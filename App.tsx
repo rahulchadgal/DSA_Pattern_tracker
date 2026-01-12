@@ -16,13 +16,13 @@ const MenuIcon = () => (
 const CloseIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
 );
-const CloudIcon = ({ active }: { active: boolean }) => (
-  <svg className={`w-4 h-4 ${active ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+const CloudIcon = ({ status }: { status: string }) => (
+  <svg className={`w-4 h-4 ${status === 'syncing' ? 'text-emerald-400 animate-pulse' : status === 'synced' ? 'text-emerald-500' : 'text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
   </svg>
 );
 
-const API_BASE = "https://keyvalue.xyz/set"; // Using keyvalue.xyz for anonymous global storage
+const API_BASE = "https://keyvalue.xyz/set";
 const GET_BASE = "https://keyvalue.xyz/get";
 
 const App: React.FC = () => {
@@ -34,6 +34,9 @@ const App: React.FC = () => {
   
   const [cloudKey, setCloudKey] = useState<string | null>(() => localStorage.getItem('dsa-cloud-key'));
   const [syncStatus, setSyncStatus] = useState<'local' | 'syncing' | 'synced' | 'error'>('local');
+  const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  
   const [selectedPattern, setSelectedPattern] = useState<Pattern>(DSA_DATA[0].patterns[0]);
   const [openSections, setOpenSections] = useState<string[]>([DSA_DATA[0].id]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -42,35 +45,48 @@ const App: React.FC = () => {
 
   // --- CLOUD LOGIC ---
   const syncToCloud = async (ids: string[], key: string) => {
+    if (isDownloading) return; // Prevent overwriting cloud with local data while still downloading
+    
     setSyncStatus('syncing');
     try {
       const response = await fetch(`${API_BASE}/${key}/${JSON.stringify(ids)}`, { method: 'POST' });
-      if (response.ok) setSyncStatus('synced');
-      else setSyncStatus('error');
-    } catch (e) {
-      setSyncStatus('error');
-    }
-  };
-
-  const syncFromCloud = async (key: string) => {
-    setSyncStatus('syncing');
-    try {
-      const response = await fetch(`${GET_BASE}/${key}`);
       if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data)) {
-          setCompletedIds(data);
-          setSyncStatus('synced');
-        }
+        setSyncStatus('synced');
+        setLastSynced(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      } else {
+        setSyncStatus('error');
       }
     } catch (e) {
       setSyncStatus('error');
     }
   };
 
-  // Setup Cloud Key
+  const syncFromCloud = async (key: string) => {
+    setIsDownloading(true);
+    setSyncStatus('syncing');
+    try {
+      const response = await fetch(`${GET_BASE}/${key}`);
+      if (response.ok) {
+        const text = await response.text();
+        // keyvalue.xyz might return the value directly as string or JSON
+        const data = JSON.parse(text);
+        if (Array.isArray(data)) {
+          setCompletedIds(data);
+          localStorage.setItem('dsa-tracker-progress', JSON.stringify(data));
+          setSyncStatus('synced');
+          setLastSynced("Just now");
+        }
+      }
+    } catch (e) {
+      console.error("Fetch error:", e);
+      setSyncStatus('error');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const enableCloudSync = () => {
-    const existing = prompt("Enter an existing Cloud Key to sync, or leave blank to generate a new one:");
+    const existing = prompt("Enter Cloud Key (e.g. dsa-xyz) to restore, or leave blank to start fresh:");
     if (existing === null) return;
     
     const newKey = existing.trim() || `dsa-${Math.random().toString(36).substr(2, 9)}`;
@@ -81,33 +97,33 @@ const App: React.FC = () => {
       syncFromCloud(newKey);
     } else {
       syncToCloud(completedIds, newKey);
-      alert(`Your New Cloud Key: ${newKey}\n\nSave this! Enter it on your other devices to auto-sync.`);
+      alert(`Cloud Sync Enabled!\n\nYour Key: ${newKey}\n\nUse this key on other devices to sync progress.`);
     }
   };
 
   // --- EFFECTS ---
-  // Load from cloud on start if key exists
+  // Load from cloud on mount
   useEffect(() => {
     if (cloudKey) {
       syncFromCloud(cloudKey);
     }
   }, []);
 
-  // Save locally & push to cloud on change
+  // Sync to cloud on change (Debounced)
   useEffect(() => {
+    // Save locally immediately
     localStorage.setItem('dsa-tracker-progress', JSON.stringify(completedIds));
     
-    // Don't push to cloud on the very first load (prevents overwriting cloud data with empty local data)
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
 
-    if (cloudKey) {
-      const timeout = setTimeout(() => syncToCloud(completedIds, cloudKey), 1000);
+    if (cloudKey && !isDownloading) {
+      const timeout = setTimeout(() => syncToCloud(completedIds, cloudKey), 500);
       return () => clearTimeout(timeout);
     }
-  }, [completedIds, cloudKey]);
+  }, [completedIds, cloudKey, isDownloading]);
 
   // --- HANDLERS ---
   const toggleQuestion = (id: string) => {
@@ -195,13 +211,13 @@ const App: React.FC = () => {
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <CloudIcon active={syncStatus === 'syncing'} />
+                  <CloudIcon status={syncStatus} />
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                    {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'All Synced' : cloudKey ? 'Cloud Ready' : 'Local Only'}
+                    {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? `Synced ${lastSynced || ''}` : cloudKey ? 'Cloud Ready' : 'Local Only'}
                   </span>
                 </div>
                 {cloudKey && (
-                  <button onClick={() => {navigator.clipboard.writeText(cloudKey); alert("Cloud Key Copied!")}} className="text-[10px] text-emerald-500 hover:underline">Copy Key</button>
+                  <button onClick={() => {navigator.clipboard.writeText(cloudKey); alert("Cloud Key Copied!")}} className="text-[10px] text-emerald-500 hover:underline">Key</button>
                 )}
              </div>
              
