@@ -7,7 +7,23 @@ import { Pattern, Question, Section } from './types';
 const SB_URL = "https://hbmjpwgwvbtdccdxflxr.supabase.co";
 const SB_KEY = "sb_publishable_7QI-0tcuaub-wWk6ZEc2BQ_3GoXjKgk";
 const PROFILE_KEY = 'dsa-handle-v4';
-const LOCAL_CACHE_KEY = 'dsa-completed-v4';
+const LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
+
+// --- UTILS ---
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const day = pad(d.getDate());
+  const month = pad(d.getMonth() + 1);
+  const year = d.getFullYear();
+  let hours = d.getHours();
+  const minutes = pad(d.getMinutes());
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  return `${day}-${month}-${year} / ${pad(hours)}:${minutes} ${ampm}`;
+};
 
 // --- UI COMPONENTS ---
 
@@ -73,10 +89,10 @@ const App: React.FC = () => {
     return localStorage.getItem(PROFILE_KEY) || '';
   });
 
-  // --- PROGRESS STATE ---
-  const [completedIds, setCompletedIds] = useState<string[]>(() => {
+  // --- PROGRESS STATE (Map of ID -> Timestamp) ---
+  const [completedMap, setCompletedMap] = useState<Record<string, string>>(() => {
     const saved = localStorage.getItem(LOCAL_CACHE_KEY);
-    return saved ? JSON.parse(saved) : [];
+    return saved ? JSON.parse(saved) : {};
   });
   
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'saved' | 'error' | 'idle'>('idle');
@@ -94,21 +110,24 @@ const App: React.FC = () => {
     if (!userHandle) return;
     setSyncStatus('syncing');
     try {
-      const response = await fetch(`${SB_URL}/rest/v1/dsa_progress_v4?handle=eq.${userHandle.toLowerCase()}&is_completed=eq.true&select=question_id`, {
+      const response = await fetch(`${SB_URL}/rest/v1/dsa_progress_v4?handle=eq.${userHandle.toLowerCase()}&is_completed=eq.true&select=question_id,updated_at`, {
         headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
       });
       const rows = await response.json();
-      const ids = rows.map((r: { question_id: string }) => r.question_id);
+      const map: Record<string, string> = {};
+      rows.forEach((r: { question_id: string, updated_at: string }) => {
+        map[r.question_id] = r.updated_at;
+      });
       
-      setCompletedIds(ids);
-      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(ids));
+      setCompletedMap(map);
+      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(map));
       setSyncStatus('saved');
     } catch (e) {
       setSyncStatus('error');
     }
   }, []);
 
-  const atomicUpdate = async (qId: string, isChecked: boolean) => {
+  const atomicUpdate = async (qId: string, isChecked: boolean, timestamp: string) => {
     if (!handle) return;
     setSyncStatus('syncing');
     try {
@@ -124,7 +143,7 @@ const App: React.FC = () => {
           handle: handle.toLowerCase(), 
           question_id: qId, 
           is_completed: isChecked,
-          updated_at: new Date().toISOString()
+          updated_at: timestamp
         })
       });
 
@@ -149,14 +168,19 @@ const App: React.FC = () => {
   // --- HANDLERS ---
 
   const toggleQuestion = (id: string) => {
-    const isNowChecked = !completedIds.includes(id);
-    const newIds = isNowChecked 
-      ? [...completedIds, id] 
-      : completedIds.filter(i => i !== id);
+    const isNowChecked = !completedMap[id];
+    const timestamp = new Date().toISOString();
+    const nextMap = { ...completedMap };
     
-    setCompletedIds(newIds);
-    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(newIds));
-    atomicUpdate(id, isNowChecked);
+    if (isNowChecked) {
+      nextMap[id] = timestamp;
+    } else {
+      delete nextMap[id];
+    }
+    
+    setCompletedMap(nextMap);
+    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(nextMap));
+    atomicUpdate(id, isNowChecked, timestamp);
   };
 
   const setupHandle = (e: React.FormEvent) => {
@@ -177,11 +201,11 @@ const App: React.FC = () => {
     if (scope === 'section') {
       const section = DSA_DATA.find(s => s.id === selectedSectionId);
       section?.patterns.forEach(p => p.questions.forEach(q => {
-        if (!completedIds.includes(q.id)) pool.push(q);
+        if (!completedMap[q.id]) pool.push(q);
       }));
     } else {
       DSA_DATA.forEach(s => s.patterns.forEach(p => p.questions.forEach(q => {
-        if (!completedIds.includes(q.id)) pool.push(q);
+        if (!completedMap[q.id]) pool.push(q);
       })));
     }
 
@@ -200,11 +224,11 @@ const App: React.FC = () => {
       let solved = 0;
       section.patterns.forEach(p => p.questions.forEach(q => {
         total++;
-        if (completedIds.includes(q.id)) solved++;
+        if (completedMap[q.id]) solved++;
       }));
       return { id: section.id, title: section.title, solved, total };
     });
-  }, [completedIds]);
+  }, [completedMap]);
 
   const currentSectionData = useMemo(() => {
     return sectionStats.find(s => s.id === selectedSectionId);
@@ -217,11 +241,11 @@ const App: React.FC = () => {
     DSA_DATA.forEach(s => s.patterns.forEach(p => p.questions.forEach(q => {
       if (stats[q.difficulty]) {
         stats[q.difficulty].total++;
-        if (completedIds.includes(q.id)) stats[q.difficulty].solved++;
+        if (completedMap[q.id]) stats[q.difficulty].solved++;
       }
     })));
     return stats;
-  }, [completedIds]);
+  }, [completedMap]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-indigo-500/30">
@@ -257,9 +281,9 @@ const App: React.FC = () => {
                 <div className="space-y-1 ml-2">
                   {section.patterns.map(pattern => {
                     const active = selectedPattern.id === pattern.id;
-                    const done = pattern.questions.filter(q => completedIds.includes(q.id)).length;
+                    const doneCount = pattern.questions.filter(q => completedMap[q.id]).length;
                     const total = pattern.questions.length;
-                    const pct = Math.round((done/total)*100);
+                    const pct = Math.round((doneCount/total)*100);
                     return (
                       <button 
                         key={pattern.id} 
@@ -285,10 +309,10 @@ const App: React.FC = () => {
         <div className="p-8 bg-slate-900/50 border-t border-slate-800/40">
            <div className="flex justify-between items-end mb-3">
               <span className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Overall Progress</span>
-              <span className="text-xl font-black text-white">{Math.round((completedIds.length / 250) * 100)}%</span>
+              <span className="text-xl font-black text-white">{Math.round((Object.keys(completedMap).length / 250) * 100)}%</span>
            </div>
            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-1000" style={{ width: `${(completedIds.length / 250) * 100}%` }} />
+              <div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-1000" style={{ width: `${(Object.keys(completedMap).length / 250) * 100}%` }} />
            </div>
         </div>
       </aside>
@@ -309,7 +333,7 @@ const App: React.FC = () => {
                    <CloudStatus status={syncStatus} />
                    <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-900/60 rounded-xl border border-slate-800/50">
                       <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Global</span>
-                      <span className="text-[10px] font-black text-indigo-400 font-mono">{Math.round((completedIds.length / 250) * 100)}%</span>
+                      <span className="text-[10px] font-black text-indigo-400 font-mono">{Math.round((Object.keys(completedMap).length / 250) * 100)}%</span>
                    </div>
                 </div>
               </div>
@@ -345,7 +369,8 @@ const App: React.FC = () => {
            {viewMode === 'syllabus' ? (
              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 pb-32">
                 {selectedPattern.questions.map(q => {
-                  const done = completedIds.includes(q.id);
+                  const timestamp = completedMap[q.id];
+                  const done = !!timestamp;
                   return (
                     <div key={q.id} className={`group relative p-8 rounded-[2.5rem] border transition-all duration-500 hover:-translate-y-2 ${done ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600'}`}>
                        <div className="flex flex-col h-full gap-6">
@@ -364,6 +389,16 @@ const App: React.FC = () => {
                                 </div>
                              </div>
                           </div>
+                          
+                          {/* Last Updated Timestamp */}
+                          {done && (
+                            <div className="flex flex-col gap-1 border-t border-emerald-500/10 pt-4 animate-in fade-in slide-in-from-top-1 duration-700">
+                               <span className="text-[8px] font-black uppercase text-emerald-500/50 tracking-[0.2em]">Last Updated</span>
+                               <span className="text-[10px] font-bold text-slate-400 font-mono italic">
+                                  {formatDate(timestamp)}
+                               </span>
+                            </div>
+                          )}
                        </div>
                     </div>
                   );
