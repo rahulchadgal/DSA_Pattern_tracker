@@ -6,7 +6,8 @@ import { Pattern, Question } from './types';
 // --- SUPABASE CONFIG ---
 const SB_URL = "https://hbmjpwgwvbtdccdxflxr.supabase.co";
 const SB_KEY = "sb_publishable_7QI-0tcuaub-wWk6ZEc2BQ_3GoXjKgk";
-const STORAGE_KEY = 'dsa-tracker-v11-auto';
+const STORAGE_KEY = 'dsa-tracker-v12-global';
+const PROFILE_KEY = 'dsa-profile-handle';
 
 // --- UI COMPONENTS ---
 
@@ -17,7 +18,7 @@ const CloudPulse = ({ status }: { status: 'syncing' | 'saved' | 'error' | 'idle'
     error: "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]",
     idle: "bg-slate-700"
   };
-  const labels = { syncing: "Syncing...", saved: "Cloud Saved", error: "Sync Error", idle: "Cloud Ready" };
+  const labels = { syncing: "Syncing...", saved: "Cloud Synced", error: "Offline", idle: "Connecting..." };
   
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900/80 rounded-full border border-slate-800 backdrop-blur-md">
@@ -65,26 +66,8 @@ const CompactTracker: React.FC<{ diff: string; solved: number; total: number }> 
 };
 
 const App: React.FC = () => {
-  // --- IDENTITY LOGIC ---
-  const [syncKey] = useState(() => {
-    // 1. Check URL for pairing key
-    const urlParams = new URLSearchParams(window.location.search);
-    const pairingKey = urlParams.get('pair');
-    if (pairingKey) {
-      localStorage.setItem('dsa-sync-key-auto', pairingKey);
-      window.history.replaceState({}, '', window.location.pathname); // Clear URL
-      return pairingKey;
-    }
-    // 2. Check local storage
-    const existing = localStorage.getItem('dsa-sync-key-auto');
-    if (existing) return existing;
-    // 3. Generate new
-    const generated = `dev-${Math.random().toString(36).substring(2, 15)}`;
-    localStorage.setItem('dsa-sync-key-auto', generated);
-    return generated;
-  });
-
   // --- STATE ---
+  const [handle, setHandle] = useState(() => localStorage.getItem(PROFILE_KEY) || '');
   const [completedIds, setCompletedIds] = useState<string[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? JSON.parse(saved) : [];
@@ -94,11 +77,12 @@ const App: React.FC = () => {
   const [selectedPattern, setSelectedPattern] = useState<Pattern>(DSA_DATA[0].patterns[0]);
   const [openSections, setOpenSections] = useState<string[]>([DSA_DATA[0].id]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [showDataModal, setShowDataModal] = useState(false);
+  const [showIdentityModal, setShowIdentityModal] = useState(!localStorage.getItem(PROFILE_KEY));
   const [randomPick, setRandomPick] = useState<Question | null>(null);
 
-  // --- SYNC ACTIONS ---
-  const pushToCloud = useCallback(async (data: string[]) => {
+  // --- CLOUD ACTIONS ---
+  const pushToCloud = useCallback(async (data: string[], targetHandle: string) => {
+    if (!targetHandle) return;
     setSyncStatus('syncing');
     try {
       const response = await fetch(`${SB_URL}/rest/v1/dsa_sync`, {
@@ -109,19 +93,20 @@ const App: React.FC = () => {
           'Content-Type': 'application/json',
           'Prefer': 'resolution=merge-duplicates'
         },
-        body: JSON.stringify({ id: syncKey, data })
+        body: JSON.stringify({ id: targetHandle.trim().toLowerCase(), data })
       });
       if (response.ok) setSyncStatus('saved');
       else throw new Error();
     } catch (e) {
       setSyncStatus('error');
     }
-  }, [syncKey]);
+  }, []);
 
-  const pullFromCloud = useCallback(async () => {
+  const pullFromCloud = useCallback(async (targetHandle: string) => {
+    if (!targetHandle) return;
     setSyncStatus('syncing');
     try {
-      const response = await fetch(`${SB_URL}/rest/v1/dsa_sync?id=eq.${syncKey}&select=data`, {
+      const response = await fetch(`${SB_URL}/rest/v1/dsa_sync?id=eq.${targetHandle.trim().toLowerCase()}&select=data`, {
         headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
       });
       const results = await response.json();
@@ -134,27 +119,46 @@ const App: React.FC = () => {
     } catch (e) {
       setSyncStatus('error');
     }
-  }, [syncKey]);
+  }, []);
 
-  // --- PERSISTENCE & AUTO-SYNC ---
+  // --- SYNC EFFECTS ---
+  
+  // Initial Pull & Focus Pull
   useEffect(() => {
-    // Initial Pull on Load
-    pullFromCloud();
-  }, [pullFromCloud]);
+    if (handle) {
+      pullFromCloud(handle);
+      
+      const onFocus = () => pullFromCloud(handle);
+      window.addEventListener('focus', onFocus);
+      return () => window.removeEventListener('focus', onFocus);
+    }
+  }, [handle, pullFromCloud]);
 
+  // Push on change
   useEffect(() => {
-    // Local Persistence
+    if (!handle) return;
+    
+    // Always save locally first
     localStorage.setItem(STORAGE_KEY, JSON.stringify(completedIds));
 
-    // Debounced Cloud Sync
-    const timeout = setTimeout(() => {
-      pushToCloud(completedIds);
-    }, 1500); // 1.5s delay after last change
+    // Debounced Push
+    const timer = setTimeout(() => {
+      pushToCloud(completedIds, handle);
+    }, 1000);
 
-    return () => clearTimeout(timeout);
-  }, [completedIds, pushToCloud]);
+    return () => clearTimeout(timer);
+  }, [completedIds, handle, pushToCloud]);
 
-  // --- HELPERS ---
+  // --- HANDLERS ---
+  const setupProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (handle.trim()) {
+      localStorage.setItem(PROFILE_KEY, handle.trim().toLowerCase());
+      setShowIdentityModal(false);
+      pullFromCloud(handle);
+    }
+  };
+
   const toggleQuestion = (id: string) => {
     setCompletedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
@@ -170,8 +174,6 @@ const App: React.FC = () => {
     const picked = unsolved[Math.floor(Math.random() * unsolved.length)];
     setRandomPick(picked);
   };
-
-  const getPairingUrl = () => `${window.location.origin}${window.location.pathname}?pair=${syncKey}`;
 
   // --- STATS ---
   const globalStats = useMemo(() => {
@@ -200,20 +202,18 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-emerald-500/30">
       
-      {/* Sidebar */}
+      {/* Sidebar Navigation */}
       <aside className={`
         fixed md:sticky top-0 left-0 h-screen w-72 bg-[#0f172a] border-r border-slate-800/60 flex flex-col z-50
         transition-transform duration-300 md:translate-x-0
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <div className="p-6 border-b border-slate-800/40 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-black text-white tracking-tighter">DSA <span className="text-emerald-500">ENGINE</span></h1>
-            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Auto-Sync Enabled</p>
+        <div className="p-6 border-b border-slate-800/40">
+          <h1 className="text-xl font-black text-white tracking-tighter mb-1">DSA <span className="text-emerald-500">ENGINE</span></h1>
+          <div className="flex items-center gap-2 group cursor-pointer" onClick={() => setShowIdentityModal(true)}>
+             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">@{handle || 'anonymous'}</span>
           </div>
-          <button onClick={() => setShowDataModal(true)} className="p-2.5 bg-slate-900 rounded-xl text-slate-400 hover:text-sky-400 transition-colors border border-slate-800">
-             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.803a4 4 0 015.656 0l4 4a4 4 0 11-5.656 5.656l-1.1-1.1" /></svg>
-          </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-3">
@@ -248,7 +248,7 @@ const App: React.FC = () => {
 
         <div className="p-6 bg-slate-900/50 border-t border-slate-800/40">
           <div className="flex justify-between text-[10px] font-black uppercase text-slate-500 mb-2.5">
-            <span>Overall Score</span>
+            <span>Overall Mastery</span>
             <span className="text-emerald-500">{overallPercent}%</span>
           </div>
           <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -257,7 +257,7 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Area */}
+      {/* Main Viewport */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         <header className="px-6 py-5 md:px-12 md:py-8 border-b border-slate-800 bg-[#020617]/95 backdrop-blur-3xl z-20 sticky top-0">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -278,7 +278,7 @@ const App: React.FC = () => {
               </div>
               <button onClick={pickRandomUnsolved} className="p-3 bg-indigo-500 text-white rounded-2xl hover:bg-indigo-400 shadow-xl shadow-indigo-500/20 transition-all active:scale-95 flex items-center gap-2 px-5">
                 <DiceIcon />
-                <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Lucky Pick</span>
+                <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Smart Pick</span>
               </button>
             </div>
           </div>
@@ -306,7 +306,7 @@ const App: React.FC = () => {
                           </div>
                        </div>
                        <div className="mt-auto pt-5 border-t border-slate-800/40 flex items-center justify-between">
-                          <span className={`text-[10px] font-black uppercase tracking-widest ${done ? 'text-emerald-500' : 'text-slate-700'}`}>{done ? 'Mastered' : 'Queued'}</span>
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${done ? 'text-emerald-500' : 'text-slate-700'}`}>{done ? 'Completed' : 'Queued'}</span>
                           <a href={q.link} target="_blank" rel="noreferrer" className="p-2 text-slate-700 hover:text-emerald-400 transition-colors"><ExternalIcon /></a>
                        </div>
                     </div>
@@ -317,53 +317,49 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Auto-Sync Connectivity Modal */}
-      {showDataModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/95 backdrop-blur-3xl animate-in fade-in duration-300">
-          <div className="bg-[#0f172a] border border-slate-800 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-sky-500" />
-            <button onClick={() => setShowDataModal(false)} className="absolute top-8 right-8 text-slate-600 hover:text-white transition-colors"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+      {/* Global Identity Setup Overlay */}
+      {showIdentityModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/98 backdrop-blur-3xl animate-in fade-in duration-300">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-[3rem] w-full max-w-sm p-12 shadow-[0_0_100px_rgba(16,185,129,0.1)] relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500" />
             
-            <div className="text-center mb-8">
-               <h3 className="text-3xl font-black text-white mb-2 tracking-tighter">Device Pairing</h3>
-               <p className="text-xs text-slate-400 leading-relaxed font-medium">Link other browsers to this progress without using a key.</p>
+            <div className="text-center mb-10">
+               <h3 className="text-4xl font-black text-white mb-3 tracking-tighter">Global Engine</h3>
+               <p className="text-xs text-slate-400 leading-relaxed font-medium">Use a unique handle to sync your progress across all devices automatically.</p>
             </div>
 
-            <div className="space-y-6">
-               <div className="bg-slate-950 p-5 rounded-[1.5rem] border border-slate-800 relative group">
-                  <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.2em] mb-3">Your Unique Link</label>
-                  <div className="flex items-center gap-3">
-                    <input readOnly value={getPairingUrl()} className="flex-1 bg-transparent border-none text-sky-400 font-mono text-xs focus:ring-0 p-0 truncate" />
+            <form onSubmit={setupProfile} className="space-y-8">
+               <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
+                  <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.2em] mb-4 text-center">Your Universal Handle</label>
+                  <div className="flex items-center gap-2 text-emerald-500 font-mono text-2xl">
+                    <span className="opacity-40">@</span>
+                    <input autoFocus type="text" placeholder="rahul-dsa" value={handle} onChange={(e) => setHandle(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 font-mono focus:ring-0 p-0 placeholder:text-slate-800" />
                   </div>
-                  <button onClick={() => { navigator.clipboard.writeText(getPairingUrl()); alert('Link copied!'); }} className="absolute bottom-5 right-5 text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-400 transition-colors">Copy Link</button>
                </div>
 
-               <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl">
-                 <p className="text-[10px] font-bold text-emerald-500 uppercase mb-1">Zero-Touch Sync</p>
-                 <p className="text-[10px] text-slate-500 leading-snug">The engine automatically backs up your data every time you solve a problem. No buttons required.</p>
-               </div>
+               <button type="submit" className="w-full py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[2rem] font-black text-xs tracking-[0.4em] uppercase shadow-2xl shadow-emerald-500/20 transition-all active:scale-95">Link Global Data</button>
                
-               <button onClick={() => setShowDataModal(false)} className="w-full py-5 bg-sky-600 hover:bg-sky-500 text-white rounded-[1.5rem] font-black text-xs tracking-[0.3em] uppercase mt-2 shadow-2xl shadow-sky-500/20 transition-all active:scale-95">Back to Work</button>
-            </div>
+               <p className="text-[10px] text-center text-slate-600 font-bold uppercase tracking-widest">Active Mirroring via Supabase</p>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Lucky pick overlay */}
+      {/* Random Target Highlight */}
       {randomPick && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl animate-in zoom-in-95 duration-200">
            <div className="bg-slate-900 border border-indigo-500/30 rounded-[3rem] p-12 max-w-md w-full shadow-[0_0_50px_rgba(99,102,241,0.15)] relative overflow-hidden text-center">
               <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]" />
               <div className="w-20 h-20 bg-indigo-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-8 text-indigo-400 border border-indigo-500/20 shadow-inner"><DiceIcon /></div>
-              <p className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.4em] mb-3">Target Identified</p>
+              <p className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.4em] mb-3">Objective Selected</p>
               <h3 className="text-2xl font-black text-white mb-4 tracking-tight leading-tight">{randomPick.title}</h3>
               <div className="flex justify-center gap-3 mb-10">
                  <DifficultyBadge diff={randomPick.difficulty} />
                  <span className="text-[10px] font-black text-slate-500 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 font-mono tracking-tighter">LC #{randomPick.id}</span>
               </div>
               <div className="flex flex-col gap-4">
-                 <a href={randomPick.link} target="_blank" rel="noreferrer" onClick={() => setRandomPick(null)} className="py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-3xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 transition-all active:scale-95">Solve Now</a>
-                 <button onClick={() => setRandomPick(null)} className="py-5 bg-slate-800/50 hover:bg-slate-800 text-slate-500 rounded-3xl font-bold text-xs uppercase tracking-widest transition-all">Cancel</button>
+                 <a href={randomPick.link} target="_blank" rel="noreferrer" onClick={() => setRandomPick(null)} className="py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 transition-all active:scale-95">Solve Immediately</a>
+                 <button onClick={() => setRandomPick(null)} className="py-5 bg-slate-800/50 hover:bg-slate-800 text-slate-500 rounded-[2rem] font-bold text-xs uppercase tracking-widest transition-all">Dismiss</button>
               </div>
            </div>
         </div>
