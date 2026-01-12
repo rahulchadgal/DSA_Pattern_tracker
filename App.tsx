@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { DSA_DATA } from './constants';
-import { Pattern, Question } from './types';
+import { Pattern, Question, Section } from './types';
 
 // --- SUPABASE CONFIG ---
 const SB_URL = "https://hbmjpwgwvbtdccdxflxr.supabase.co";
@@ -81,6 +81,7 @@ const App: React.FC = () => {
   
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'saved' | 'error' | 'idle'>('idle');
   const [selectedPattern, setSelectedPattern] = useState<Pattern>(DSA_DATA[0].patterns[0]);
+  const [selectedSectionId, setSelectedSectionId] = useState<string>(DSA_DATA[0].id);
   const [openSections, setOpenSections] = useState<string[]>([DSA_DATA[0].id]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(!handle);
@@ -169,14 +170,15 @@ const App: React.FC = () => {
     }
   };
 
-  const getShareLink = () => `${window.location.origin}${window.location.pathname}?user=${handle}`;
-
   // --- SEARCH LOGIC ---
 
-  const pickRandom = (scope: 'pattern' | 'global') => {
+  const pickRandom = (scope: 'section' | 'global') => {
     let pool: Question[] = [];
-    if (scope === 'pattern') {
-      pool = selectedPattern.questions.filter(q => !completedIds.includes(q.id));
+    if (scope === 'section') {
+      const section = DSA_DATA.find(s => s.id === selectedSectionId);
+      section?.patterns.forEach(p => p.questions.forEach(q => {
+        if (!completedIds.includes(q.id)) pool.push(q);
+      }));
     } else {
       DSA_DATA.forEach(s => s.patterns.forEach(p => p.questions.forEach(q => {
         if (!completedIds.includes(q.id)) pool.push(q);
@@ -191,6 +193,22 @@ const App: React.FC = () => {
   };
 
   // --- STATS ---
+
+  const sectionStats = useMemo(() => {
+    return DSA_DATA.map(section => {
+      let total = 0;
+      let solved = 0;
+      section.patterns.forEach(p => p.questions.forEach(q => {
+        total++;
+        if (completedIds.includes(q.id)) solved++;
+      }));
+      return { id: section.id, title: section.title, solved, total };
+    });
+  }, [completedIds]);
+
+  const currentSectionData = useMemo(() => {
+    return sectionStats.find(s => s.id === selectedSectionId);
+  }, [sectionStats, selectedSectionId]);
 
   const patternProgress = useMemo(() => {
     const total = selectedPattern.questions.length;
@@ -267,7 +285,7 @@ const App: React.FC = () => {
                     return (
                       <button 
                         key={pattern.id} 
-                        onClick={() => { setSelectedPattern(pattern); setViewMode('syllabus'); setIsSidebarOpen(false); }}
+                        onClick={() => { setSelectedPattern(pattern); setSelectedSectionId(section.id); setViewMode('syllabus'); setIsSidebarOpen(false); }}
                         className={`w-full group px-4 py-3 rounded-2xl text-[12px] text-left transition-all border ${active ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-lg shadow-indigo-500/5' : 'text-slate-500 hover:bg-slate-800/40 border-transparent'}`}
                       >
                         <div className="flex justify-between items-center mb-2">
@@ -305,7 +323,7 @@ const App: React.FC = () => {
               <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3 bg-slate-900 rounded-2xl border border-slate-800 text-slate-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg></button>
               <div>
                 <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-2">
-                  {viewMode === 'syllabus' ? selectedPattern.name : 'Random Objective Picker'}
+                  {viewMode === 'syllabus' ? selectedPattern.name : 'Roulette Command Center'}
                 </h2>
                 <div className="flex flex-wrap gap-3">
                    <CloudStatus status={syncStatus} />
@@ -323,9 +341,6 @@ const App: React.FC = () => {
                     <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
                   ))}
                </div>
-               <button onClick={() => pickRandom('pattern')} className="p-4 bg-white text-slate-950 rounded-2xl hover:bg-slate-200 transition-all shadow-xl shadow-white/5 active:scale-95">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-               </button>
             </div>
           </div>
         </header>
@@ -359,45 +374,92 @@ const App: React.FC = () => {
                 })}
              </div>
            ) : (
-             <div className="max-w-4xl mx-auto py-12 space-y-12">
-                <div className="text-center space-y-4">
-                   <h3 className="text-4xl font-black text-white tracking-tighter">Objective Roulette</h3>
-                   <p className="text-slate-500 font-medium">Break analysis paralysis. Let the engine decide your next target.</p>
+             <div className="max-w-4xl mx-auto py-12 space-y-16">
+                
+                {/* Horizontal Category Tracker Scroller */}
+                <div className="space-y-6">
+                   <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600 text-center">Engine Overview</h4>
+                   <div className="flex overflow-x-auto gap-4 pb-4 px-2 no-scrollbar scroll-smooth">
+                      {sectionStats.map(stat => {
+                        const active = stat.id === selectedSectionId;
+                        const pct = Math.round((stat.solved / stat.total) * 100);
+                        return (
+                          <div 
+                            key={stat.id}
+                            className={`flex-none w-48 p-5 rounded-3xl border transition-all duration-300 ${active ? 'bg-indigo-500/10 border-indigo-500/40 shadow-lg' : 'bg-slate-900/40 border-slate-800/80 opacity-60'}`}
+                          >
+                             <div className="flex justify-between items-center mb-3">
+                                <span className={`text-[10px] font-black uppercase tracking-widest truncate ${active ? 'text-indigo-400' : 'text-slate-600'}`}>{stat.title}</span>
+                                <span className="text-[10px] font-black font-mono text-slate-500">{pct}%</span>
+                             </div>
+                             <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
+                                <div className={`h-full transition-all duration-700 ${pct === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
+                             </div>
+                          </div>
+                        );
+                      })}
+                   </div>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-8">
-                   {/* Option 1: Pattern Scope */}
-                   <button 
-                     onClick={() => pickRandom('pattern')}
-                     className="group relative p-12 rounded-[3.5rem] bg-slate-900/40 border border-slate-800 hover:border-indigo-500/50 transition-all duration-500 hover:-translate-y-2 text-left"
-                   >
-                      <div className="w-16 h-16 bg-indigo-500/10 rounded-3xl flex items-center justify-center mb-8 border border-indigo-500/20 text-indigo-500 group-hover:scale-110 transition-transform">
-                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                {/* Simplified Unified Roulette Card */}
+                <div className="group relative p-12 md:p-16 rounded-[4rem] bg-slate-900/40 border border-slate-800/60 shadow-2xl overflow-hidden">
+                   <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 opacity-50" />
+                   
+                   <div className="flex flex-col items-center text-center max-w-lg mx-auto space-y-12">
+                      <div className="w-24 h-24 bg-indigo-500/10 rounded-[2.5rem] flex items-center justify-center border border-indigo-500/20 text-indigo-400 group-hover:scale-110 transition-transform shadow-inner">
+                         <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                       </div>
-                      <h4 className="text-2xl font-black text-white mb-2 tracking-tight">Pattern Roulette</h4>
-                      <p className="text-sm text-slate-500 mb-8 leading-relaxed">Picks a random unsolved question from <span className="text-indigo-400 font-bold">{selectedPattern.name}</span>.</p>
-                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-500">
-                         <span>Start Search</span>
-                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                      </div>
-                   </button>
 
-                   {/* Option 2: Global Scope */}
-                   <button 
-                     onClick={() => pickRandom('global')}
-                     className="group relative p-12 rounded-[3.5rem] bg-slate-900/40 border border-slate-800 hover:border-emerald-500/50 transition-all duration-500 hover:-translate-y-2 text-left"
-                   >
-                      <div className="w-16 h-16 bg-emerald-500/10 rounded-3xl flex items-center justify-center mb-8 border border-emerald-500/20 text-emerald-500 group-hover:scale-110 transition-transform">
-                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                      <div className="space-y-4">
+                         <h4 className="text-3xl font-black text-white tracking-tighter">Objective Selector</h4>
+                         <p className="text-sm text-slate-500 leading-relaxed font-medium">Select a major pattern category below or challenge the entire syllabus.</p>
                       </div>
-                      <h4 className="text-2xl font-black text-white mb-2 tracking-tight">Global Roulette</h4>
-                      <p className="text-sm text-slate-500 mb-8 leading-relaxed">Scans all 250+ questions across the entire syllabus for an unsolved challenge.</p>
-                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-500">
-                         <span>Start Search</span>
-                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+
+                      {/* Dropdown Selection */}
+                      <div className="w-full space-y-3">
+                         <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">Select Major Category</label>
+                         <div className="relative group/select">
+                            <select 
+                              value={selectedSectionId}
+                              onChange={(e) => setSelectedSectionId(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 text-slate-200 py-6 px-8 rounded-[2rem] appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all cursor-pointer font-bold text-sm tracking-tight"
+                            >
+                               {DSA_DATA.map(s => (
+                                 <option key={s.id} value={s.id}>{s.title}</option>
+                               ))}
+                            </select>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-slate-600">
+                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                         </div>
+                         {currentSectionData && (
+                            <div className="flex justify-between px-4 pt-1">
+                               <span className="text-[10px] font-black uppercase text-indigo-400/60 tracking-widest">{currentSectionData.solved}/{currentSectionData.total} Solved</span>
+                               <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Progress Active</span>
+                            </div>
+                         )}
                       </div>
-                   </button>
+
+                      {/* Unified Control Buttons */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full pt-4">
+                         <button 
+                           onClick={() => pickRandom('section')}
+                           className="py-6 px-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[2rem] font-black text-[11px] uppercase tracking-[0.25em] shadow-xl shadow-indigo-600/20 transition-all active:scale-95 group/btn flex items-center justify-center gap-3"
+                         >
+                            <span>Spin Category</span>
+                            <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7" /></svg>
+                         </button>
+                         <button 
+                           onClick={() => pickRandom('global')}
+                           className="py-6 px-10 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[2rem] font-black text-[11px] uppercase tracking-[0.25em] shadow-xl shadow-emerald-600/20 transition-all active:scale-95 group/btn flex items-center justify-center gap-3"
+                         >
+                            <span>Global Spin</span>
+                            <svg className="w-4 h-4 group-hover/btn:rotate-45 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                         </button>
+                      </div>
+                   </div>
                 </div>
+
              </div>
            )}
         </div>
