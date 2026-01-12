@@ -210,12 +210,6 @@ const App: React.FC = () => {
     return sectionStats.find(s => s.id === selectedSectionId);
   }, [sectionStats, selectedSectionId]);
 
-  const patternProgress = useMemo(() => {
-    const total = selectedPattern.questions.length;
-    const done = selectedPattern.questions.filter(q => completedIds.includes(q.id)).length;
-    return Math.round((done / total) * 100);
-  }, [selectedPattern, completedIds]);
-
   const globalStats = useMemo(() => {
     const stats: Record<string, { total: number; solved: number }> = {
       Easy: { total: 0, solved: 0 }, Medium: { total: 0, solved: 0 }, Hard: { total: 0, solved: 0 }
@@ -246,22 +240,6 @@ const App: React.FC = () => {
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] group-hover:text-white transition-colors">@{handle || 'guest'}</span>
             </button>
           </div>
-        </div>
-
-        {/* Mode Switcher */}
-        <div className="px-6 pt-6 grid grid-cols-2 gap-2">
-           <button 
-             onClick={() => setViewMode('syllabus')}
-             className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${viewMode === 'syllabus' ? 'bg-indigo-500 border-indigo-400 text-white' : 'bg-slate-900 border-slate-800 text-slate-600 hover:text-slate-400'}`}
-           >
-             Syllabus
-           </button>
-           <button 
-             onClick={() => setViewMode('random')}
-             className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${viewMode === 'random' ? 'bg-indigo-500 border-indigo-400 text-white' : 'bg-slate-900 border-slate-800 text-slate-600 hover:text-slate-400'}`}
-           >
-             Roulette
-           </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-4">
@@ -317,29 +295,47 @@ const App: React.FC = () => {
 
       {/* Main Viewport */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="px-8 py-6 md:px-14 md:py-10 border-b border-slate-800/60 bg-[#020617]/80 backdrop-blur-2xl z-20 sticky top-0">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+        <header className="px-8 py-6 md:px-14 md:py-8 border-b border-slate-800/60 bg-[#020617]/80 backdrop-blur-2xl z-20 sticky top-0">
+          <div className="flex items-center justify-between gap-8">
             <div className="flex items-center gap-6">
-              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3 bg-slate-900 rounded-2xl border border-slate-800 text-slate-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg></button>
+              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3 bg-slate-900 rounded-2xl border border-slate-800 text-slate-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              </button>
               <div>
-                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-2">
-                  {viewMode === 'syllabus' ? selectedPattern.name : 'Roulette Command Center'}
+                <h2 className="text-xl md:text-2xl font-black text-white tracking-tighter">
+                  {viewMode === 'syllabus' ? selectedPattern.name : 'Objective Selection'}
                 </h2>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-3 mt-1.5">
                    <CloudStatus status={syncStatus} />
-                   <div className="flex items-center gap-2 px-4 py-2 bg-slate-900/60 rounded-2xl border border-slate-800/50">
-                      <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-500">Global Coverage</span>
-                      <span className="text-[11px] font-black text-indigo-400 font-mono">{Math.round((completedIds.length / 250) * 100)}%</span>
+                   <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-900/60 rounded-xl border border-slate-800/50">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Global</span>
+                      <span className="text-[10px] font-black text-indigo-400 font-mono">{Math.round((completedIds.length / 250) * 100)}%</span>
                    </div>
                 </div>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-               <div className="flex gap-2 p-1.5 bg-slate-950 rounded-2xl border border-slate-800/50 shadow-inner">
+            <div className="flex items-center gap-6">
+               <div className="hidden lg:flex gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800/50">
                   {(Object.entries(globalStats) as [string, { total: number; solved: number }][]).map(([diff, data]) => (
                     <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
                   ))}
+               </div>
+
+               {/* Header Mode Switcher */}
+               <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
+                  <button 
+                    onClick={() => setViewMode('syllabus')}
+                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'syllabus' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    Syllabus
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('random')}
+                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'random' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    Roulette
+                  </button>
                </div>
             </div>
           </div>
@@ -374,90 +370,79 @@ const App: React.FC = () => {
                 })}
              </div>
            ) : (
-             <div className="max-w-4xl mx-auto py-12 space-y-16">
+             <div className="h-full flex flex-col items-center pt-10 md:pt-16 px-4">
                 
-                {/* Horizontal Category Tracker Scroller */}
-                <div className="space-y-6">
-                   <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600 text-center">Engine Overview</h4>
-                   <div className="flex overflow-x-auto gap-4 pb-4 px-2 no-scrollbar scroll-smooth">
-                      {sectionStats.map(stat => {
-                        const active = stat.id === selectedSectionId;
-                        const pct = Math.round((stat.solved / stat.total) * 100);
-                        return (
-                          <div 
-                            key={stat.id}
-                            className={`flex-none w-48 p-5 rounded-3xl border transition-all duration-300 ${active ? 'bg-indigo-500/10 border-indigo-500/40 shadow-lg' : 'bg-slate-900/40 border-slate-800/80 opacity-60'}`}
-                          >
-                             <div className="flex justify-between items-center mb-3">
-                                <span className={`text-[10px] font-black uppercase tracking-widest truncate ${active ? 'text-indigo-400' : 'text-slate-600'}`}>{stat.title}</span>
-                                <span className="text-[10px] font-black font-mono text-slate-500">{pct}%</span>
-                             </div>
-                             <div className="h-1 w-full bg-slate-950 rounded-full overflow-hidden">
-                                <div className={`h-full transition-all duration-700 ${pct === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
-                             </div>
-                          </div>
-                        );
-                      })}
-                   </div>
-                </div>
+                <div className="w-full max-w-2xl space-y-8 md:space-y-12">
+                  {/* Category Tracker Bar */}
+                  <div className="flex justify-center gap-2 overflow-x-auto no-scrollbar py-2">
+                    {sectionStats.map(stat => (
+                      <button 
+                        key={stat.id}
+                        onClick={() => setSelectedSectionId(stat.id)}
+                        className={`flex-none cursor-pointer px-4 py-2.5 rounded-2xl border transition-all active:scale-95 ${stat.id === selectedSectionId ? 'bg-indigo-500/10 border-indigo-500/40 shadow-xl shadow-indigo-500/5' : 'bg-slate-900/40 border-slate-800/40 opacity-40 hover:opacity-100'}`}
+                      >
+                         <div className="flex items-center gap-3">
+                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider truncate max-w-[100px]">{stat.title}</span>
+                            <span className="text-[10px] font-black font-mono text-indigo-400">{Math.round((stat.solved / stat.total) * 100)}%</span>
+                         </div>
+                      </button>
+                    ))}
+                  </div>
 
-                {/* Simplified Unified Roulette Card */}
-                <div className="group relative p-12 md:p-16 rounded-[4rem] bg-slate-900/40 border border-slate-800/60 shadow-2xl overflow-hidden">
-                   <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 opacity-50" />
-                   
-                   <div className="flex flex-col items-center text-center max-w-lg mx-auto space-y-12">
-                      <div className="w-24 h-24 bg-indigo-500/10 rounded-[2.5rem] flex items-center justify-center border border-indigo-500/20 text-indigo-400 group-hover:scale-110 transition-transform shadow-inner">
-                         <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      </div>
+                  {/* Compact Control Center */}
+                  <div className="group relative p-8 md:p-14 rounded-[3.5rem] bg-slate-900/40 border border-slate-800/60 shadow-2xl overflow-hidden backdrop-blur-md">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 opacity-50" />
+                    
+                    <div className="flex flex-col items-center text-center space-y-8 md:space-y-10">
+                        <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-500/10 rounded-[2rem] flex items-center justify-center border border-indigo-500/20 text-indigo-400 shadow-inner group-hover:rotate-12 transition-transform">
+                          <svg className="w-8 h-8 md:w-10 md:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </div>
 
-                      <div className="space-y-4">
-                         <h4 className="text-3xl font-black text-white tracking-tighter">Objective Selector</h4>
-                         <p className="text-sm text-slate-500 leading-relaxed font-medium">Select a major pattern category below or challenge the entire syllabus.</p>
-                      </div>
-
-                      {/* Dropdown Selection */}
-                      <div className="w-full space-y-3">
-                         <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">Select Major Category</label>
-                         <div className="relative group/select">
+                        <div className="w-full space-y-4">
+                          <label className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-600 block">Search Scope Configuration</label>
+                          <div className="relative group/select">
                             <select 
                               value={selectedSectionId}
                               onChange={(e) => setSelectedSectionId(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-slate-200 py-6 px-8 rounded-[2rem] appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all cursor-pointer font-bold text-sm tracking-tight"
+                              className="w-full bg-slate-950 border border-slate-800 text-slate-100 py-4 md:py-5 px-8 rounded-[1.8rem] appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all cursor-pointer font-bold text-sm tracking-tight hover:border-slate-700"
                             >
-                               {DSA_DATA.map(s => (
-                                 <option key={s.id} value={s.id}>{s.title}</option>
-                               ))}
+                                {DSA_DATA.map(s => (
+                                  <option key={s.id} value={s.id}>{s.title}</option>
+                                ))}
                             </select>
                             <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-slate-600">
-                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                             </div>
-                         </div>
-                         {currentSectionData && (
-                            <div className="flex justify-between px-4 pt-1">
-                               <span className="text-[10px] font-black uppercase text-indigo-400/60 tracking-widest">{currentSectionData.solved}/{currentSectionData.total} Solved</span>
-                               <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Progress Active</span>
+                          </div>
+                          {currentSectionData && (
+                            <div className="flex justify-between items-center px-6">
+                               <div className="flex items-center gap-2">
+                                  <div className="w-1 h-1 rounded-full bg-indigo-500" />
+                                  <span className="text-[9px] font-black uppercase text-slate-500 tracking-[0.2em]">{currentSectionData.solved}/{currentSectionData.total} Solved</span>
+                               </div>
+                               <span className="text-[9px] font-black uppercase text-indigo-400 tracking-widest">{Math.round((currentSectionData.solved/currentSectionData.total)*100)}%</span>
                             </div>
-                         )}
-                      </div>
+                          )}
+                        </div>
 
-                      {/* Unified Control Buttons */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full pt-4">
-                         <button 
-                           onClick={() => pickRandom('section')}
-                           className="py-6 px-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[2rem] font-black text-[11px] uppercase tracking-[0.25em] shadow-xl shadow-indigo-600/20 transition-all active:scale-95 group/btn flex items-center justify-center gap-3"
-                         >
-                            <span>Spin Category</span>
-                            <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7" /></svg>
-                         </button>
-                         <button 
-                           onClick={() => pickRandom('global')}
-                           className="py-6 px-10 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[2rem] font-black text-[11px] uppercase tracking-[0.25em] shadow-xl shadow-emerald-600/20 transition-all active:scale-95 group/btn flex items-center justify-center gap-3"
-                         >
-                            <span>Global Spin</span>
-                            <svg className="w-4 h-4 group-hover/btn:rotate-45 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
-                         </button>
-                      </div>
-                   </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                          <button 
+                            onClick={() => pickRandom('section')}
+                            className="py-5 px-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.3em] shadow-xl shadow-indigo-600/20 transition-all active:scale-95 flex items-center justify-center gap-3 group/spin"
+                          >
+                             <span>Spin Section</span>
+                             <svg className="w-4 h-4 group-hover/spin:rotate-45 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7" /></svg>
+                          </button>
+                          <button 
+                            onClick={() => pickRandom('global')}
+                            className="py-5 px-10 bg-slate-800 hover:bg-slate-700 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.3em] transition-all active:scale-95 flex items-center justify-center gap-3 group/spin"
+                          >
+                             <span>Global Spin</span>
+                             <svg className="w-4 h-4 group-hover/spin:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                          </button>
+                        </div>
+                    </div>
+                  </div>
                 </div>
 
              </div>
@@ -470,7 +455,6 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-slate-950/98 backdrop-blur-3xl animate-in fade-in duration-500">
            <div className="bg-[#0f172a] border border-slate-800/80 rounded-[3.5rem] w-full max-w-md p-14 shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-indigo-500" />
-              
               <div className="text-center mb-12">
                  <div className="w-20 h-20 bg-emerald-500/10 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 border border-emerald-500/20 text-emerald-500">
                     <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
@@ -478,46 +462,54 @@ const App: React.FC = () => {
                  <h3 className="text-4xl font-black text-white mb-4 tracking-tighter leading-none">Universal Link</h3>
                  <p className="text-sm text-slate-500 leading-relaxed font-medium">Use a unique handle to sync your progress question-by-question across all your devices.</p>
               </div>
-
               <form onSubmit={setupHandle} className="space-y-8">
                  <div className="bg-slate-950 p-8 rounded-[2.5rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
                     <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Global Handle</label>
                     <div className="flex items-center gap-3 text-2xl font-mono">
                        <span className="text-emerald-500/40">@</span>
-                       <input 
-                         autoFocus 
-                         type="text" 
-                         placeholder="yourname-dsa" 
-                         value={handle} 
-                         onChange={(e) => setHandle(e.target.value)} 
-                         className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" 
-                       />
+                       <input autoFocus type="text" placeholder="yourname-dsa" value={handle} onChange={(e) => setHandle(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
                     </div>
                  </div>
-
                  <button type="submit" className="w-full py-7 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[2.5rem] font-black text-sm tracking-[0.4em] uppercase shadow-2xl shadow-indigo-600/20 transition-all active:scale-95">Connect Profile</button>
               </form>
            </div>
         </div>
       )}
 
-      {/* Target Focus Overlay (The Random Pick Result) */}
+      {/* Target Focus Overlay (The Random Pick Result) - TRANSPARENT GLASS CARD */}
       {randomPick && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-8 bg-slate-950/95 backdrop-blur-2xl animate-in zoom-in-95 duration-300">
-           <div className="bg-slate-900 border border-emerald-500/30 rounded-[4rem] p-14 max-w-lg w-full text-center relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)]" />
-              <div className="w-24 h-24 bg-emerald-500/10 rounded-[3rem] flex items-center justify-center mx-auto mb-10 text-emerald-400 border border-emerald-500/20 shadow-inner">
-                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-8 bg-slate-950/40 backdrop-blur-2xl animate-in zoom-in-95 duration-300">
+           <div className="bg-[#0f172a]/60 border border-emerald-500/30 rounded-[3rem] p-10 max-w-md w-full text-center relative overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.1)]">
+              <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500" />
+              
+              <div className="w-16 h-16 bg-emerald-500/20 rounded-[1.8rem] flex items-center justify-center mx-auto mb-8 text-emerald-400 border border-emerald-500/20">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               </div>
-              <p className="text-[11px] font-black text-emerald-500 uppercase tracking-[0.5em] mb-4">Strategic Objective</p>
-              <h3 className="text-3xl font-black text-white mb-6 tracking-tight leading-tight">{randomPick.title}</h3>
-              <div className="flex justify-center gap-4 mb-12">
+              
+              <p className="text-[9px] font-black text-emerald-500 uppercase tracking-[0.4em] mb-3">Objective Acquired</p>
+              <h3 className="text-2xl font-black text-white mb-6 tracking-tight leading-snug">{randomPick.title}</h3>
+              
+              <div className="flex justify-center items-center gap-3 mb-10">
                  <DifficultyBadge diff={randomPick.difficulty} />
-                 <span className="text-[11px] font-black text-slate-500 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 font-mono tracking-tighter">LC #{randomPick.id}</span>
+                 <span className="text-[10px] font-black text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-800 font-mono">LC #{randomPick.id}</span>
               </div>
-              <div className="flex flex-col gap-4">
-                 <a href={randomPick.link} target="_blank" rel="noreferrer" onClick={() => setRandomPick(null)} className="py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[2.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-xl shadow-emerald-600/30 transition-all active:scale-95">Go To LeetCode</a>
-                 <button onClick={() => setRandomPick(null)} className="py-6 bg-slate-800/50 hover:bg-slate-800 text-slate-500 rounded-[2.5rem] font-bold text-xs uppercase tracking-widest transition-all">Dismiss</button>
+              
+              <div className="flex flex-col gap-3">
+                 <a 
+                   href={randomPick.link} 
+                   target="_blank" 
+                   rel="noreferrer" 
+                   onClick={() => setRandomPick(null)} 
+                   className="py-5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
+                 >
+                   Launch LeetCode
+                 </a>
+                 <button 
+                   onClick={() => setRandomPick(null)} 
+                   className="py-4 text-slate-500 hover:text-slate-300 font-black text-[9px] uppercase tracking-widest transition-colors"
+                 >
+                   Dismiss
+                 </button>
               </div>
            </div>
         </div>
