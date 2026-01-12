@@ -33,6 +33,12 @@ const CloseIcon = () => (
   </svg>
 );
 
+const SyncIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+  </svg>
+);
+
 const App: React.FC = () => {
   const [completedIds, setCompletedIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('dsa-tracker-progress');
@@ -41,6 +47,7 @@ const App: React.FC = () => {
   const [selectedPattern, setSelectedPattern] = useState<Pattern>(DSA_DATA[0].patterns[0]);
   const [openSections, setOpenSections] = useState<string[]>([DSA_DATA[0].id]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'copied' | 'error'>('idle');
 
   useEffect(() => {
     localStorage.setItem('dsa-tracker-progress', JSON.stringify(completedIds));
@@ -56,6 +63,34 @@ const App: React.FC = () => {
     setOpenSections(prev => 
       prev.includes(sectionId) ? prev.filter(id => id !== sectionId) : [...prev, sectionId]
     );
+  };
+
+  // Manual Sync Logic
+  const handleExport = () => {
+    try {
+      const dataString = btoa(JSON.stringify(completedIds));
+      navigator.clipboard.writeText(dataString);
+      setSyncStatus('copied');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (e) {
+      setSyncStatus('error');
+    }
+  };
+
+  const handleImport = () => {
+    const code = prompt("Paste your Sync Code here to restore your progress:");
+    if (!code) return;
+    try {
+      const decoded = JSON.parse(atob(code));
+      if (Array.isArray(decoded)) {
+        setCompletedIds(decoded);
+        alert("Success! Progress synced.");
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      alert("Invalid Sync Code. Please make sure you copied the full code.");
+    }
   };
 
   const totalQuestionsCount = useMemo(() => {
@@ -153,20 +188,45 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="p-6 border-t border-slate-800 bg-slate-900/50">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-slate-300">Overall Progress</span>
-            <span className="text-sm font-bold text-emerald-500">{overallProgress}%</span>
+        {/* Sync & Progress Footer */}
+        <div className="p-6 border-t border-slate-800 bg-slate-900/50 space-y-4">
+          {/* Sync Controls */}
+          <div className="flex gap-2">
+            <button 
+              onClick={handleExport}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all border
+                ${syncStatus === 'copied' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}
+              `}
+            >
+              <SyncIcon />
+              {syncStatus === 'copied' ? 'Copied Code!' : 'Get Sync Code'}
+            </button>
+            <button 
+              onClick={handleImport}
+              className="px-3 py-2 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all"
+              title="Import Progress"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+            </button>
           </div>
-          <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-emerald-500 transition-all duration-1000 ease-out" 
-              style={{ width: `${overallProgress}%` }} 
-            />
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-300">Overall Progress</span>
+              <span className="text-sm font-bold text-emerald-500">{overallProgress}%</span>
+            </div>
+            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-emerald-500 transition-all duration-1000 ease-out" 
+                style={{ width: `${overallProgress}%` }} 
+              />
+            </div>
+            <p className="text-[10px] text-slate-500 mt-3 text-center">
+              {completedIds.length} / {totalQuestionsCount} Problems Solved
+            </p>
           </div>
-          <p className="text-[10px] text-slate-500 mt-3 text-center">
-            {completedIds.length} / {totalQuestionsCount} Problems Solved
-          </p>
         </div>
       </aside>
 
