@@ -1,6 +1,68 @@
 
 import { Section, Question } from './types';
 
+// Hardcoded difficulty map for instant lookup (covers current syllabus)
+const DIFFICULTY_MAP: Record<string, 'Easy' | 'Medium' | 'Hard'> = {
+  // Pattern 1 & 2
+  "1": "Easy", "11": "Medium", "15": "Medium", "16": "Medium", "18": "Medium", "167": "Medium", "349": "Easy", "881": "Medium", "977": "Easy", "259": "Medium",
+  "141": "Easy", "202": "Easy", "287": "Medium", "392": "Easy",
+  // Pattern 3 & 4
+  "19": "Medium", "876": "Easy", "2095": "Medium",
+  "26": "Easy", "27": "Easy", "75": "Medium", "80": "Medium", "283": "Easy", "443": "Medium", "905": "Easy", "2337": "Medium", "2938": "Medium",
+  // Pattern 5, 6, 7
+  "844": "Easy", "1598": "Easy", "2390": "Medium",
+  "5": "Medium", "647": "Medium",
+  "151": "Medium", "344": "Easy", "345": "Easy", "541": "Easy",
+  // Sliding Window
+  "346": "Easy", "643": "Easy", "2985": "Easy", "3254": "Easy", "3318": "Easy",
+  "3": "Medium", "76": "Hard", "209": "Medium", "219": "Easy", "424": "Medium", "713": "Medium", "904": "Medium", "1004": "Medium", "1438": "Medium", "1493": "Medium", "1658": "Medium", "1838": "Medium", "2461": "Medium", "2516": "Medium", "2762": "Medium", "2779": "Medium", "2981": "Medium", "3026": "Medium", "3346": "Medium", "3347": "Hard",
+  "239": "Hard", "862": "Hard", "1696": "Medium", "438": "Medium", "567": "Medium",
+  // Trees
+  "102": "Medium", "103": "Medium", "199": "Medium", "515": "Medium", "1161": "Medium",
+  "100": "Easy", "101": "Easy", "105": "Medium", "114": "Medium", "226": "Easy", "257": "Easy", "988": "Medium",
+  "94": "Easy", "98": "Medium", "173": "Medium", "230": "Medium", "501": "Easy", "530": "Easy",
+  "104": "Easy", "110": "Easy", "124": "Hard", "145": "Easy", "337": "Medium", "366": "Medium", "543": "Easy", "863": "Medium", "1110": "Medium", "2458": "Hard",
+  "235": "Medium", "236": "Medium", "297": "Hard", "572": "Easy", "652": "Medium",
+  // Graphs
+  "130": "Medium", "200": "Medium", "417": "Medium", "547": "Medium", "695": "Medium", "733": "Easy", "841": "Medium", "1020": "Medium", "1254": "Medium", "1905": "Medium", "2101": "Medium",
+  "542": "Medium", "994": "Medium", "1091": "Medium", "207": "Medium", "210": "Medium", "802": "Medium", "1059": "Medium",
+  "269": "Hard", "310": "Medium", "444": "Medium", "1136": "Medium", "1857": "Hard", "2050": "Hard", "2115": "Medium", "2392": "Hard",
+  "133": "Medium", "1334": "Medium", "138": "Medium", "1490": "Easy",
+  "743": "Medium", "778": "Hard", "1514": "Medium", "1631": "Medium", "1976": "Medium", "2045": "Hard", "2203": "Hard", "2290": "Hard", "2577": "Hard", "2812": "Medium",
+  "787": "Medium", "1129": "Medium", "261": "Medium", "305": "Hard", "323": "Medium", "684": "Medium", "721": "Medium", "737": "Medium", "947": "Medium", "952": "Hard", "959": "Medium", "1101": "Medium",
+  "1192": "Hard", "2360": "Hard", "1135": "Medium", "1584": "Medium", "1168": "Hard", "1489": "Hard", "127": "Hard", "126": "Hard", "815": "Hard",
+  // DP
+  "70": "Easy", "91": "Medium", "198": "Medium", "213": "Medium", "509": "Easy", "740": "Medium", "746": "Easy",
+  "53": "Medium", "918": "Medium", "2321": "Hard", "1749": "Medium", "152": "Medium",
+  "322": "Medium", "377": "Medium", "518": "Medium", "416": "Medium", "494": "Medium", "139": "Medium", "140": "Hard",
+  "1143": "Medium", "1092": "Hard", "1312": "Hard", "72": "Hard", "583": "Medium", "712": "Medium",
+  "62": "Medium", "63": "Medium", "64": "Medium", "120": "Medium", "221": "Medium", "931": "Medium", "1277": "Medium",
+  "312": "Hard", "546": "Hard", "95": "Medium", "96": "Medium", "241": "Medium", "300": "Medium", "354": "Hard", "1671": "Hard", "2407": "Hard",
+  "121": "Easy", "122": "Medium", "123": "Hard", "188": "Hard", "309": "Medium",
+  // Heaps
+  "215": "Medium", "347": "Medium", "451": "Medium", "506": "Easy", "703": "Easy", "973": "Medium", "1046": "Easy", "2558": "Easy",
+  "295": "Hard", "1825": "Hard", "23": "Hard", "373": "Medium", "378": "Medium", "632": "Hard",
+  "253": "Medium", "767": "Medium", "857": "Hard", "1642": "Medium", "1792": "Medium", "1834": "Medium", "1942": "Medium", "2402": "Hard",
+  // Backtracking
+  "17": "Medium", "77": "Medium", "78": "Medium", "90": "Medium", "31": "Medium", "46": "Medium", "60": "Hard", "39": "Medium", "40": "Medium", "22": "Medium", "301": "Hard", "79": "Medium", "212": "Hard", "2018": "Medium", "37": "Hard", "51": "Hard", "131": "Medium", "132": "Hard", "1457": "Medium",
+  // Greedy
+  "56": "Medium", "57": "Medium", "759": "Hard", "986": "Medium", "2406": "Medium", "45": "Medium", "55": "Medium", "134": "Medium", "2202": "Medium", "621": "Medium", "1054": "Medium", "455": "Easy", "135": "Hard", "406": "Medium", "1029": "Medium",
+  // Binary Search
+  "35": "Easy", "69": "Easy", "74": "Medium", "278": "Easy", "374": "Easy", "540": "Medium", "704": "Easy", "1539": "Easy", "33": "Medium", "81": "Medium", "153": "Medium", "162": "Medium", "852": "Medium", "1095": "Hard", "410": "Hard", "774": "Hard", "875": "Medium", "1011": "Medium", "1482": "Medium", "1760": "Medium", "2064": "Medium", "2226": "Medium", "34": "Medium", "658": "Medium", "4": "Hard", "719": "Hard",
+  // Stack
+  "20": "Easy", "32": "Hard", "921": "Medium", "1249": "Medium", "1963": "Medium", "402": "Medium", "496": "Easy", "503": "Medium", "739": "Medium", "901": "Medium", "907": "Medium", "962": "Medium", "1475": "Easy", "1673": "Medium", "150": "Medium", "224": "Hard", "227": "Medium", "772": "Hard", "71": "Medium", "394": "Medium", "735": "Medium", "155": "Medium", "895": "Hard", "84": "Hard", "85": "Hard",
+  // Bit Manipulation
+  "136": "Easy", "137": "Medium", "268": "Easy", "389": "Easy", "191": "Easy", "231": "Easy", "477": "Medium", "338": "Easy", "1494": "Hard", "1442": "Medium", "342": "Easy",
+  // Linked Lists
+  "83": "Easy", "92": "Medium", "206": "Easy", "25": "Hard", "234": "Easy", "82": "Medium", "21": "Easy", "2": "Medium", "369": "Medium", "160": "Easy", "599": "Easy", "24": "Medium", "61": "Medium", "86": "Medium", "143": "Medium", "328": "Medium",
+  // Arrays
+  "48": "Medium", "189": "Medium", "867": "Easy", "54": "Medium", "59": "Medium", "885": "Medium", "2326": "Medium", "73": "Medium", "289": "Medium", "498": "Medium", "238": "Medium", "845": "Medium", "2483": "Medium", "66": "Easy", "43": "Medium", "989": "Easy", "67": "Easy", "88": "Easy", "41": "Hard", "442": "Medium", "448": "Easy",
+  // Strings
+  "9": "Easy", "125": "Easy", "680": "Easy", "49": "Medium", "242": "Easy", "13": "Easy", "12": "Medium", "8": "Medium", "65": "Hard", "415": "Easy", "28": "Easy", "214": "Hard", "686": "Medium", "796": "Easy", "3008": "Hard", "459": "Easy",
+  // Design & Tries
+  "146": "Medium", "225": "Easy", "232": "Easy", "251": "Medium", "271": "Medium", "341": "Medium", "353": "Medium", "359": "Easy", "362": "Medium", "379": "Medium", "380": "Medium", "432": "Hard", "460": "Hard", "604": "Easy", "622": "Medium", "641": "Medium", "642": "Hard", "706": "Easy", "715": "Hard", "900": "Medium", "981": "Medium", "1146": "Medium", "1348": "Medium", "1352": "Medium", "1381": "Medium", "1756": "Medium", "2013": "Medium", "2034": "Medium", "2296": "Hard", "2336": "Medium", "208": "Medium", "211": "Medium", "720": "Medium", "648": "Medium", "425": "Hard", "745": "Hard"
+};
+
 const generateLeetCodeLink = (title: string): string => {
   const slug = title
     .toLowerCase()
@@ -17,19 +79,21 @@ const parseQuestions = (raw: string): Question[] => {
     if (match) {
       const id = match[1];
       const title = match[2];
+      const difficulty = DIFFICULTY_MAP[id] || "Medium"; // Default to Medium if not in map
       return {
         id,
         title,
         fullTitle: trimmed,
         link: generateLeetCodeLink(title),
+        difficulty,
       };
     }
-    // Fallback for weird formatting
     return {
       id: trimmed,
       title: trimmed,
       fullTitle: trimmed,
       link: `https://leetcode.com/search/?q=${encodeURIComponent(trimmed)}`,
+      difficulty: "Medium",
     };
   });
 };

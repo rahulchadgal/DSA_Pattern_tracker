@@ -4,6 +4,7 @@ export interface Question {
   title: string; // The problem name (e.g. "Container With Most Water")
   fullTitle: string; // "11. Container With Most Water"
   link: string; // LeetCode URL
+  difficulty: 'Easy' | 'Medium' | 'Hard';
 }
 
 export interface Pattern {
