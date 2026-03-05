@@ -8,6 +8,8 @@ const SB_URL = "https://hbmjpwgwvbtdccdxflxr.supabase.co";
 const SB_KEY = "sb_publishable_7QI-0tcuaub-wWk6ZEc2BQ_3GoXjKgk";
 const PROFILE_KEY = 'dsa-handle-v4';
 const LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
+const NAVBAR_COLLAPSED_KEY = 'dsa-navbar-collapsed-v1';
+const GRID_VIEW_KEY = 'dsa-grid-view-v1';
 
 // --- UTILS ---
 const formatDate = (dateStr: string) => {
@@ -100,9 +102,14 @@ const App: React.FC = () => {
   const [selectedSectionId, setSelectedSectionId] = useState<string>(DSA_DATA[0].id);
   const [openSections, setOpenSections] = useState<string[]>([DSA_DATA[0].id]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => localStorage.getItem(NAVBAR_COLLAPSED_KEY) === 'true');
   const [showWelcome, setShowWelcome] = useState(!handle);
   const [randomPick, setRandomPick] = useState<Question | null>(null);
   const [viewMode, setViewMode] = useState<'syllabus' | 'random'>('syllabus');
+  const [gridView, setGridView] = useState<'list' | 'small' | 'big'>(() => {
+    const saved = localStorage.getItem(GRID_VIEW_KEY);
+    return saved === 'list' || saved === 'small' || saved === 'big' ? saved : 'big';
+  });
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
@@ -164,6 +171,14 @@ const App: React.FC = () => {
       return () => window.removeEventListener('focus', onFocus);
     }
   }, [handle, pullRelationalProgress]);
+
+  useEffect(() => {
+    localStorage.setItem(NAVBAR_COLLAPSED_KEY, String(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem(GRID_VIEW_KEY, gridView);
+  }, [gridView]);
 
   // --- HANDLERS ---
 
@@ -252,16 +267,26 @@ const App: React.FC = () => {
       
       {/* Sidebar Navigation */}
       <aside className={`
-        fixed md:sticky top-0 left-0 h-screen w-80 bg-[#0f172a] border-r border-slate-800/60 flex flex-col z-50
-        transition-transform duration-500 md:translate-x-0
+        fixed md:sticky top-0 left-0 h-screen bg-[#0f172a] border-r border-slate-800/60 flex flex-col z-50
+        transition-all duration-500 md:translate-x-0 ${isSidebarCollapsed ? 'md:w-24' : 'md:w-80'} w-80
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <div className="p-8 border-b border-slate-800/40">
-          <h1 className="text-2xl font-black text-white tracking-tighter mb-2 underline decoration-indigo-500 underline-offset-8">DSA ENGINE</h1>
+        <div className={`${isSidebarCollapsed ? 'p-4' : 'p-8'} border-b border-slate-800/40`}>
+          <div className="flex items-center justify-between gap-2">
+            {!isSidebarCollapsed && <h1 className="text-2xl font-black text-white tracking-tighter mb-2 underline decoration-indigo-500 underline-offset-8">DSA ENGINE</h1>}
+            {isSidebarCollapsed && <h1 className="text-lg font-black text-white tracking-tighter">DSA</h1>}
+            <button
+              onClick={() => setIsSidebarCollapsed(prev => !prev)}
+              className="hidden md:flex p-2 bg-slate-900 rounded-xl border border-slate-800 text-slate-400 hover:text-slate-200"
+              title={isSidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+            >
+              <svg className={`w-4 h-4 transition-transform ${isSidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            </button>
+          </div>
           <div className="mt-4 flex flex-col gap-2">
             <button onClick={() => setShowWelcome(true)} className="flex items-center gap-2 group w-fit text-left">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] group-hover:text-white transition-colors">@{handle || 'guest'}</span>
+              {!isSidebarCollapsed && <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] group-hover:text-white transition-colors">@{handle || 'guest'}</span>}
             </button>
           </div>
         </div>
@@ -269,15 +294,16 @@ const App: React.FC = () => {
         <nav className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-4">
           {DSA_DATA.map(section => (
             <div key={section.id} className="space-y-1">
-              <button 
+              <button
+                title={section.title}
                 onClick={() => setOpenSections(prev => prev.includes(section.id) ? prev.filter(i => i !== section.id) : [...prev, section.id])}
-                className="w-full flex items-center justify-between p-3 text-left group"
+                className={`w-full flex items-center justify-between p-3 text-left group ${isSidebarCollapsed ? 'px-1' : ''}`}
               >
-                <span className={`text-[10px] font-black uppercase tracking-widest ${openSections.includes(section.id) ? 'text-indigo-400' : 'text-slate-600 group-hover:text-slate-400'}`}>{section.title}</span>
-                <svg className={`w-3 h-3 text-slate-700 transition-transform ${openSections.includes(section.id) ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${openSections.includes(section.id) ? 'text-indigo-400' : 'text-slate-600 group-hover:text-slate-400'} ${isSidebarCollapsed ? 'mx-auto text-center' : ''}`}>{isSidebarCollapsed ? section.title.slice(0, 3) : section.title}</span>
+                {!isSidebarCollapsed && <svg className={`w-3 h-3 text-slate-700 transition-transform ${openSections.includes(section.id) ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>}
               </button>
               
-              {openSections.includes(section.id) && (
+              {openSections.includes(section.id) && !isSidebarCollapsed && (
                 <div className="space-y-1 ml-2">
                   {section.patterns.map(pattern => {
                     const active = selectedPattern.id === pattern.id;
@@ -306,7 +332,7 @@ const App: React.FC = () => {
           ))}
         </nav>
 
-        <div className="p-8 bg-slate-900/50 border-t border-slate-800/40">
+        <div className={`${isSidebarCollapsed ? 'p-4' : 'p-8'} bg-slate-900/50 border-t border-slate-800/40`}>
            <div className="flex justify-between items-end mb-3">
               <span className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Overall Progress</span>
               <span className="text-xl font-black text-white">{Math.round((Object.keys(completedMap).length / 250) * 100)}%</span>
@@ -324,6 +350,9 @@ const App: React.FC = () => {
             <div className="flex items-center gap-6">
               <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3 bg-slate-900 rounded-2xl border border-slate-800 text-slate-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              </button>
+              <button onClick={() => setIsSidebarCollapsed(prev => !prev)} className="hidden md:flex p-3 bg-slate-900 rounded-2xl border border-slate-800 text-slate-400">
+                <svg className={`w-5 h-5 transition-transform ${isSidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
               </button>
               <div>
                 <h2 className="text-xl md:text-2xl font-black text-white tracking-tighter">
@@ -367,22 +396,41 @@ const App: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-8 md:p-14 custom-scrollbar">
            {viewMode === 'syllabus' ? (
-             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 pb-32">
+             <>
+               <div className="mb-8 flex items-center gap-3">
+                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">View Settings</span>
+                 <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
+                   {([
+                     ['list', 'List View'],
+                     ['small', 'Small Icons'],
+                     ['big', 'Big Icons']
+                   ] as const).map(([mode, label]) => (
+                     <button
+                       key={mode}
+                       onClick={() => setGridView(mode)}
+                       className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                     >
+                       {label}
+                     </button>
+                   ))}
+                 </div>
+               </div>
+               <div className={`pb-32 ${gridView === 'list' ? 'flex flex-col gap-4 max-w-4xl' : gridView === 'small' ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6'}`}>
                 {selectedPattern.questions.map(q => {
                   const timestamp = completedMap[q.id];
                   const done = !!timestamp;
                   return (
-                    <div key={q.id} className={`group relative p-8 rounded-[2.5rem] border transition-all duration-500 hover:-translate-y-2 ${done ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600'}`}>
-                       <div className="flex flex-col h-full gap-6">
-                          <div className="flex gap-6 items-start">
+                    <div key={q.id} className={`group relative border transition-all duration-500 ${gridView === 'small' ? 'p-5 rounded-3xl' : gridView === 'list' ? 'p-5 rounded-2xl' : 'p-8 rounded-[2.5rem] hover:-translate-y-2'} ${done ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600'}`}>
+                       <div className={`flex flex-col h-full ${gridView === 'small' ? 'gap-3' : 'gap-6'}`}>
+                          <div className={`flex items-start ${gridView === 'small' ? 'gap-3' : 'gap-6'}`}>
                              <button 
                                onClick={() => toggleQuestion(q.id)}
-                               className={`shrink-0 w-14 h-14 rounded-3xl border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white shadow-xl shadow-emerald-500/20' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
+                               className={`shrink-0 ${gridView === 'small' ? 'w-10 h-10 rounded-2xl' : 'w-14 h-14 rounded-3xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white shadow-xl shadow-emerald-500/20' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
                              >
-                                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                <svg className={`${gridView === 'small' ? 'w-5 h-5' : 'w-7 h-7'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                              </button>
                              <div className="flex-1 min-w-0 pt-1">
-                                <a href={q.link} target="_blank" rel="noreferrer" className={`block text-lg font-bold leading-tight mb-2 transition-all ${done ? 'text-slate-600 line-through opacity-60 italic' : 'text-slate-100 group-hover:text-indigo-400'}`}>{q.title}</a>
+                                <a href={q.link} target="_blank" rel="noreferrer" className={`block ${gridView === 'small' ? 'text-sm' : 'text-lg'} font-bold leading-tight mb-2 transition-all ${done ? 'text-slate-600 line-through opacity-60 italic' : 'text-slate-100 group-hover:text-indigo-400'}`}>{q.title}</a>
                                 <div className="flex items-center gap-3">
                                    <span className="text-[10px] font-bold text-slate-700 font-mono tracking-tighter">LC #{q.id}</span>
                                    <DifficultyBadge diff={q.difficulty} />
@@ -391,7 +439,7 @@ const App: React.FC = () => {
                           </div>
                           
                           {/* Last Updated Timestamp */}
-                          {done && (
+                          {done && gridView !== 'small' && (
                             <div className="flex flex-col gap-1 border-t border-emerald-500/10 pt-4 animate-in fade-in slide-in-from-top-1 duration-700">
                                <span className="text-[8px] font-black uppercase text-emerald-500/50 tracking-[0.2em]">Last Updated</span>
                                <span className="text-[10px] font-bold text-slate-400 font-mono italic">
@@ -403,7 +451,8 @@ const App: React.FC = () => {
                     </div>
                   );
                 })}
-             </div>
+               </div>
+             </>
            ) : (
              <div className="h-full flex flex-col items-center pt-10 md:pt-16 px-4">
                 
