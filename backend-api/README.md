@@ -37,7 +37,7 @@ Use `.env.example` values in Render environment:
 1. Create PostgreSQL in Aiven and copy host/port/db/user/password.
 2. Construct JDBC URL:
    `jdbc:postgresql://<host>:<port>/<database>`
-3. Deploy backend on Render using `backend/render.yaml`.
+3. Deploy backend on Render using `backend-api/render.yaml`.
 4. Fill secret env vars in Render dashboard.
 5. In Vercel frontend, set `VITE_API_BASE_URL` to Render backend `/api` path.
 

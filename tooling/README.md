@@ -6,11 +6,11 @@ This folder contains cross-IDE tooling for the DSA Pattern Tracker.
 
 - `shared-core` (Maven): common REST client + LeetCode JSON parser + tree builder.
 - `eclipse-plugin` (PDE skeleton): STS/Eclipse OSGi plugin boilerplate with `ViewPart` + `TreeViewer`.
-- `intellij-bridge` (reference): IntelliJ secure token + bridge classes + Gradle dependency example.
+- `intellij-plugin` (reference): IntelliJ secure token + bridge classes + Gradle dependency example.
 
 ## Build shared core
 
 ```bash
-cd ide-tooling
+cd tooling
 mvn -pl shared-core -am clean install
 ```

@@ -3,13 +3,14 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.dsatracker</groupId>
-    <artifactId>ide-tooling-parent</artifactId>
+    <artifactId>dsa-pattern-tracker-root</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>DSA Pattern IDE Tooling Parent</name>
+    <name>DSA Pattern Tracker Root</name>
 
     <modules>
-        <module>shared-core</module>
+        <module>backend-api</module>
+        <module>tooling</module>
     </modules>
 </project>

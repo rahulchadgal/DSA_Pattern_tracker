@@ -3,10 +3,13 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.dsatracker</groupId>
-    <artifactId>intellij-bridge</artifactId>
+    <artifactId>tooling-parent</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>DSA Pattern IntelliJ Bridge</name>
-    <description>Reference integration for reusing shared-core from IntelliJ plugins</description>
+    <name>DSA Pattern IDE Tooling Parent</name>
+
+    <modules>
+        <module>shared-core</module>
+    </modules>
 </project>

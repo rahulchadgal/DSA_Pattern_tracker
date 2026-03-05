@@ -1,36 +1,54 @@
+# DSA Pattern Tracker Monorepo
 
-# 🚀 Deployment Guide: DSA Pattern Tracker
+This repository is organized so each major component can be opened directly in its preferred IDE.
 
-To get your app live on your **GoDaddy Domain** for free:
+## Folder layout
 
-## Step 1: Push to GitHub
-1. Create a new repository on [GitHub](https://github.com).
-2. Upload these files to the repository.
+- `frontend-app/` - React + Vite UI
+- `backend-api/` - Spring Boot 4 API
+- `tooling/shared-core/` - shared Java library for IDE plugins
+- `tooling/eclipse-plugin/` - STS/Eclipse PDE plugin
+- `tooling/intellij-plugin/` - IntelliJ SDK plugin bridge/reference
 
-## Step 2: Connect to Vercel (Free Hosting)
-1. Go to [Vercel.com](https://vercel.com) and sign up with GitHub.
-2. Click **"Add New"** > **"Project"**.
-3. Import your GitHub repository.
-4. Click **"Deploy"**. Your app is now live on a `.vercel.app` URL!
+## Open in IDE
 
-## Step 3: Link your GoDaddy Domain
-1. In your Vercel Project dashboard, go to **Settings** > **Domains**.
-2. Type your GoDaddy domain (e.g., `www.yourname.com`) and click **Add**.
-3. Vercel will show you two DNS records (usually an **A record** and a **CNAME record**).
-4. Log into **GoDaddy** > **My Products** > **DNS Management** for your domain.
-5. **Update the records:**
-   - Change the `A` record `@` to point to the IP Vercel gave you.
-   - Change the `CNAME` record `www` to point to `cname.vercel-dns.com`.
-6. Wait 5-10 minutes. Your DSA tracker is now live on your personal site!
+- IntelliJ IDEA:
+  - Open `frontend-app/` for frontend work, or
+  - Open `backend-api/` for backend work, or
+  - Open `tooling/` for shared/plugin Java code
+- STS/Eclipse:
+  - Import existing Maven project from `backend-api/`
+  - Import existing projects from `tooling/eclipse-plugin` and `tooling/shared-core`
+  - Use PDE target platform for Eclipse plugin dependencies
 
----
+## Run locally
 
-### Why this setup?
-- **Fast:** Vercel uses a Global Edge Network (much faster than GoDaddy's servers).
-- **SSL Included:** You get a free Padlock (HTTPS) automatically.
-- **Auto-Update:** Whenever you change your code on GitHub, your website updates automatically.
-- **Zero Cost:** The hosting is free forever as long as you aren't getting millions of hits.
+Frontend:
 
-## Backend API (Spring Boot)
-A backend scaffold is available under `backend/` with JWT auth, CORS, PostgreSQL entities, and Render/Aiven deployment notes.
-See: `backend/README.md`.
+```bash
+cd frontend-app
+npm install
+npm run dev
+```
+
+Backend:
+
+```bash
+cd backend-api
+mvn spring-boot:run
+```
+
+Shared core build:
+
+```bash
+cd tooling
+mvn -pl shared-core -am clean install
+```
+
+Or use root helper scripts:
+
+```bash
+./dev/run-frontend.sh
+./dev/run-backend.sh
+./dev/build-shared-core.sh
+```

@@ -15,7 +15,7 @@ This project provides a PDE plugin skeleton with a `ViewPart` named **DSA Patter
 1. Build shared-core jar:
 
 ```bash
-cd ide-tooling
+cd tooling
 mvn -pl shared-core -am clean install
 ```
 

@@ -4,7 +4,7 @@ Use this reference to wire `shared-core` into your IntelliJ SDK plugin project a
 
 ## 1) Install the shared module locally
 
-From `ide-tooling/`:
+From `tooling/`:
 
 ```bash
 mvn -pl shared-core -am clean install
@@ -25,7 +25,7 @@ dependencies {
 If you prefer source-level linking during development, use Gradle composite builds:
 
 ```kotlin
-includeBuild("../ide-tooling/shared-core")
+includeBuild("../tooling/shared-core")
 ```
 
 ## 3) Token storage with PasswordSafe
