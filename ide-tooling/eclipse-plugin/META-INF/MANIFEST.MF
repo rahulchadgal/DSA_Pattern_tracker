@@ -1,0 +1,20 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: DSA Patterns Plugin
+Bundle-SymbolicName: com.dsatracker.eclipse.plugin;singleton:=true
+Bundle-Version: 0.1.0.qualifier
+Bundle-Activator: com.dsatracker.eclipse.Activator
+Bundle-RequiredExecutionEnvironment: JavaSE-21
+Require-Bundle: org.eclipse.ui,
+ org.eclipse.core.runtime,
+ org.eclipse.core.resources,
+ org.eclipse.jface,
+ org.eclipse.ui.ide,
+ org.eclipse.ui.workbench,
+ org.eclipse.equinox.security,
+ org.eclipse.equinox.security.ui
+Import-Package: com.dsatracker.idecore.auth,
+ com.dsatracker.idecore.client,
+ com.dsatracker.idecore.model,
+ com.dsatracker.idecore.tree
+Bundle-ActivationPolicy: lazy
