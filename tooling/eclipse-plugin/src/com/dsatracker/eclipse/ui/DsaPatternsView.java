@@ -62,7 +62,7 @@ public class DsaPatternsView extends ViewPart {
         });
 
         backendClient = new DsaBackendClient(
-                new BackendClientConfig(URI.create("http://localhost:8080"), Duration.ofSeconds(15), null),
+                new BackendClientConfig(URI.create("http://localhost:8888"), Duration.ofSeconds(15), null),
                 new EclipseSecureTokenStore()
         );
 

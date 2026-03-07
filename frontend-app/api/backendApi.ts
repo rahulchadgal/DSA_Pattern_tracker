@@ -43,7 +43,7 @@ export interface QuestionUpsertPayload {
   metadataJson: string;
 }
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8080';
+const DEFAULT_API_BASE_URL = 'http://localhost:8888';
 
 const getConfiguredBase = () => {
   const envValue = import.meta.env.VITE_API_BASE_URL?.trim();

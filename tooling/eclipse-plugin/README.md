@@ -27,6 +27,6 @@ mvn -pl shared-core -am clean install
 
 ## Notes
 
-- Backend base URL is currently hardcoded to `http://localhost:8080` in `DsaPatternsView`.
+- Backend base URL is currently hardcoded to `http://localhost:8888` in `DsaPatternsView`.
 - The view expects a JWT token to already exist in secure storage for `/api/v2/questions`.
 - Add a login command/dialog that calls `DsaBackendClient.login(...)` and stores token via `EclipseSecureTokenStore`.

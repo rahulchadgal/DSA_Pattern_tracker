@@ -5,7 +5,7 @@
 
 Copy `frontend-app/.env.example` into `.env` and configure:
 
-- `VITE_API_BASE_URL` - backend API base URL (`http://localhost:8080` for local)
+- `VITE_API_BASE_URL` - backend API base URL (`http://localhost:8888` for local)
 
 To get your app live on your **GoDaddy Domain** for free:
 
