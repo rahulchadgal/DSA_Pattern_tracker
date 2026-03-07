@@ -5,7 +5,7 @@ services:
     plan: free
     autoDeploy: true
     rootDir: backend-api
-    healthCheckPath: /actuator/health
+    healthCheckPath: /actuator/health/liveness
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod

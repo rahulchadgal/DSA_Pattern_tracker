@@ -37,7 +37,7 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health", "/api/auth/**", "/api/v1/questions").permitAll()
+                        .requestMatchers("/actuator/health/**", "/api/auth/**", "/api/v1/questions").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v2/questions").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v2/questions").permitAll()
                         .requestMatchers("/api/progress/**").permitAll()

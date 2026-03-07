@@ -26,3 +26,13 @@ logging:
     org.springframework.web: INFO
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} level=%-5level logger=%logger{36} requestId=%X{requestId:-na} msg=%msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
