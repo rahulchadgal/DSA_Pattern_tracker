@@ -6,8 +6,6 @@
 Copy `frontend-app/.env.example` into `.env` and configure:
 
 - `VITE_API_BASE_URL` - backend API base URL (`http://localhost:8080` for local)
-- `VITE_SUPABASE_URL` - existing Supabase project URL (temporary during migration)
-- `VITE_SUPABASE_ANON_KEY` - Supabase anon key (temporary during migration)
 
 To get your app live on your **GoDaddy Domain** for free:
 

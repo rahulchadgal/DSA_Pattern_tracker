@@ -23,8 +23,18 @@ public class QuestionService {
                 .toList();
     }
 
-    public List<QuestionV2Response> getV2Questions() {
-        return questionRepository.findAll().stream()
+    public List<QuestionV2Response> getV2Questions(Boolean customOnly, String importedByHandle) {
+        List<QuestionCatalogItem> source;
+        if (Boolean.TRUE.equals(customOnly)) {
+            String normalizedHandle = normalizeOptionalHandle(importedByHandle);
+            source = normalizedHandle == null
+                    ? questionRepository.findByCustomImportedTrue()
+                    : questionRepository.findByCustomImportedTrueAndImportedByHandle(normalizedHandle);
+        } else {
+            source = questionRepository.findAll();
+        }
+
+        return source.stream()
                 .map(q -> new QuestionV2Response(
                         q.getLeetcodeId(),
                         q.getTitle(),
@@ -53,10 +63,17 @@ public class QuestionService {
         item.setLink(request.link().trim());
         item.setDefaultQuestion(request.defaultQuestion());
         item.setCustomImported(request.customImported());
-        item.setImportedByHandle(request.importedByHandle());
+        item.setImportedByHandle(normalizeOptionalHandle(request.importedByHandle()));
         item.setContentType(request.contentType() == null || request.contentType().isBlank() ? "QUESTION_ONLY" : request.contentType().trim());
         item.setMetadataJson(request.metadataJson());
 
         return questionRepository.save(item);
+    }
+
+    private String normalizeOptionalHandle(String handle) {
+        if (handle == null || handle.isBlank()) {
+            return null;
+        }
+        return handle.trim().toLowerCase();
     }
 }

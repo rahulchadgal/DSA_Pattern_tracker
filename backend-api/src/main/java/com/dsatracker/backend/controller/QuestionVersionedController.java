@@ -25,8 +25,11 @@ public class QuestionVersionedController {
     }
 
     @GetMapping("/v2/questions")
-    public List<QuestionV2Response> listV2Questions() {
-        return questionService.getV2Questions();
+    public List<QuestionV2Response> listV2Questions(
+            @RequestParam(required = false) Boolean customOnly,
+            @RequestParam(required = false) String importedByHandle
+    ) {
+        return questionService.getV2Questions(customOnly, importedByHandle);
     }
 
     @PostMapping("/v2/questions")

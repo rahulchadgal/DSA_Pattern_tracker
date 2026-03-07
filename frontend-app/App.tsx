@@ -1,18 +1,14 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { DSA_DATA } from './constants';
+import { backendApi, QuestionV1Row } from './api/backendApi';
+import { useProfileHandle } from './hooks/useProfileHandle';
+import { useAppRoute } from './hooks/useAppRoute';
 import { Pattern, Question, Section } from './types';
 
-// --- SUPABASE CONFIG ---
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-const SB_URL = import.meta.env.VITE_SUPABASE_URL || '';
-const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-const PROFILE_KEY = 'dsa-handle-v4';
 const LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
 const NAVBAR_COLLAPSED_KEY = 'dsa-navbar-collapsed-v1';
 const GRID_VIEW_KEY = 'dsa-grid-view-v1';
 const CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
-const CUSTOM_QUESTION_TABLE = 'dsa_custom_questions_v1';
 
 type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
 
@@ -29,22 +25,18 @@ interface CustomQuestionRow extends LcMetadata {
   patternId: string;
 }
 
-const CATEGORY_TO_SECTION_ID: Record<string, string> = {
-  'Dynamic Programming': 'S5',
-  'Sliding Window': 'S2',
-  'Graphs': 'S4',
-  'Trees': 'S3',
-  'Binary Search': 'S9',
-  'Greedy': 'S8',
-  'Backtracking': 'S7',
-  'Stacks': 'S10',
-  'Two Pointers': 'S1',
-  'Heaps': 'S6'
-};
-
-const CATEGORY_OPTIONS = Object.keys(CATEGORY_TO_SECTION_ID);
-const isSupabaseConfigured = Boolean(SB_URL && SB_KEY);
-const supabaseHeaders = () => ({ 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` });
+const CATEGORY_OPTIONS = [
+  'Dynamic Programming',
+  'Sliding Window',
+  'Graphs',
+  'Trees',
+  'Binary Search',
+  'Greedy',
+  'Backtracking',
+  'Stacks',
+  'Two Pointers',
+  'Heaps'
+];
 
 // --- UTILS ---
 const formatDate = (dateStr: string) => {
@@ -64,6 +56,75 @@ const formatDate = (dateStr: string) => {
 
 
 const cloneSections = (sections: Section[]): Section[] => JSON.parse(JSON.stringify(sections));
+
+const findSectionIdByCategory = (sections: Section[], category: string): string => {
+  if (sections.length === 0) return '';
+  const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalizedCategory = norm(category);
+
+  const exact = sections.find(s => norm(s.title) === normalizedCategory);
+  if (exact) return exact.id;
+
+  const inclusive = sections.find(s => {
+    const title = norm(s.title);
+    return title.includes(normalizedCategory) || normalizedCategory.includes(title);
+  });
+  if (inclusive) return inclusive.id;
+
+  return sections[0].id;
+};
+
+const normalizeDifficulty = (difficulty: string): DifficultyLevel => {
+  if (difficulty === 'Easy' || difficulty === 'Medium' || difficulty === 'Hard') {
+    return difficulty;
+  }
+  return 'Medium';
+};
+
+const buildSectionsFromQuestions = (questions: QuestionV1Row[]): Section[] => {
+  const sectionMap = new Map<string, { section: Section; patternMap: Map<string, Pattern> }>();
+  let sectionCounter = 1;
+  let patternCounter = 1;
+
+  questions.forEach((row) => {
+    const sectionTitle = row.mainPattern?.trim() || 'General';
+    const patternName = row.subPattern?.trim() || 'General Pattern';
+
+    let sectionEntry = sectionMap.get(sectionTitle);
+    if (!sectionEntry) {
+      sectionEntry = {
+        section: {
+          id: `S${sectionCounter++}`,
+          title: sectionTitle,
+          patterns: []
+        },
+        patternMap: new Map<string, Pattern>()
+      };
+      sectionMap.set(sectionTitle, sectionEntry);
+    }
+
+    let pattern = sectionEntry.patternMap.get(patternName);
+    if (!pattern) {
+      pattern = {
+        id: `P${patternCounter++}`,
+        name: patternName,
+        questions: []
+      };
+      sectionEntry.patternMap.set(patternName, pattern);
+      sectionEntry.section.patterns.push(pattern);
+    }
+
+    pattern.questions.push({
+      id: row.leetcodeId,
+      title: row.title,
+      fullTitle: `${row.leetcodeId}. ${row.title}`,
+      link: row.link,
+      difficulty: normalizeDifficulty(row.difficulty)
+    });
+  });
+
+  return Array.from(sectionMap.values()).map((entry) => entry.section);
+};
 
 const addCustomQuestionToSections = (sections: Section[], customQuestion: CustomQuestionRow): Section[] => {
   const next = cloneSections(sections);
@@ -166,17 +227,8 @@ const DifficultyBadge: React.FC<{ diff: string }> = ({ diff }) => {
 };
 
 const App: React.FC = () => {
-  // --- IDENTITY ---
-  const [handle, setHandle] = useState(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlHandle = urlParams.get('user');
-    if (urlHandle) {
-      localStorage.setItem(PROFILE_KEY, urlHandle.toLowerCase());
-      window.history.replaceState({}, '', window.location.pathname);
-      return urlHandle.toLowerCase();
-    }
-    return localStorage.getItem(PROFILE_KEY) || '';
-  });
+  const { handle, setHandle, showWelcome, setShowWelcome, persistHandle } = useProfileHandle();
+  const { isProfile, isRoulette, isSyllabus, goMain, goProfile, goSyllabus, goRoulette } = useAppRoute();
 
   // --- PROGRESS STATE (Map of ID -> Timestamp) ---
   const [completedMap, setCompletedMap] = useState<Record<string, string>>(() => {
@@ -185,20 +237,18 @@ const App: React.FC = () => {
   });
   
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'saved' | 'error' | 'idle'>('idle');
-  const [sectionsData, setSectionsData] = useState<Section[]>(() => cloneSections(DSA_DATA));
-  const [selectedPattern, setSelectedPattern] = useState<Pattern>(DSA_DATA[0].patterns[0]);
-  const [selectedSectionId, setSelectedSectionId] = useState<string>(DSA_DATA[0].id);
-  const [openSections, setOpenSections] = useState<string[]>([DSA_DATA[0].id]);
+  const [baseSectionsData, setBaseSectionsData] = useState<Section[]>([]);
+  const [sectionsData, setSectionsData] = useState<Section[]>([]);
+  const [selectedPattern, setSelectedPattern] = useState<Pattern>({ id: '', name: 'Loading...', questions: [] });
+  const [selectedSectionId, setSelectedSectionId] = useState<string>('');
+  const [openSections, setOpenSections] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => localStorage.getItem(NAVBAR_COLLAPSED_KEY) === 'true');
-  const [showWelcome, setShowWelcome] = useState(!handle);
   const [randomPick, setRandomPick] = useState<Question | null>(null);
-  const [viewMode, setViewMode] = useState<'syllabus' | 'random'>('syllabus');
   const [gridView, setGridView] = useState<'list' | 'small' | 'big'>(() => {
     const saved = localStorage.getItem(GRID_VIEW_KEY);
     return saved === 'list' || saved === 'small' || saved === 'big' ? saved : 'big';
   });
-  const [activeScreen, setActiveScreen] = useState<'main' | 'profile'>('main');
   const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
   const [questionIdInput, setQuestionIdInput] = useState('');
   const [aiSuggestion, setAiSuggestion] = useState<LcMetadata | null>(null);
@@ -208,21 +258,38 @@ const App: React.FC = () => {
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
+  const pullBaseQuestions = useCallback(async () => {
+    try {
+      const rows = await backendApi.getQuestionsV1();
+      const nextSections = buildSectionsFromQuestions(rows);
+      setBaseSectionsData(nextSections);
+      setSectionsData(nextSections);
+
+      if (nextSections.length > 0 && nextSections[0].patterns.length > 0) {
+        const firstSection = nextSections[0];
+        setSelectedSectionId(firstSection.id);
+        setSelectedPattern(firstSection.patterns[0]);
+        setOpenSections([firstSection.id]);
+      } else {
+        setSelectedSectionId('');
+        setSelectedPattern({ id: '', name: 'No Patterns', questions: [] });
+        setOpenSections([]);
+      }
+    } catch {
+      setSyncStatus('error');
+    }
+  }, []);
+
   const pullRelationalProgress = useCallback(async (userHandle: string) => {
     if (!userHandle) return;
-    if (!isSupabaseConfigured) {
-      setSyncStatus('error');
-      return;
-    }
     setSyncStatus('syncing');
     try {
-      const response = await fetch(`${SB_URL}/rest/v1/dsa_progress_v4?handle=eq.${userHandle.toLowerCase()}&is_completed=eq.true&select=question_id,updated_at`, {
-        headers: supabaseHeaders()
-      });
-      const rows = await response.json();
+      const rows = await backendApi.getProgress(userHandle);
       const map: Record<string, string> = {};
-      rows.forEach((r: { question_id: string, updated_at: string }) => {
-        map[r.question_id] = r.updated_at;
+      rows.forEach((r) => {
+        if (r.completed) {
+          map[r.leetcodeId] = r.updatedAt;
+        }
       });
       
       setCompletedMap(map);
@@ -233,31 +300,16 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const atomicUpdate = async (qId: string, isChecked: boolean, timestamp: string) => {
+  const atomicUpdate = async (qId: string, isChecked: boolean) => {
     if (!handle) return;
-    if (!isSupabaseConfigured) {
-      setSyncStatus('error');
-      return;
-    }
     setSyncStatus('syncing');
     try {
-      const response = await fetch(`${SB_URL}/rest/v1/dsa_progress_v4`, {
-        method: 'POST',
-        headers: {
-          ...supabaseHeaders(),
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({ 
-          handle: handle.toLowerCase(), 
-          question_id: qId, 
-          is_completed: isChecked,
-          updated_at: timestamp
-        })
+      await backendApi.upsertProgress({
+        handle: handle.toLowerCase(),
+        leetcodeId: qId,
+        completed: isChecked
       });
-
-      if (response.ok) setSyncStatus('saved');
-      else throw new Error();
+      setSyncStatus('saved');
     } catch (e) {
       setSyncStatus('error');
     }
@@ -266,25 +318,22 @@ const App: React.FC = () => {
 
   const saveCustomQuestion = async (question: CustomQuestionRow) => {
     if (!handle) return;
-    if (!isSupabaseConfigured) return;
     try {
-      await fetch(`${SB_URL}/rest/v1/${CUSTOM_QUESTION_TABLE}`, {
-        method: 'POST',
-        headers: {
-          ...supabaseHeaders(),
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({
-          handle: handle.toLowerCase(),
-          question_id: question.questionId,
-          title: question.title,
-          difficulty: question.difficulty,
-          category: question.category,
-          section_id: question.sectionId,
-          pattern_id: question.patternId,
-          link: question.link,
-          updated_at: new Date().toISOString()
+      await backendApi.upsertQuestion({
+        leetcodeId: question.questionId,
+        title: question.title,
+        difficulty: question.difficulty,
+        mainPattern: question.category,
+        subPattern: question.patternId,
+        link: question.link,
+        defaultQuestion: false,
+        customImported: true,
+        importedByHandle: handle.toLowerCase(),
+        contentType: 'QUESTION_ONLY',
+        metadataJson: JSON.stringify({
+          sectionId: question.sectionId,
+          patternId: question.patternId,
+          source: 'frontend-app'
         })
       });
     } catch (error) {
@@ -294,37 +343,49 @@ const App: React.FC = () => {
 
   const pullCustomQuestions = useCallback(async (userHandle: string) => {
     const fromCache = localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY);
-    if (fromCache) {
+    if (fromCache && baseSectionsData.length > 0) {
       const cachedRows: CustomQuestionRow[] = JSON.parse(fromCache);
-      setSectionsData(prev => cachedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), prev));
+      const merged = cachedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
+      setSectionsData(merged);
     }
 
     if (!userHandle) return;
-    if (!isSupabaseConfigured) return;
 
     try {
-      const response = await fetch(`${SB_URL}/rest/v1/${CUSTOM_QUESTION_TABLE}?handle=eq.${userHandle.toLowerCase()}&select=question_id,title,difficulty,category,section_id,pattern_id,link`, {
-        headers: supabaseHeaders()
-      });
-      if (!response.ok) return;
-      const rows = await response.json();
-      const normalizedRows: CustomQuestionRow[] = rows.map((row: any) => ({
-        questionId: row.question_id,
+      const rows = await backendApi.getCustomQuestions(userHandle);
+      const normalizedRows: CustomQuestionRow[] = rows.map((row: any) => {
+        let sectionId = '';
+        let patternId = '';
+        if (row.metadataJson) {
+          try {
+            const metadata = JSON.parse(row.metadataJson);
+            sectionId = metadata.sectionId || '';
+            patternId = metadata.patternId || '';
+          } catch {
+            // ignore invalid metadata and fall back to pattern mapping
+          }
+        }
+        const inferredSectionId = sectionId || findSectionIdByCategory(baseSectionsData, row.mainPattern);
+        return {
+          questionId: row.leetcodeId,
         title: row.title,
         difficulty: row.difficulty,
-        category: row.category,
-        sectionId: row.section_id,
-        patternId: row.pattern_id,
+        category: row.mainPattern,
+        sectionId: inferredSectionId,
+        patternId: patternId || `custom-${inferredSectionId}`,
         link: row.link
-      }));
+        };
+      });
 
       localStorage.setItem(CUSTOM_QUESTIONS_CACHE_KEY, JSON.stringify(normalizedRows));
-      setSectionsData(cloneSections(DSA_DATA));
-      setSectionsData(prev => normalizedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), prev));
+      if (baseSectionsData.length > 0) {
+        const merged = normalizedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
+        setSectionsData(merged);
+      }
     } catch (error) {
       // keep cached/local data only
     }
-  }, []);
+  }, [baseSectionsData]);
 
   const handleClassifyQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -340,8 +401,12 @@ const App: React.FC = () => {
     if (!aiSuggestion || !handle) return;
     setIsSavingQuestion(true);
 
-    const selectedCategory = manualCategory in CATEGORY_TO_SECTION_ID ? manualCategory : 'Dynamic Programming';
-    const sectionId = CATEGORY_TO_SECTION_ID[selectedCategory] || 'S5';
+    const selectedCategory = CATEGORY_OPTIONS.includes(manualCategory) ? manualCategory : 'Dynamic Programming';
+    const sectionId = findSectionIdByCategory(baseSectionsData, selectedCategory) || selectedSectionId;
+    if (!sectionId) {
+      setIsSavingQuestion(false);
+      return;
+    }
     const patternId = `custom-${sectionId}`;
 
     const newRow: CustomQuestionRow = {
@@ -386,6 +451,10 @@ const App: React.FC = () => {
   // --- SYNC TRIGGERS ---
 
   useEffect(() => {
+    pullBaseQuestions();
+  }, [pullBaseQuestions]);
+
+  useEffect(() => {
     if (handle) {
       pullRelationalProgress(handle);
       pullCustomQuestions(handle);
@@ -393,14 +462,30 @@ const App: React.FC = () => {
       window.addEventListener('focus', onFocus);
       return () => window.removeEventListener('focus', onFocus);
     }
-  }, [handle, pullRelationalProgress, pullCustomQuestions]);
+  }, [handle, pullRelationalProgress, pullCustomQuestions, baseSectionsData]);
 
   useEffect(() => {
     const cachedRows: CustomQuestionRow[] = JSON.parse(localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY) || '[]');
-    if (cachedRows.length) {
-      setSectionsData(prev => cachedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), prev));
+    if (cachedRows.length && baseSectionsData.length > 0) {
+      const merged = cachedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
+      setSectionsData(merged);
     }
-  }, []);
+  }, [baseSectionsData]);
+
+  useEffect(() => {
+    if (sectionsData.length === 0) return;
+    const selectedSection = sectionsData.find(s => s.id === selectedSectionId) || sectionsData[0];
+    if (!selectedSection) return;
+
+    if (selectedSection.id !== selectedSectionId) {
+      setSelectedSectionId(selectedSection.id);
+    }
+
+    const matchedPattern = selectedSection.patterns.find(p => p.id === selectedPattern.id) || selectedSection.patterns[0];
+    if (matchedPattern && matchedPattern.id !== selectedPattern.id) {
+      setSelectedPattern(matchedPattern);
+    }
+  }, [sectionsData, selectedSectionId, selectedPattern.id]);
 
   useEffect(() => {
     localStorage.setItem(NAVBAR_COLLAPSED_KEY, String(isSidebarCollapsed));
@@ -425,16 +510,13 @@ const App: React.FC = () => {
     
     setCompletedMap(nextMap);
     localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(nextMap));
-    atomicUpdate(id, isNowChecked, timestamp);
+    atomicUpdate(id, isNowChecked);
   };
 
   const setupHandle = (e: React.FormEvent) => {
     e.preventDefault();
     if (handle.trim()) {
-      const cleanHandle = handle.trim().toLowerCase();
-      setHandle(cleanHandle);
-      localStorage.setItem(PROFILE_KEY, cleanHandle);
-      setShowWelcome(false);
+      const cleanHandle = persistHandle(handle);
       pullRelationalProgress(cleanHandle);
       pullCustomQuestions(cleanHandle);
     }
@@ -493,6 +575,16 @@ const App: React.FC = () => {
     return stats;
   }, [completedMap, sectionsData]);
 
+  const totalQuestions = useMemo(() => {
+    return sectionsData.reduce((sum, section) => (
+      sum + section.patterns.reduce((patternSum, pattern) => patternSum + pattern.questions.length, 0)
+    ), 0);
+  }, [sectionsData]);
+
+  const overallPercent = totalQuestions > 0
+    ? Math.round((Object.keys(completedMap).length / totalQuestions) * 100)
+    : 0;
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-indigo-500/30">
       
@@ -544,7 +636,7 @@ const App: React.FC = () => {
                     return (
                       <button 
                         key={pattern.id} 
-                        onClick={() => { setSelectedPattern(pattern); setSelectedSectionId(section.id); setViewMode('syllabus'); setIsSidebarOpen(false); }}
+                        onClick={() => { setSelectedPattern(pattern); setSelectedSectionId(section.id); goSyllabus(); setIsSidebarOpen(false); }}
                         className={`w-full group px-4 py-3 rounded-2xl text-[12px] text-left transition-all border ${active ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-lg shadow-indigo-500/5' : 'text-slate-500 hover:bg-slate-800/40 border-transparent'}`}
                       >
                         <div className="flex justify-between items-center mb-2">
@@ -566,10 +658,10 @@ const App: React.FC = () => {
         <div className={`${isSidebarCollapsed ? 'p-4' : 'p-8'} bg-slate-900/50 border-t border-slate-800/40`}>
            <div className="flex justify-between items-end mb-3">
               <span className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Overall Progress</span>
-              <span className="text-xl font-black text-white">{Math.round((Object.keys(completedMap).length / 250) * 100)}%</span>
+              <span className="text-xl font-black text-white">{overallPercent}%</span>
            </div>
            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-1000" style={{ width: `${(Object.keys(completedMap).length / 250) * 100}%` }} />
+              <div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-1000" style={{ width: `${overallPercent}%` }} />
            </div>
         </div>
       </aside>
@@ -587,13 +679,13 @@ const App: React.FC = () => {
               </button>
               <div>
                 <h2 className="text-xl md:text-2xl font-black text-white tracking-tighter">
-                  {activeScreen === 'profile' ? 'Profile Settings' : viewMode === 'syllabus' ? selectedPattern.name : 'Objective Selection'}
+                  {isProfile ? 'Profile Settings' : isSyllabus ? (selectedPattern.name || 'Syllabus') : 'Objective Selection'}
                 </h2>
                 <div className="flex items-center gap-3 mt-1.5">
                    <CloudStatus status={syncStatus} />
                    <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-900/60 rounded-xl border border-slate-800/50">
                       <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Global</span>
-                      <span className="text-[10px] font-black text-indigo-400 font-mono">{Math.round((Object.keys(completedMap).length / 250) * 100)}%</span>
+                      <span className="text-[10px] font-black text-indigo-400 font-mono">{overallPercent}%</span>
                    </div>
                 </div>
               </div>
@@ -609,29 +701,29 @@ const App: React.FC = () => {
                {/* Header Mode Switcher */}
                <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
                   <button
-                    onClick={() => setActiveScreen('main')}
-                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeScreen === 'main' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                    onClick={goMain}
+                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                   >
                     Main
                   </button>
                   <button
-                    onClick={() => setActiveScreen('profile')}
-                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeScreen === 'profile' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                    onClick={goProfile}
+                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                   >
                     Profile
                   </button>
                </div>
-               {activeScreen === 'main' && (
+               {!isProfile && (
                  <div className="hidden sm:flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
                     <button 
-                      onClick={() => setViewMode('syllabus')}
-                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'syllabus' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                      onClick={goSyllabus}
+                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isSyllabus ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                     >
                       Syllabus
                     </button>
                     <button 
-                      onClick={() => setViewMode('random')}
-                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'random' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                      onClick={goRoulette}
+                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRoulette ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                     >
                       Roulette
                     </button>
@@ -642,7 +734,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-8 md:p-14 custom-scrollbar">
-           {activeScreen === 'profile' ? (
+           {isProfile ? (
              <div className="max-w-3xl mx-auto">
                <div className="rounded-[2.5rem] border border-slate-800/70 bg-slate-900/40 p-8 md:p-12">
                  <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-black">Profile Settings</p>
@@ -656,7 +748,7 @@ const App: React.FC = () => {
                  </button>
                </div>
              </div>
-           ) : viewMode === 'syllabus' ? (
+           ) : isSyllabus ? (
              <>
                <div className="mb-8 flex items-center gap-3">
                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">View Settings</span>

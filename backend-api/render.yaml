@@ -18,7 +18,7 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: CORS_ALLOWED_ORIGINS
-        sync: false
+        value: https://www.rahulchadgal.in,https://rahulchadgal.in,https://dsa-pattern-tracker-git-main-rahulchadgals-projects.vercel.app,https://dsa-pattern-tracker-oz3jjzlxp-rahulchadgals-projects.vercel.app
       - key: JWT_EXPIRATION_MS
         sync: false
       - key: FEATURE_AI_CLASSIFICATION

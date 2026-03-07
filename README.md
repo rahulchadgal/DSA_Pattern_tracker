@@ -33,8 +33,6 @@ npm run dev
 
 Set env first (see `frontend-app/.env.example`):
 - `VITE_API_BASE_URL`
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
 
 Backend:
 

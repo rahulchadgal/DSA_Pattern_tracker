@@ -19,14 +19,27 @@ public class ProgressController {
     }
 
     @GetMapping
-    public List<ProgressResponse> getMyProgress(Authentication authentication) {
-        return progressService.getForHandle(authentication.getName()).stream()
+    public List<ProgressResponse> getMyProgress(
+            @RequestParam(required = false) String handle,
+            Authentication authentication
+    ) {
+        return progressService.getForHandle(resolveHandle(authentication, handle)).stream()
                 .map(progressService::toResponse)
                 .toList();
     }
 
     @PostMapping
     public ProgressResponse upsertProgress(@RequestBody @Valid ProgressUpsertRequest request, Authentication authentication) {
-        return progressService.toResponse(progressService.upsertProgress(authentication.getName(), request));
+        return progressService.toResponse(progressService.upsertProgress(resolveHandle(authentication, request.handle()), request));
+    }
+
+    private String resolveHandle(Authentication authentication, String fallbackHandle) {
+        if (authentication != null && authentication.getName() != null && !authentication.getName().isBlank()) {
+            return authentication.getName().trim().toLowerCase();
+        }
+        if (fallbackHandle != null && !fallbackHandle.isBlank()) {
+            return fallbackHandle.trim().toLowerCase();
+        }
+        throw new IllegalArgumentException("Handle is required when not authenticated");
     }
 }
