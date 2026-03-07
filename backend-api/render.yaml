@@ -7,6 +7,8 @@ services:
     rootDir: backend-api
     healthCheckPath: /actuator/health
     envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
       - key: PORT
         value: 8888
       - key: DB_URL
@@ -21,6 +23,8 @@ services:
         value: https://www.rahulchadgal.in,https://rahulchadgal.in,https://dsa-pattern-tracker-git-main-rahulchadgals-projects.vercel.app,https://dsa-pattern-tracker-oz3jjzlxp-rahulchadgals-projects.vercel.app
       - key: JWT_EXPIRATION_MS
         sync: false
+      - key: HIBERNATE_DDL_AUTO
+        value: validate
       - key: FEATURE_AI_CLASSIFICATION
         value: false
       - key: FEATURE_EXCEL_IMPORT

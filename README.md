@@ -41,7 +41,7 @@ cd backend-api
 mvn spring-boot:run
 ```
 
-Set env first (see `backend-api/.env.example`):
+Set env first (choose Spring active profile `local` or `prod` in IDE/Run config):
 - `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
 - `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`
 - `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`, `GOOGLE_APPLICATION_CREDENTIALS` (for future large object storage)
@@ -75,6 +75,5 @@ Or use root helper scripts:
 
 ```bash
 ./dev/run-frontend.sh
-./dev/run-backend.sh
 ./dev/build-shared-core.sh
 ```

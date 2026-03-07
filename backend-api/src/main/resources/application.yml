@@ -1,14 +1,8 @@
-server:
-  port: ${PORT:8888}
-
 spring:
-  datasource:
-    url: ${DB_URL:jdbc:postgresql://pg-1cf92bb0-chadgal33-2d14.k.aivencloud.com:12809/defaultdb?ssl=require}
-    username: ${DB_USERNAME:avnadmin}
-    password: ${DB_PASSWORD:AVNS_8E6PI-SHjUds6gf2jlw}
+  application:
+    name: dsa-tracker-backend
   jpa:
-    hibernate:
-      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     properties:
       hibernate:
         format_sql: true

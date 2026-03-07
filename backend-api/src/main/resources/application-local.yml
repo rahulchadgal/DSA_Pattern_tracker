@@ -1,0 +1,27 @@
+server:
+  port: ${PORT:8888}
+
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://pg-1cf92bb0-chadgal33-2d14.k.aivencloud.com:12809/defaultdb?ssl=require}
+    username: ${DB_USERNAME:avnadmin}
+    password: ${DB_PASSWORD:AVNS_8E6PI-SHjUds6gf2jlw}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:local-dev-secret-please-change-me-32-plus}
+
+logging:
+  level:
+    root: INFO
+    com.dsatracker.backend: DEBUG
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} level=%-5level logger=%logger{36} requestId=%X{requestId:-na} msg=%msg%n"

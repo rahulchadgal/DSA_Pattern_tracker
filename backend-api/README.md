@@ -26,7 +26,11 @@ Backend scaffold for migration from frontend-managed persistence to secure API-d
 - `POST /api/progress` (supports JWT or request-body `handle`)
 
 ## Environment variables
-Use `.env.example` values in Render environment:
+Use standard Spring Boot profiles from IDE/Run Configuration:
+- Active Profile `local` for local development
+- Active Profile `prod` for production-like runs
+
+Set env vars directly in your run configuration (or OS env):
 - `DB_URL`
 - `DB_USERNAME`
 - `DB_PASSWORD`
@@ -34,6 +38,11 @@ Use `.env.example` values in Render environment:
 - `CORS_ALLOWED_ORIGINS`
   - local dev default should include `http://localhost:3000` for Vite frontend
 - `HIBERNATE_DDL_AUTO` (`update` for local dev, `validate` recommended for managed DB after schema init)
+- `SPRING_PROFILES_ACTIVE` (`local` or `prod`)
+
+Notes:
+- Keep database name same between local/prod if needed (for example `defaultdb`), and only vary host/port/credentials.
+- No script is required for profile handling.
 
 ## Aiven + Render setup
 1. Create PostgreSQL in Aiven and copy host/port/db/user/password.
@@ -61,11 +70,13 @@ Use `.env.example` values in Render environment:
    - `Runtime`: `Docker`
    - `Health Check Path`: `/actuator/health`
 5. Set required environment variables:
+   - `SPRING_PROFILES_ACTIVE=prod`
    - `DB_URL`
    - `DB_USERNAME`
    - `DB_PASSWORD`
    - `JWT_SECRET`
    - `JWT_EXPIRATION_MS` (optional override)
+   - `HIBERNATE_DDL_AUTO=validate`
 6. Set `CORS_ALLOWED_ORIGINS` to at least:
    - `https://www.rahulchadgal.in`
    - `https://rahulchadgal.in`
