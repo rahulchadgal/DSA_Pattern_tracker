@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { backendApi, QuestionV1Row } from './api/backendApi';
+import { backendApi, QuestionV1Row, subscribeBackendWakeStatus } from './api/backendApi';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
 import { Pattern, Question, Section } from './types';
@@ -226,6 +226,16 @@ const DifficultyBadge: React.FC<{ diff: string }> = ({ diff }) => {
   );
 };
 
+const WakeBanner: React.FC<{ visible: boolean }> = ({ visible }) => {
+  if (!visible) return null;
+  return (
+    <div className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300">
+      <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+      <span className="text-[10px] font-black uppercase tracking-[0.15em]">Waking backend... retrying automatically</span>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   const { handle, setHandle, showWelcome, setShowWelcome, persistHandle } = useProfileHandle();
   const { isProfile, isRoulette, isSyllabus, goMain, goProfile, goSyllabus, goRoulette } = useAppRoute();
@@ -255,6 +265,7 @@ const App: React.FC = () => {
   const [manualCategory, setManualCategory] = useState<string>('Dynamic Programming');
   const [isClassifying, setIsClassifying] = useState(false);
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
+  const [isBackendWaking, setIsBackendWaking] = useState(false);
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
@@ -495,6 +506,30 @@ const App: React.FC = () => {
     localStorage.setItem(GRID_VIEW_KEY, gridView);
   }, [gridView]);
 
+  useEffect(() => {
+    let hideWakeTimer: number | undefined;
+    const unsubscribe = subscribeBackendWakeStatus((status) => {
+      if (hideWakeTimer) {
+        window.clearTimeout(hideWakeTimer);
+      }
+      if (status === 'waking') {
+        setIsBackendWaking(true);
+        return;
+      }
+      if (status === 'awake') {
+        hideWakeTimer = window.setTimeout(() => setIsBackendWaking(false), 1200);
+        return;
+      }
+      setIsBackendWaking(false);
+    });
+    return () => {
+      if (hideWakeTimer) {
+        window.clearTimeout(hideWakeTimer);
+      }
+      unsubscribe();
+    };
+  }, []);
+
   // --- HANDLERS ---
 
   const toggleQuestion = (id: string) => {
@@ -688,6 +723,7 @@ const App: React.FC = () => {
                       <span className="text-[10px] font-black text-indigo-400 font-mono">{overallPercent}%</span>
                    </div>
                 </div>
+                <WakeBanner visible={isBackendWaking} />
               </div>
             </div>
             
