@@ -4,7 +4,8 @@ services:
     runtime: docker
     plan: free
     autoDeploy: true
-    rootDir: backend
+    rootDir: backend-api
+    healthCheckPath: /actuator/health
     envVars:
       - key: PORT
         value: 8080
@@ -18,3 +19,9 @@ services:
         sync: false
       - key: CORS_ALLOWED_ORIGINS
         sync: false
+      - key: JWT_EXPIRATION_MS
+        sync: false
+      - key: FEATURE_AI_CLASSIFICATION
+        value: false
+      - key: FEATURE_EXCEL_IMPORT
+        value: false

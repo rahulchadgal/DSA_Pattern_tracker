@@ -4,8 +4,9 @@ import { DSA_DATA } from './constants';
 import { Pattern, Question, Section } from './types';
 
 // --- SUPABASE CONFIG ---
-const SB_URL = "https://hbmjpwgwvbtdccdxflxr.supabase.co";
-const SB_KEY = "sb_publishable_7QI-0tcuaub-wWk6ZEc2BQ_3GoXjKgk";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const SB_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const PROFILE_KEY = 'dsa-handle-v4';
 const LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
 const NAVBAR_COLLAPSED_KEY = 'dsa-navbar-collapsed-v1';
@@ -42,6 +43,8 @@ const CATEGORY_TO_SECTION_ID: Record<string, string> = {
 };
 
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_TO_SECTION_ID);
+const isSupabaseConfigured = Boolean(SB_URL && SB_KEY);
+const supabaseHeaders = () => ({ 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` });
 
 // --- UTILS ---
 const formatDate = (dateStr: string) => {
@@ -207,10 +210,14 @@ const App: React.FC = () => {
 
   const pullRelationalProgress = useCallback(async (userHandle: string) => {
     if (!userHandle) return;
+    if (!isSupabaseConfigured) {
+      setSyncStatus('error');
+      return;
+    }
     setSyncStatus('syncing');
     try {
       const response = await fetch(`${SB_URL}/rest/v1/dsa_progress_v4?handle=eq.${userHandle.toLowerCase()}&is_completed=eq.true&select=question_id,updated_at`, {
-        headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+        headers: supabaseHeaders()
       });
       const rows = await response.json();
       const map: Record<string, string> = {};
@@ -228,13 +235,16 @@ const App: React.FC = () => {
 
   const atomicUpdate = async (qId: string, isChecked: boolean, timestamp: string) => {
     if (!handle) return;
+    if (!isSupabaseConfigured) {
+      setSyncStatus('error');
+      return;
+    }
     setSyncStatus('syncing');
     try {
       const response = await fetch(`${SB_URL}/rest/v1/dsa_progress_v4`, {
         method: 'POST',
         headers: {
-          'apikey': SB_KEY,
-          'Authorization': `Bearer ${SB_KEY}`,
+          ...supabaseHeaders(),
           'Content-Type': 'application/json',
           'Prefer': 'resolution=merge-duplicates'
         },
@@ -256,12 +266,12 @@ const App: React.FC = () => {
 
   const saveCustomQuestion = async (question: CustomQuestionRow) => {
     if (!handle) return;
+    if (!isSupabaseConfigured) return;
     try {
       await fetch(`${SB_URL}/rest/v1/${CUSTOM_QUESTION_TABLE}`, {
         method: 'POST',
         headers: {
-          'apikey': SB_KEY,
-          'Authorization': `Bearer ${SB_KEY}`,
+          ...supabaseHeaders(),
           'Content-Type': 'application/json',
           'Prefer': 'resolution=merge-duplicates'
         },
@@ -290,10 +300,11 @@ const App: React.FC = () => {
     }
 
     if (!userHandle) return;
+    if (!isSupabaseConfigured) return;
 
     try {
       const response = await fetch(`${SB_URL}/rest/v1/${CUSTOM_QUESTION_TABLE}?handle=eq.${userHandle.toLowerCase()}&select=question_id,title,difficulty,category,section_id,pattern_id,link`, {
-        headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+        headers: supabaseHeaders()
       });
       if (!response.ok) return;
       const rows = await response.json();

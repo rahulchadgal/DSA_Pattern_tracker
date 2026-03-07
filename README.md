@@ -31,12 +31,40 @@ npm install
 npm run dev
 ```
 
+Set env first (see `frontend-app/.env.example`):
+- `VITE_API_BASE_URL`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
 Backend:
 
 ```bash
 cd backend-api
 mvn spring-boot:run
 ```
+
+Set env first (see `backend-api/.env.example`):
+- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
+- `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`
+- `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`, `GOOGLE_APPLICATION_CREDENTIALS` (for future large object storage)
+
+Initialize Aiven/Postgres schema before first backend run:
+
+```bash
+# one-time: copy/edit credentials file
+cp dev/.env.aiven.example dev/.env.aiven
+# then run init
+./dev/init-aiven-schema.sh
+```
+
+Seed question catalog from `frontend-app/constants.tsx`:
+
+```bash
+./dev/seed-aiven-questions.sh
+```
+
+Recommended for managed DB environments:
+- set `HIBERNATE_DDL_AUTO=validate` after schema is initialized.
 
 Shared core build:
 

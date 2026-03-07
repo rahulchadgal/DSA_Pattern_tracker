@@ -32,14 +32,24 @@ Use `.env.example` values in Render environment:
 - `DB_PASSWORD`
 - `JWT_SECRET`
 - `CORS_ALLOWED_ORIGINS`
+- `HIBERNATE_DDL_AUTO` (`update` for local dev, `validate` recommended for managed DB after schema init)
 
 ## Aiven + Render setup
 1. Create PostgreSQL in Aiven and copy host/port/db/user/password.
 2. Construct JDBC URL:
    `jdbc:postgresql://<host>:<port>/<database>`
-3. Deploy backend on Render using `backend-api/render.yaml`.
-4. Fill secret env vars in Render dashboard.
-5. In Vercel frontend, set `VITE_API_BASE_URL` to Render backend `/api` path.
+3. Initialize schema from repo:
+   ```bash
+   cp dev/.env.aiven.example dev/.env.aiven
+   ./dev/init-aiven-schema.sh
+   ```
+4. Seed default catalog questions from `frontend-app/constants.tsx`:
+   ```bash
+   ./dev/seed-aiven-questions.sh
+   ```
+5. Deploy backend on Render using `backend-api/render.yaml`.
+6. Fill secret env vars in Render dashboard.
+7. In Vercel frontend, set `VITE_API_BASE_URL` to Render backend `/api` path.
 
 ## Note
 AI classification and Excel import remain as upcoming feature modules and can be toggled by feature flags.

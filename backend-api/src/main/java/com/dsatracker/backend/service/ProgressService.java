@@ -1,6 +1,7 @@
 package com.dsatracker.backend.service;
 
 import com.dsatracker.backend.dto.ProgressUpsertRequest;
+import com.dsatracker.backend.dto.ProgressResponse;
 import com.dsatracker.backend.model.ProgressRecord;
 import com.dsatracker.backend.model.QuestionCatalogItem;
 import com.dsatracker.backend.model.UserHandle;
@@ -47,6 +48,15 @@ public class ProgressService {
         record.setQuestion(question);
         record.setCompleted(request.completed());
         return progressRepository.save(record);
+    }
+
+    public ProgressResponse toResponse(ProgressRecord record) {
+        return new ProgressResponse(
+                record.getQuestion().getLeetcodeId(),
+                record.isCompleted(),
+                record.getUpdatedAt(),
+                record.getCompletedAt()
+        );
     }
 
     @Recover

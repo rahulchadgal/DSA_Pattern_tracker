@@ -1,7 +1,7 @@
 package com.dsatracker.backend.controller;
 
 import com.dsatracker.backend.dto.ProgressUpsertRequest;
-import com.dsatracker.backend.model.ProgressRecord;
+import com.dsatracker.backend.dto.ProgressResponse;
 import com.dsatracker.backend.service.ProgressService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -19,12 +19,14 @@ public class ProgressController {
     }
 
     @GetMapping
-    public List<ProgressRecord> getMyProgress(Authentication authentication) {
-        return progressService.getForHandle(authentication.getName());
+    public List<ProgressResponse> getMyProgress(Authentication authentication) {
+        return progressService.getForHandle(authentication.getName()).stream()
+                .map(progressService::toResponse)
+                .toList();
     }
 
     @PostMapping
-    public ProgressRecord upsertProgress(@RequestBody @Valid ProgressUpsertRequest request, Authentication authentication) {
-        return progressService.upsertProgress(authentication.getName(), request);
+    public ProgressResponse upsertProgress(@RequestBody @Valid ProgressUpsertRequest request, Authentication authentication) {
+        return progressService.toResponse(progressService.upsertProgress(authentication.getName(), request));
     }
 }
