@@ -230,6 +230,21 @@ const DifficultyBadge: React.FC<{ diff: string }> = ({ diff }) => {
   );
 };
 
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 640;
+  });
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  return isMobile;
+};
+
 const WakeBanner: React.FC<{ visible: boolean }> = ({ visible }) => {
   if (!visible) return null;
   return (
@@ -243,6 +258,7 @@ const WakeBanner: React.FC<{ visible: boolean }> = ({ visible }) => {
 const App: React.FC = () => {
   const { handle, setHandle, showWelcome, setShowWelcome, persistHandle } = useProfileHandle();
   const { isProfile, isRoulette, isSyllabus, goMain, goProfile, goSyllabus, goRoulette } = useAppRoute();
+  const isMobile = useIsMobile();
 
   // --- PROGRESS STATE (Map of ID -> Timestamp) ---
   const [completedMap, setCompletedMap] = useState<Record<string, string>>(() => {
@@ -859,24 +875,24 @@ const App: React.FC = () => {
                    ))}
                  </div>
                </div>
-               <div className={`pb-32 ${gridView === 'list' ? 'flex flex-col gap-4 max-w-4xl' : gridView === 'small' ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6'}`}>
+               <div className={`pb-32 ${gridView === 'list' ? 'flex flex-col gap-3 sm:gap-4 max-w-4xl' : gridView === 'small' ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6'}`}>
                 {selectedPattern.questions.map(q => {
                   const timestamp = completedMap[q.id];
                   const done = !!timestamp;
                   const hasSolution = Boolean(solutionMap[q.id] && solutionMap[q.id].trim().length > 0);
                   return (
-                    <div key={q.id} className={`group relative border transition-all duration-500 ${gridView === 'small' ? 'p-5 rounded-3xl' : gridView === 'list' ? 'p-5 rounded-2xl' : 'p-8 rounded-[2.5rem] hover:-translate-y-2'} ${done ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600'}`}>
-                       <div className={`flex flex-col h-full ${gridView === 'small' ? 'gap-3' : 'gap-6'}`}>
-                          <div className={`flex items-start ${gridView === 'small' ? 'gap-3' : 'gap-6'}`}>
+                    <div key={q.id} className={`group relative border transition-all duration-500 ${gridView === 'small' ? 'p-4 sm:p-5 rounded-2xl sm:rounded-3xl' : gridView === 'list' ? 'p-3.5 sm:p-5 rounded-2xl' : 'p-5 sm:p-8 rounded-3xl sm:rounded-[2.5rem] sm:hover:-translate-y-2'} ${done ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600'}`}>
+                       <div className={`flex flex-col h-full ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
+                          <div className={`flex items-start ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
                              <button 
                                onClick={() => toggleQuestion(q.id)}
-                               className={`shrink-0 ${gridView === 'small' ? 'w-10 h-10 rounded-2xl' : 'w-14 h-14 rounded-3xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white shadow-xl shadow-emerald-500/20' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
+                               className={`shrink-0 ${gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-14 h-14 rounded-3xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white shadow-xl shadow-emerald-500/20' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
                              >
-                                <svg className={`${gridView === 'small' ? 'w-5 h-5' : 'w-7 h-7'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                <svg className={`${gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-7 h-7'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                              </button>
                              <div className="flex-1 min-w-0 pt-1">
-                                <a href={q.link} target="_blank" rel="noreferrer" className={`block ${gridView === 'small' ? 'text-sm' : 'text-lg'} font-bold leading-tight mb-2 transition-all ${done ? 'text-slate-600 line-through opacity-60 italic' : 'text-slate-100 group-hover:text-indigo-400'}`}>{q.title}</a>
-                                <div className="flex items-center gap-3">
+                                <a href={q.link} target="_blank" rel="noreferrer" className={`block ${gridView === 'small' || isMobile ? 'text-[13px] sm:text-sm' : 'text-base sm:text-lg'} font-bold leading-tight mb-1.5 sm:mb-2 transition-all ${done ? 'text-slate-600 line-through opacity-60 italic' : 'text-slate-100 group-hover:text-indigo-400'}`}>{q.title}</a>
+                                <div className="flex items-center gap-2 sm:gap-3">
                                    <span className="text-[10px] font-bold text-slate-700 font-mono tracking-tighter">LC #{q.id}</span>
                                    <DifficultyBadge diff={q.difficulty} />
                                    <button
@@ -888,7 +904,7 @@ const App: React.FC = () => {
                                          : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'
                                      }`}
                                    >
-                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                     <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
                                      </svg>
                                    </button>
@@ -898,7 +914,7 @@ const App: React.FC = () => {
                           
                           {/* Last Updated Timestamp */}
                           {done && gridView !== 'small' && (
-                            <div className="flex flex-col gap-1 border-t border-emerald-500/10 pt-4 animate-in fade-in slide-in-from-top-1 duration-700">
+                            <div className="flex flex-col gap-1 border-t border-emerald-500/10 pt-3 sm:pt-4 animate-in fade-in slide-in-from-top-1 duration-700">
                                <span className="text-[8px] font-black uppercase text-emerald-500/50 tracking-[0.2em]">Last Updated</span>
                                <span className="text-[10px] font-bold text-slate-400 font-mono italic">
                                   {formatDate(timestamp)}
