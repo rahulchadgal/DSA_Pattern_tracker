@@ -35,3 +35,8 @@ Use `IntellijTokenStore` as your `TokenStore` implementation. It stores/retrieve
 ## 4) Call backend once, reuse everywhere
 
 Use `IntellijBackendBridge` to fetch `QuestionV2` and build a pattern tree via shared `PatternTreeBuilder`.
+
+Backend URL resolution order used by `IntellijBackendBridge()`:
+- Java system property: `-Ddsa.backend.url=https://...`
+- Environment variable: `DSA_BACKEND_URL=https://...`
+- Fallback default: `https://dsa-tracker-api-l3na.onrender.com`

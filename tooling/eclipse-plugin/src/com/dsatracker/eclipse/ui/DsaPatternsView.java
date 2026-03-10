@@ -1,11 +1,12 @@
 package com.dsatracker.eclipse.ui;
 
-import com.dsatracker.eclipse.secure.EclipseSecureTokenStore;
-import com.dsatracker.idecore.client.BackendClientConfig;
-import com.dsatracker.idecore.client.DsaBackendClient;
-import com.dsatracker.idecore.model.PatternNode;
-import com.dsatracker.idecore.model.QuestionV2;
-import com.dsatracker.idecore.tree.PatternTreeBuilder;
+import java.io.ByteArrayInputStream;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
@@ -16,58 +17,72 @@ import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.jobs.Job;
+import org.eclipse.core.runtime.jobs.JobChangeAdapter;
+import org.eclipse.core.runtime.jobs.IJobChangeEvent;
+import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.jface.viewers.ArrayContentProvider;
 import org.eclipse.jface.viewers.DoubleClickEvent;
 import org.eclipse.jface.viewers.IDoubleClickListener;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.viewers.LabelProvider;
 import org.eclipse.jface.viewers.TreeViewer;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.layout.GridData;
+import org.eclipse.swt.layout.GridLayout;
+import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
-import org.eclipse.ui.IEditorPart;
-import org.eclipse.ui.IEditorRegistry;
+import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IWorkbenchPage;
-import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.part.ViewPart;
 
-import java.io.ByteArrayInputStream;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.List;
+import com.dsatracker.eclipse.secure.EclipseSecureTokenStore;
+import com.dsatracker.idecore.client.BackendClientConfig;
+import com.dsatracker.idecore.client.BackendUrlResolver;
+import com.dsatracker.idecore.client.DsaBackendClient;
+import com.dsatracker.idecore.model.QuestionV1;
 
 public class DsaPatternsView extends ViewPart {
     public static final String VIEW_ID = "com.dsatracker.eclipse.views.dsaPatterns";
 
     private TreeViewer viewer;
+    private final List<QuestionV1> questions = new ArrayList<>();
     private DsaBackendClient backendClient;
 
     @Override
     public void createPartControl(Composite parent) {
-        viewer = new TreeViewer(parent);
-        viewer.setContentProvider(new PatternTreeContentProvider());
+        Composite root = new Composite(parent, SWT.NONE);
+        root.setLayout(new GridLayout(1, false));
+
+        Composite toolbar = new Composite(root, SWT.NONE);
+        toolbar.setLayoutData(new GridData(SWT.FILL, SWT.TOP, true, false));
+        toolbar.setLayout(new GridLayout(2, false));
+
+        Text backendUrlInput = new Text(toolbar, SWT.BORDER);
+        backendUrlInput.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+        backendUrlInput.setText(BackendUrlResolver.resolve());
+
+        Button loadButton = new Button(toolbar, SWT.PUSH);
+        loadButton.setText("Load Questions");
+
+        viewer = new TreeViewer(root, SWT.BORDER | SWT.SINGLE | SWT.V_SCROLL | SWT.H_SCROLL);
+        viewer.getTree().setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
+        viewer.setContentProvider(ArrayContentProvider.getInstance());
         viewer.setLabelProvider(new LabelProvider() {
             @Override
             public String getText(Object element) {
-                if (element instanceof PatternNode node) {
-                    if (node.getQuestion() != null) {
-                        QuestionV2 q = node.getQuestion();
-                        return q.title() + " [" + q.difficulty() + "]";
-                    }
-                    return node.getName();
+                if (element instanceof QuestionV1 question) {
+                    return question.leetcodeId() + ". " + question.title() + " [" + question.difficulty() + "]"
+                            + " - " + question.mainPattern() + "/" + question.subPattern();
                 }
                 return super.getText(element);
             }
         });
-
-        backendClient = new DsaBackendClient(
-                new BackendClientConfig(URI.create("http://localhost:8888"), Duration.ofSeconds(15), null),
-                new EclipseSecureTokenStore()
-        );
-
         viewer.addDoubleClickListener(new OpenProblemDoubleClickListener());
-        fetchPatterns();
+        loadButton.addListener(SWT.Selection, event -> loadQuestions(backendUrlInput.getText(), loadButton));
+        backendUrlInput.addListener(SWT.DefaultSelection, event -> loadQuestions(backendUrlInput.getText(), loadButton));
     }
 
     @Override
@@ -77,20 +92,55 @@ public class DsaPatternsView extends ViewPart {
         }
     }
 
-    private void fetchPatterns() {
-        Job.create("Load DSA patterns", monitor -> {
-            List<QuestionV2> questions = backendClient.listQuestionsV2();
-            List<PatternNode> roots = new PatternTreeBuilder().build(questions);
+    private void loadQuestions(String backendUrl, Button loadButton) {
+        String value = backendUrl == null ? "" : backendUrl.trim();
+        if (value.isEmpty()) {
+            showError("Please provide backend base URL first.");
+            return;
+        }
+
+        loadButton.setEnabled(false);
+        backendClient = new DsaBackendClient(
+                new BackendClientConfig(URI.create(value.endsWith("/") ? value : value + "/"), Duration.ofSeconds(20), null),
+                new EclipseSecureTokenStore()
+        );
+
+        Job loadJob = Job.create("Load questions from backend", monitor -> {
+            List<QuestionV1> loaded = backendClient.listQuestionsV1();
             PlatformUI.getWorkbench().getDisplay().asyncExec(() -> {
                 if (viewer != null && !viewer.getTree().isDisposed()) {
-                    viewer.setInput(roots);
-                    viewer.expandToLevel(2);
+                    questions.clear();
+                    questions.addAll(loaded);
+                    viewer.setInput(List.copyOf(questions));
+                    loadButton.setEnabled(true);
                 }
             });
-        }).schedule();
+        }).addJobChangeListener(new JobChangeAdapter() {
+            @Override
+            public void done(IJobChangeEvent event) {
+                if (event.getResult().isOK()) {
+                    return;
+                }
+                PlatformUI.getWorkbench().getDisplay().asyncExec(() -> {
+                    loadButton.setEnabled(true);
+                    String message = event.getResult().getMessage();
+                    if (message == null || message.isBlank()) {
+                        message = "Unable to load backend questions from /api/v1/questions.";
+                    }
+                    showError(message);
+                });
+            }
+        });
+        loadJob.schedule();
     }
 
-    private static final class OpenProblemDoubleClickListener implements IDoubleClickListener {
+    private void showError(String message) {
+        if (viewer != null && !viewer.getTree().isDisposed()) {
+            MessageDialog.openError(viewer.getTree().getShell(), "Backend Load Error", message);
+        }
+    }
+
+    private final class OpenProblemDoubleClickListener implements IDoubleClickListener {
         @Override
         public void doubleClick(DoubleClickEvent event) {
             ISelection selection = event.getSelection();
@@ -98,27 +148,29 @@ public class DsaPatternsView extends ViewPart {
                 return;
             }
             Object selected = structuredSelection.getFirstElement();
-            if (!(selected instanceof PatternNode node) || node.getQuestion() == null) {
+            if (!(selected instanceof QuestionV1 question)) {
                 return;
             }
 
             try {
-                IFile javaFile = createOrUpdateJavaTemplate(node.getQuestion(), new NullProgressMonitor());
+                IFile javaFile = createOrUpdateJavaTemplate(question, new NullProgressMonitor());
                 IWorkbenchPage page = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
                 IDE.openEditor(page, javaFile);
             } catch (Exception e) {
-                throw new RuntimeException("Unable to open Java template", e);
+                showError("Unable to create Java file: " + e.getMessage());
             }
         }
 
-        private static IFile createOrUpdateJavaTemplate(QuestionV2 question, IProgressMonitor monitor) throws CoreException, PartInitException {
+        private IFile createOrUpdateJavaTemplate(QuestionV1 question, IProgressMonitor monitor) throws CoreException {
             IProject project = resolveWritableJavaProject();
-            IFolder sourceFolder = project.getFolder("src/main/java/dsa/generated");
+            String patternFolder = sanitizePackageSegment(question.mainPattern());
+            String subPatternFolder = sanitizePackageSegment(question.subPattern());
+            IFolder sourceFolder = project.getFolder("src/main/java/dsa/" + patternFolder + "/" + subPatternFolder);
             createFolders(sourceFolder, monitor);
 
-            String className = sanitizeClassName(question.title()) + "Solution";
+            String className = "Q" + sanitizeDigits(question.leetcodeId()) + "_" + sanitizeClassSegment(question.title());
             IFile file = sourceFolder.getFile(new Path(className + ".java"));
-            String content = starterCode(question, className);
+            String content = starterCode(question, patternFolder, subPatternFolder, className);
 
             byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
             ByteArrayInputStream input = new ByteArrayInputStream(bytes);
@@ -153,34 +205,53 @@ public class DsaPatternsView extends ViewPart {
             folder.create(true, true, monitor);
         }
 
-        private static String sanitizeClassName(String title) {
-            String cleaned = title.replaceAll("[^A-Za-z0-9]+", " ").trim();
-            StringBuilder sb = new StringBuilder();
-            for (String part : cleaned.split("\\s+")) {
-                if (part.isEmpty()) {
-                    continue;
-                }
-                sb.append(Character.toUpperCase(part.charAt(0)));
-                if (part.length() > 1) {
-                    sb.append(part.substring(1).toLowerCase());
-                }
-            }
-            if (sb.isEmpty() || !Character.isJavaIdentifierStart(sb.charAt(0))) {
-                sb.insert(0, "Problem");
-            }
-            return sb.toString();
+        private String sanitizePackageSegment(String value) {
+            String cleaned = (value == null ? "general" : value)
+                    .toLowerCase()
+                    .replaceAll("[^a-z0-9]+", "_")
+                    .replaceAll("^_+|_+$", "");
+            return cleaned.isBlank() ? "general" : cleaned;
         }
 
-        private static String starterCode(QuestionV2 question, String className) {
-            return "package dsa.generated;\n\n"
-                    + "// " + question.title() + " (" + question.leetcodeId() + ")\n"
+        private String sanitizeDigits(String value) {
+            String digits = value == null ? "" : value.replaceAll("[^0-9]", "");
+            return digits.isBlank() ? "0000" : digits;
+        }
+
+        private String sanitizeClassSegment(String title) {
+            String cleaned = (title == null ? "Problem" : title).replaceAll("[^A-Za-z0-9]+", " ").trim();
+            if (cleaned.isBlank()) {
+                return "Problem";
+            }
+            StringBuilder builder = new StringBuilder();
+            for (String part : cleaned.split("\\s+")) {
+                if (part.isBlank()) {
+                    continue;
+                }
+                builder.append(Character.toUpperCase(part.charAt(0)));
+                if (part.length() > 1) {
+                    builder.append(part.substring(1).toLowerCase());
+                }
+            }
+            if (builder.isEmpty()) {
+                return "Problem";
+            }
+            return builder.toString();
+        }
+
+        private String starterCode(QuestionV1 question, String patternFolder, String subPatternFolder, String className) {
+            String packageName = "dsa." + patternFolder + "." + subPatternFolder;
+            return "package " + packageName + ";\n\n"
+                    + "// LeetCode " + question.leetcodeId() + ": " + question.title() + "\n"
+                    + "// Difficulty: " + question.difficulty() + "\n"
                     + "// Pattern: " + question.mainPattern() + " / " + question.subPattern() + "\n"
-                    + "// Link: " + question.link() + "\n\n"
+                    + "// URL: " + question.link() + "\n\n"
                     + "public class " + className + " {\n"
                     + "    public void solve() {\n"
-                    + "        // TODO: implement\n"
+                    + "        // TODO: implement solution\n"
                     + "    }\n"
-                    + "}\n";
+                    + "}\n"
+                    + "\n";
         }
     }
 }

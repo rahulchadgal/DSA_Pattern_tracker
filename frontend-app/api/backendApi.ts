@@ -11,6 +11,7 @@ export interface ProgressRow {
   leetcodeId: string;
   completed: boolean;
   updatedAt: string;
+  completedAt?: string | null;
 }
 
 export interface QuestionV2Row {
@@ -21,6 +22,22 @@ export interface QuestionV2Row {
   subPattern: string;
   link: string;
   metadataJson?: string | null;
+}
+
+export interface DatabaseRuntimeInfo {
+  activeProfile: string;
+  host: string;
+  port: string;
+  database: string;
+}
+
+export interface DashboardV1Response {
+  mode: string;
+  handle?: string | null;
+  database: DatabaseRuntimeInfo;
+  questions: QuestionV1Row[];
+  progress: ProgressRow[];
+  customQuestions: QuestionV2Row[];
 }
 
 export interface ProgressUpsertPayload {
@@ -120,6 +137,14 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const backendApi = {
   getQuestionsV1: () => apiRequest<QuestionV1Row[]>('/api/v1/questions'),
+  getDashboardV1: (handle?: string, mode: 'SERVER' | 'CLIENT' = 'SERVER') => {
+    const params = new URLSearchParams();
+    params.set('mode', mode);
+    if (handle && handle.trim().length > 0) {
+      params.set('handle', handle.toLowerCase());
+    }
+    return apiRequest<DashboardV1Response>(`/api/v1/dashboard?${params.toString()}`);
+  },
   getProgress: (handle: string) => apiRequest<ProgressRow[]>(`/api/progress?handle=${encodeURIComponent(handle.toLowerCase())}`),
   upsertProgress: (payload: ProgressUpsertPayload) => apiRequest<ProgressRow>('/api/progress', {
     method: 'POST',

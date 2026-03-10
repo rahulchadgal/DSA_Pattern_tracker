@@ -5,9 +5,9 @@ This project provides a PDE plugin skeleton with a `ViewPart` named **DSA Patter
 ## Included
 
 - `plugin.xml`: Registers the `DSA Patterns` sidebar view.
-- `DsaPatternsView`: Uses `TreeViewer` and loads backend patterns.
-- `PatternTreeContentProvider`: Hierarchical tree for pattern/sub-pattern/problem.
-- Double-click behavior: creates or updates a `.java` starter file and opens it in the Eclipse editor.
+- `DsaPatternsView`: Loads questions from backend `GET /api/v1/questions`.
+- Double-click behavior: creates or updates a `.java` starter file under
+  `src/main/java/dsa/<mainPattern>/<subPattern>/` and opens it in the Eclipse editor.
 - `EclipseSecureTokenStore`: stores JWT token with `SecurePreferencesFactory`.
 
 ## Wiring `shared-core` in PDE
@@ -19,14 +19,18 @@ cd tooling
 mvn -pl shared-core -am clean install
 ```
 
-2. In Eclipse/STS, create a **Target Platform** that includes:
-- Eclipse base + PDE bundles
-- A bundle wrapping `shared-core` (or include it as a plugin dependency via bnd/Target definition)
+2. The plugin now bundles required runtime jars under `tooling/eclipse-plugin/lib/`:
+- `shared-core-0.1.0-SNAPSHOT.jar`
+- `jackson-databind-2.18.2.jar`
+- `jackson-core-2.18.2.jar`
+- `jackson-annotations-2.18.2.jar`
 
-3. Ensure `MANIFEST.MF` imports `com.dsatracker.idecore.*` packages (already scaffolded).
+3. Refresh `eclipse-plugin` project in STS after rebuilding shared-core so latest jar is picked up.
 
 ## Notes
 
-- Backend base URL is currently hardcoded to `http://localhost:8888` in `DsaPatternsView`.
-- The view expects a JWT token to already exist in secure storage for `/api/v2/questions`.
-- Add a login command/dialog that calls `DsaBackendClient.login(...)` and stores token via `EclipseSecureTokenStore`.
+- Backend URL is editable in the view and defaults using:
+  - Java system property: `-Ddsa.backend.url=https://...`
+  - Environment variable: `DSA_BACKEND_URL=https://...`
+  - Fallback default: `https://dsa-tracker-api-l3na.onrender.com`
+- Current view uses `api/v1/questions` (public endpoint), so no login is required.

@@ -1,9 +1,10 @@
 package com.dsatracker.eclipse.ui;
 
-import com.dsatracker.idecore.model.PatternNode;
+import java.util.List;
+
 import org.eclipse.jface.viewers.ITreeContentProvider;
 
-import java.util.List;
+import com.dsatracker.idecore.model.PatternNode;
 
 public class PatternTreeContentProvider implements ITreeContentProvider {
     @Override

@@ -1,11 +1,12 @@
 package com.dsatracker.eclipse.secure;
 
-import com.dsatracker.idecore.auth.TokenStore;
+import java.util.Optional;
+
 import org.eclipse.equinox.security.storage.ISecurePreferences;
 import org.eclipse.equinox.security.storage.SecurePreferencesFactory;
 import org.eclipse.equinox.security.storage.StorageException;
 
-import java.util.Optional;
+import com.dsatracker.idecore.auth.TokenStore;
 
 public class EclipseSecureTokenStore implements TokenStore {
     private static final String NODE = "com.dsatracker.eclipse";

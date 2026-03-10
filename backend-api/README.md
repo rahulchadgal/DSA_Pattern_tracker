@@ -20,6 +20,7 @@ Backend scaffold for migration from frontend-managed persistence to secure API-d
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET /api/v1/questions` (basic list)
+- `GET /api/v1/dashboard` (aggregated payload for UI: questions + progress + custom + safe DB runtime info)
 - `GET /api/v2/questions` (metadata/streaming-ready; supports `customOnly` and `importedByHandle`)
 - `POST /api/v2/questions`
 - `GET /api/progress` (supports JWT or `?handle=<handle>`)

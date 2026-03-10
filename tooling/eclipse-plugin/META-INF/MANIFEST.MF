@@ -5,6 +5,11 @@ Bundle-SymbolicName: com.dsatracker.eclipse.plugin;singleton:=true
 Bundle-Version: 0.1.0.qualifier
 Bundle-Activator: com.dsatracker.eclipse.Activator
 Bundle-RequiredExecutionEnvironment: JavaSE-21
+Bundle-ClassPath: .,
+ lib/shared-core-0.1.0-SNAPSHOT.jar,
+ lib/jackson-databind-2.18.2.jar,
+ lib/jackson-core-2.18.2.jar,
+ lib/jackson-annotations-2.18.2.jar
 Require-Bundle: org.eclipse.ui,
  org.eclipse.core.runtime,
  org.eclipse.core.resources,
@@ -13,8 +18,4 @@ Require-Bundle: org.eclipse.ui,
  org.eclipse.ui.workbench,
  org.eclipse.equinox.security,
  org.eclipse.equinox.security.ui
-Import-Package: com.dsatracker.idecore.auth,
- com.dsatracker.idecore.client,
- com.dsatracker.idecore.model,
- com.dsatracker.idecore.tree
 Bundle-ActivationPolicy: lazy
