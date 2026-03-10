@@ -60,7 +60,7 @@ export interface QuestionUpsertPayload {
   metadataJson: string;
 }
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8888';
+const DEFAULT_API_BASE_URL = '';
 const RETRY_DELAYS_MS = [1200, 2500, 4000];
 
 export type BackendWakeStatus = 'idle' | 'waking' | 'awake';
@@ -74,6 +74,9 @@ const getConfiguredBase = () => {
 
 const apiUrl = (path: string) => {
   const base = getConfiguredBase().replace(/\/$/, '');
+  if (base.length === 0) {
+    return path;
+  }
   if (base.endsWith('/api') && path.startsWith('/api/')) {
     return `${base}${path.slice(4)}`;
   }

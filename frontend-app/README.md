@@ -5,7 +5,21 @@
 
 Copy `frontend-app/.env.example` into `.env` and configure:
 
-- `VITE_API_BASE_URL` - backend API base URL (`http://localhost:8888` for local)
+- `VITE_API_BASE_URL` - optional. Keep empty to use same-origin `/api/*` serverless routes in Vercel.
+
+## Serverless API (Vercel Functions)
+
+This app now includes serverless API routes under `frontend-app/api/`:
+- `GET /api/v1/questions`
+- `GET /api/v1/dashboard`
+- `GET/POST /api/progress`
+- `GET/POST /api/v2/questions`
+
+Set database secrets in Vercel (server-side only):
+- `DATABASE_URL` (recommended), or
+- `DB_URL` + `DB_USERNAME` + `DB_PASSWORD`
+
+Use `frontend-app/.env.server.example` as the template for required server env keys.
 
 To get your app live on your **GoDaddy Domain** for free:
 
@@ -37,6 +51,5 @@ To get your app live on your **GoDaddy Domain** for free:
 - **Auto-Update:** Whenever you change your code on GitHub, your website updates automatically.
 - **Zero Cost:** The hosting is free forever as long as you aren't getting millions of hits.
 
-## Backend API (Spring Boot)
-A backend scaffold is available under `backend-api/` with JWT auth, CORS, PostgreSQL entities, and Render/Aiven deployment notes.
-See: `../backend-api/README.md`.
+## Optional Spring Backend
+`backend-api/` still exists for Spring Boot deployment, but frontend can now run end-to-end with Vercel serverless API + PostgreSQL.

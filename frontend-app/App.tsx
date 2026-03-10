@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { backendApi, DatabaseRuntimeInfo, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './api/backendApi';
+import { backendApi, DatabaseRuntimeInfo, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
 import { Pattern, Question, Section } from './types';
