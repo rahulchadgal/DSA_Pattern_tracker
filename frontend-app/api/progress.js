@@ -1,8 +1,22 @@
 import { query } from '../server/db.js';
 import { allowMethods, normalizeHandle, parseBody, sendError, sendJson } from '../server/http.js';
 
+let schemaReadyPromise;
+
 function randomSuffix() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+async function ensureSchema() {
+  if (!schemaReadyPromise) {
+    schemaReadyPromise = query(
+      'ALTER TABLE progress_records ADD COLUMN IF NOT EXISTS solution_rich_text TEXT'
+    ).catch((error) => {
+      schemaReadyPromise = undefined;
+      throw error;
+    });
+  }
+  await schemaReadyPromise;
 }
 
 async function resolveOrCreateUserId(handle) {
@@ -42,12 +56,14 @@ async function getProgress(req, res) {
   }
 
   try {
+    await ensureSchema();
     const userId = await resolveOrCreateUserId(handle);
     const result = await query(
       `SELECT q.leetcode_id AS "leetcodeId",
               p.completed,
               p.updated_at AS "updatedAt",
-              p.completed_at AS "completedAt"
+              p.completed_at AS "completedAt",
+              p.solution_rich_text AS "solutionRichText"
        FROM progress_records p
        JOIN question_catalog q ON q.id = p.question_id
        WHERE p.user_id = $1
@@ -65,6 +81,10 @@ async function upsertProgress(req, res) {
   const handle = normalizeHandle(body.handle);
   const leetcodeId = typeof body.leetcodeId === 'string' ? body.leetcodeId.trim() : '';
   const completed = Boolean(body.completed);
+  const solutionRichText =
+    typeof body.solutionRichText === 'string' && body.solutionRichText.trim().length > 0
+      ? body.solutionRichText
+      : null;
 
   if (!handle) {
     return sendError(res, 400, 'Handle is required');
@@ -74,6 +94,7 @@ async function upsertProgress(req, res) {
   }
 
   try {
+    await ensureSchema();
     const questionResult = await query('SELECT id, leetcode_id FROM question_catalog WHERE leetcode_id = $1', [leetcodeId]);
     if (!questionResult.rows[0]) {
       return sendError(res, 404, 'Question not found in catalog');
@@ -82,18 +103,20 @@ async function upsertProgress(req, res) {
     const userId = await resolveOrCreateUserId(handle);
 
     const result = await query(
-      `INSERT INTO progress_records (user_id, question_id, completed, updated_at, completed_at)
-       VALUES ($1, $2, $3, NOW(), CASE WHEN $3 THEN NOW() ELSE NULL END)
+      `INSERT INTO progress_records (user_id, question_id, completed, updated_at, completed_at, solution_rich_text)
+       VALUES ($1, $2, $3, NOW(), CASE WHEN $3 THEN NOW() ELSE NULL END, $4)
        ON CONFLICT (user_id, question_id) DO UPDATE SET
          completed = EXCLUDED.completed,
          updated_at = NOW(),
-         completed_at = CASE WHEN EXCLUDED.completed THEN NOW() ELSE NULL END
+         completed_at = CASE WHEN EXCLUDED.completed THEN NOW() ELSE NULL END,
+         solution_rich_text = EXCLUDED.solution_rich_text
        RETURNING
          (SELECT leetcode_id FROM question_catalog WHERE id = progress_records.question_id) AS "leetcodeId",
          completed,
          updated_at AS "updatedAt",
-         completed_at AS "completedAt"`,
-      [userId, questionId, completed]
+         completed_at AS "completedAt",
+         solution_rich_text AS "solutionRichText"`,
+      [userId, questionId, completed, solutionRichText]
     );
 
     return sendJson(res, 200, result.rows[0]);
@@ -101,4 +124,3 @@ async function upsertProgress(req, res) {
     return sendError(res, 500, error instanceof Error ? error.message : 'Unable to save progress');
   }
 }
-

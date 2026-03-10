@@ -12,6 +12,7 @@ export interface ProgressRow {
   completed: boolean;
   updatedAt: string;
   completedAt?: string | null;
+  solutionRichText?: string | null;
 }
 
 export interface QuestionV2Row {
@@ -28,6 +29,7 @@ export interface ProgressUpsertPayload {
   handle: string;
   leetcodeId: string;
   completed: boolean;
+  solutionRichText?: string | null;
 }
 
 export interface QuestionUpsertPayload {

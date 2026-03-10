@@ -1,11 +1,12 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { backendApi, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
 import { Pattern, Question, Section } from './types';
 
 const LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
+const SOLUTION_CACHE_KEY = 'dsa-solution-notes-v1';
 const NAVBAR_COLLAPSED_KEY = 'dsa-navbar-collapsed-v1';
 const GRID_VIEW_KEY = 'dsa-grid-view-v1';
 const CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
@@ -179,17 +180,20 @@ const mockClassifyQuestion = async (questionId: string): Promise<LcMetadata> => 
 
 const CloudStatus: React.FC<{ status: 'syncing' | 'saved' | 'error' | 'idle' }> = ({ status }) => {
   const configs = {
-    syncing: { color: "bg-amber-400", label: "Syncing..." },
-    saved: { color: "bg-emerald-500", label: "Relational Sync Active" },
-    error: { color: "bg-rose-500", label: "Sync Offline" },
-    idle: { color: "bg-slate-600", label: "Connecting..." }
+    syncing: { color: "bg-amber-400", label: "Sync in progress" },
+    saved: { color: "bg-emerald-500", label: "Synced" },
+    error: { color: "bg-rose-500", label: "Sync failed" },
+    idle: { color: "bg-slate-600", label: "Idle" }
   };
   const cfg = configs[status];
   
   return (
-    <div className="flex items-center gap-2.5 px-4 py-2 bg-slate-900/60 rounded-2xl border border-slate-800/50 backdrop-blur-xl">
-      <div className={`w-2 h-2 rounded-full ${cfg.color} ${status === 'syncing' ? 'animate-pulse' : ''}`} />
-      <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">{cfg.label}</span>
+    <div
+      title={cfg.label}
+      aria-label={cfg.label}
+      className="flex items-center justify-center h-8 w-8 bg-slate-900/60 rounded-full border border-slate-800/50 backdrop-blur-xl"
+    >
+      <div className={`w-2.5 h-2.5 rounded-full ${cfg.color} ${status === 'syncing' ? 'animate-pulse' : ''}`} />
     </div>
   );
 };
@@ -245,6 +249,10 @@ const App: React.FC = () => {
     const saved = localStorage.getItem(LOCAL_CACHE_KEY);
     return saved ? JSON.parse(saved) : {};
   });
+  const [solutionMap, setSolutionMap] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem(SOLUTION_CACHE_KEY);
+    return saved ? JSON.parse(saved) : {};
+  });
   
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'saved' | 'error' | 'idle'>('idle');
   const [baseSectionsData, setBaseSectionsData] = useState<Section[]>([]);
@@ -266,6 +274,8 @@ const App: React.FC = () => {
   const [isClassifying, setIsClassifying] = useState(false);
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
   const [isBackendWaking, setIsBackendWaking] = useState(false);
+  const [editingSolutionQuestion, setEditingSolutionQuestion] = useState<Question | null>(null);
+  const solutionEditorRef = useRef<HTMLDivElement | null>(null);
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
@@ -296,29 +306,36 @@ const App: React.FC = () => {
     setSyncStatus('syncing');
     try {
       const rows = await backendApi.getProgress(userHandle);
-      const map: Record<string, string> = {};
+      const completionMap: Record<string, string> = {};
+      const solutionNotesMap: Record<string, string> = {};
       rows.forEach((r) => {
         if (r.completed) {
-          map[r.leetcodeId] = r.updatedAt;
+          completionMap[r.leetcodeId] = r.updatedAt;
+        }
+        if (r.solutionRichText && r.solutionRichText.trim().length > 0) {
+          solutionNotesMap[r.leetcodeId] = r.solutionRichText;
         }
       });
       
-      setCompletedMap(map);
-      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(map));
+      setCompletedMap(completionMap);
+      setSolutionMap(solutionNotesMap);
+      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(completionMap));
+      localStorage.setItem(SOLUTION_CACHE_KEY, JSON.stringify(solutionNotesMap));
       setSyncStatus('saved');
     } catch (e) {
       setSyncStatus('error');
     }
   }, []);
 
-  const atomicUpdate = async (qId: string, isChecked: boolean) => {
+  const atomicUpdate = async (qId: string, isChecked: boolean, solutionRichText?: string | null) => {
     if (!handle) return;
     setSyncStatus('syncing');
     try {
       await backendApi.upsertProgress({
         handle: handle.toLowerCase(),
         leetcodeId: qId,
-        completed: isChecked
+        completed: isChecked,
+        solutionRichText: solutionRichText ?? null
       });
       setSyncStatus('saved');
     } catch (e) {
@@ -530,6 +547,11 @@ const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!editingSolutionQuestion || !solutionEditorRef.current) return;
+    solutionEditorRef.current.innerHTML = solutionMap[editingSolutionQuestion.id] || '';
+  }, [editingSolutionQuestion, solutionMap]);
+
   // --- HANDLERS ---
 
   const toggleQuestion = (id: string) => {
@@ -545,7 +567,40 @@ const App: React.FC = () => {
     
     setCompletedMap(nextMap);
     localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(nextMap));
-    atomicUpdate(id, isNowChecked);
+    atomicUpdate(id, isNowChecked, solutionMap[id] ?? null);
+  };
+
+  const openSolutionEditor = (question: Question) => {
+    setEditingSolutionQuestion(question);
+  };
+
+  const closeSolutionEditor = () => {
+    setEditingSolutionQuestion(null);
+  };
+
+  const applyEditorCommand = (command: string) => {
+    document.execCommand(command, false);
+  };
+
+  const saveSolutionNote = async () => {
+    if (!editingSolutionQuestion) return;
+
+    const questionId = editingSolutionQuestion.id;
+    const nextHtml = solutionEditorRef.current?.innerHTML.trim() || '';
+    const nextMap = { ...solutionMap };
+    if (nextHtml) {
+      nextMap[questionId] = nextHtml;
+    } else {
+      delete nextMap[questionId];
+    }
+    setSolutionMap(nextMap);
+    localStorage.setItem(SOLUTION_CACHE_KEY, JSON.stringify(nextMap));
+
+    if (handle) {
+      await atomicUpdate(questionId, Boolean(completedMap[questionId]), nextHtml || null);
+    }
+
+    closeSolutionEditor();
   };
 
   const setupHandle = (e: React.FormEvent) => {
@@ -808,6 +863,7 @@ const App: React.FC = () => {
                 {selectedPattern.questions.map(q => {
                   const timestamp = completedMap[q.id];
                   const done = !!timestamp;
+                  const hasSolution = Boolean(solutionMap[q.id] && solutionMap[q.id].trim().length > 0);
                   return (
                     <div key={q.id} className={`group relative border transition-all duration-500 ${gridView === 'small' ? 'p-5 rounded-3xl' : gridView === 'list' ? 'p-5 rounded-2xl' : 'p-8 rounded-[2.5rem] hover:-translate-y-2'} ${done ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600'}`}>
                        <div className={`flex flex-col h-full ${gridView === 'small' ? 'gap-3' : 'gap-6'}`}>
@@ -823,6 +879,19 @@ const App: React.FC = () => {
                                 <div className="flex items-center gap-3">
                                    <span className="text-[10px] font-bold text-slate-700 font-mono tracking-tighter">LC #{q.id}</span>
                                    <DifficultyBadge diff={q.difficulty} />
+                                   <button
+                                     onClick={() => openSolutionEditor(q)}
+                                     title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
+                                     className={`ml-auto p-2 rounded-xl border transition-all ${
+                                       hasSolution
+                                         ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+                                         : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'
+                                     }`}
+                                   >
+                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
+                                     </svg>
+                                   </button>
                                 </div>
                              </div>
                           </div>
@@ -922,6 +991,71 @@ const App: React.FC = () => {
            )}
         </div>
       </main>
+
+      {editingSolutionQuestion && (
+        <div className="fixed inset-0 z-[106] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl">
+          <div className="w-full max-w-3xl rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-8">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-xl font-black text-white tracking-tight">Solution Notes</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  LC #{editingSolutionQuestion.id} • {editingSolutionQuestion.title}
+                </p>
+              </div>
+              <button onClick={closeSolutionEditor} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => applyEditorCommand('bold')}
+                type="button"
+                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
+              >
+                Bold
+              </button>
+              <button
+                onClick={() => applyEditorCommand('italic')}
+                type="button"
+                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
+              >
+                Italic
+              </button>
+              <button
+                onClick={() => applyEditorCommand('insertUnorderedList')}
+                type="button"
+                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
+              >
+                Bullet
+              </button>
+            </div>
+
+            <div
+              ref={solutionEditorRef}
+              contentEditable
+              suppressContentEditableWarning
+              className="min-h-[260px] w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 overflow-y-auto"
+            />
+
+            <div className="mt-5 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">Your note is stored per handle and question.</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={closeSolutionEditor}
+                  className="px-5 py-2.5 rounded-2xl border border-slate-700 text-xs font-black uppercase tracking-[0.15em] text-slate-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveSolutionNote}
+                  className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-xs font-black uppercase tracking-[0.15em] text-white"
+                >
+                  Save Note
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {showAddQuestionModal && (
