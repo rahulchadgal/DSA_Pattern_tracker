@@ -3,23 +3,17 @@
 
 ## Environment setup
 
-Copy `frontend-app/.env.example` into `.env` and configure:
+Client (`frontend-app/.env`):
+- `VITE_API_BASE_URL` (optional)
+  - Leave empty to use same-origin `/api/*` (Vercel serverless functions).
+  - Set `http://localhost:8888` only if you want to call Spring backend directly in local.
 
-- `VITE_API_BASE_URL` - optional. Keep empty to use same-origin `/api/*` serverless routes in Vercel.
+Serverless (`Vercel Project > Settings > Environment Variables`):
+- `DATABASE_URL` (recommended) as Postgres URL
+- `DB_URL` (optional compatibility) if you want to reuse JDBC-style value
+- `PG_POOL_MAX` (optional) pool size
 
-## Serverless API (Vercel Functions)
-
-This app now includes serverless API routes under `frontend-app/api/`:
-- `GET /api/v1/questions`
-- `GET /api/v1/dashboard`
-- `GET/POST /api/progress`
-- `GET/POST /api/v2/questions`
-
-Set database secrets in Vercel (server-side only):
-- `DATABASE_URL` (recommended), or
-- `DB_URL` + `DB_USERNAME` + `DB_PASSWORD`
-
-Use `frontend-app/.env.server.example` as the template for required server env keys.
+Example serverless env file is available at `frontend-app/.env.server.example`.
 
 To get your app live on your **GoDaddy Domain** for free:
 
@@ -51,5 +45,13 @@ To get your app live on your **GoDaddy Domain** for free:
 - **Auto-Update:** Whenever you change your code on GitHub, your website updates automatically.
 - **Zero Cost:** The hosting is free forever as long as you aren't getting millions of hits.
 
-## Optional Spring Backend
-`backend-api/` still exists for Spring Boot deployment, but frontend can now run end-to-end with Vercel serverless API + PostgreSQL.
+## API routes now hosted in frontend deployment
+This app now includes Vercel serverless functions:
+- `GET /api/v1/questions`
+- `GET /api/v2/questions`
+- `POST /api/v2/questions`
+- `GET /api/progress?handle=<handle>`
+- `POST /api/progress`
+- `GET /api/liveness`
+
+`backend-api/` is kept in the repo as-is, but frontend production can run independently via these serverless routes.

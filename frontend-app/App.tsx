@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { backendApi, DatabaseRuntimeInfo, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
+import { backendApi, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
 import { Pattern, Question, Section } from './types';
@@ -9,7 +9,6 @@ const LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
 const NAVBAR_COLLAPSED_KEY = 'dsa-navbar-collapsed-v1';
 const GRID_VIEW_KEY = 'dsa-grid-view-v1';
 const CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
-const DATA_FLOW_MODE_KEY = 'dsa-data-flow-mode-v1';
 
 type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
 
@@ -267,11 +266,6 @@ const App: React.FC = () => {
   const [isClassifying, setIsClassifying] = useState(false);
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
   const [isBackendWaking, setIsBackendWaking] = useState(false);
-  const [dataFlowMode, setDataFlowMode] = useState<'server' | 'client'>(() => {
-    const saved = localStorage.getItem(DATA_FLOW_MODE_KEY);
-    return saved === 'client' ? 'client' : 'server';
-  });
-  const [databaseInfo, setDatabaseInfo] = useState<DatabaseRuntimeInfo | null>(null);
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
@@ -296,68 +290,6 @@ const App: React.FC = () => {
       setSyncStatus('error');
     }
   }, []);
-
-  const pullDashboardData = useCallback(async (userHandle?: string) => {
-    try {
-      const payload = await backendApi.getDashboardV1(
-        userHandle,
-        dataFlowMode === 'client' ? 'CLIENT' : 'SERVER'
-      );
-
-      setDatabaseInfo(payload.database);
-
-      const nextSections = buildSectionsFromQuestions(payload.questions);
-      setBaseSectionsData(nextSections);
-
-      const progressMap: Record<string, string> = {};
-      payload.progress.forEach((p) => {
-        if (p.completed) {
-          progressMap[p.leetcodeId] = p.updatedAt;
-        }
-      });
-      setCompletedMap(progressMap);
-      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(progressMap));
-
-      const normalizedRows: CustomQuestionRow[] = payload.customQuestions.map((row: QuestionV2Row) => {
-        let sectionId = '';
-        let patternId = '';
-        if (row.metadataJson) {
-          try {
-            const metadata = JSON.parse(row.metadataJson);
-            sectionId = metadata.sectionId || '';
-            patternId = metadata.patternId || '';
-          } catch {
-            // ignore invalid metadata and fall back to inferred mapping
-          }
-        }
-        const inferredSectionId = sectionId || findSectionIdByCategory(nextSections, row.mainPattern);
-        return {
-          questionId: row.leetcodeId,
-          title: row.title,
-          difficulty: normalizeDifficulty(row.difficulty),
-          category: row.mainPattern,
-          sectionId: inferredSectionId,
-          patternId: patternId || `custom-${inferredSectionId}`,
-          link: row.link
-        };
-      });
-
-      localStorage.setItem(CUSTOM_QUESTIONS_CACHE_KEY, JSON.stringify(normalizedRows));
-      const merged = normalizedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(nextSections));
-      setSectionsData(merged);
-
-      if (merged.length > 0 && merged[0].patterns.length > 0) {
-        const firstSection = merged[0];
-        setSelectedSectionId(firstSection.id);
-        setSelectedPattern(firstSection.patterns[0]);
-        setOpenSections([firstSection.id]);
-      }
-
-      setSyncStatus('saved');
-    } catch {
-      setSyncStatus('error');
-    }
-  }, [dataFlowMode]);
 
   const pullRelationalProgress = useCallback(async (userHandle: string) => {
     if (!userHandle) return;
@@ -389,9 +321,6 @@ const App: React.FC = () => {
         completed: isChecked
       });
       setSyncStatus('saved');
-      if (dataFlowMode === 'server') {
-        await pullDashboardData(handle);
-      }
     } catch (e) {
       setSyncStatus('error');
     }
@@ -418,9 +347,6 @@ const App: React.FC = () => {
           source: 'frontend-app'
         })
       });
-      if (dataFlowMode === 'server') {
-        await pullDashboardData(handle);
-      }
     } catch (error) {
       // local-first fallback; keeps UI responsive even if network fails
     }
@@ -536,17 +462,10 @@ const App: React.FC = () => {
   // --- SYNC TRIGGERS ---
 
   useEffect(() => {
-    if (dataFlowMode === 'server') {
-      pullDashboardData(handle || undefined);
-      return;
-    }
     pullBaseQuestions();
-  }, [dataFlowMode, handle, pullBaseQuestions, pullDashboardData]);
+  }, [pullBaseQuestions]);
 
   useEffect(() => {
-    if (dataFlowMode !== 'client') {
-      return;
-    }
     if (handle) {
       pullRelationalProgress(handle);
       pullCustomQuestions(handle);
@@ -554,18 +473,15 @@ const App: React.FC = () => {
       window.addEventListener('focus', onFocus);
       return () => window.removeEventListener('focus', onFocus);
     }
-  }, [dataFlowMode, handle, pullRelationalProgress, pullCustomQuestions, baseSectionsData]);
+  }, [handle, pullRelationalProgress, pullCustomQuestions, baseSectionsData]);
 
   useEffect(() => {
-    if (dataFlowMode !== 'client') {
-      return;
-    }
     const cachedRows: CustomQuestionRow[] = JSON.parse(localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY) || '[]');
     if (cachedRows.length && baseSectionsData.length > 0) {
       const merged = cachedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
       setSectionsData(merged);
     }
-  }, [dataFlowMode, baseSectionsData]);
+  }, [baseSectionsData]);
 
   useEffect(() => {
     if (sectionsData.length === 0) return;
@@ -589,10 +505,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(GRID_VIEW_KEY, gridView);
   }, [gridView]);
-
-  useEffect(() => {
-    localStorage.setItem(DATA_FLOW_MODE_KEY, dataFlowMode);
-  }, [dataFlowMode]);
 
   useEffect(() => {
     let hideWakeTimer: number | undefined;
@@ -812,27 +724,6 @@ const App: React.FC = () => {
                    </div>
                 </div>
                 <WakeBanner visible={isBackendWaking} />
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <div className="flex p-1 bg-slate-950 rounded-xl border border-slate-800/80">
-                    <button
-                      onClick={() => setDataFlowMode('server')}
-                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${dataFlowMode === 'server' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                      Server Flow
-                    </button>
-                    <button
-                      onClick={() => setDataFlowMode('client')}
-                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${dataFlowMode === 'client' ? 'bg-amber-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                      Client Flow
-                    </button>
-                  </div>
-                  {databaseInfo && (
-                    <div className="px-3 py-1.5 rounded-xl border border-slate-800/70 bg-slate-900/40 text-[9px] font-bold text-slate-400">
-                      DB {databaseInfo.database} @ {databaseInfo.host}:{databaseInfo.port} ({databaseInfo.activeProfile})
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
             
