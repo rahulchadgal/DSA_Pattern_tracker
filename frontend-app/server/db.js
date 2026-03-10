@@ -50,11 +50,32 @@ function toPgConnectionString(rawValue) {
   return jdbcUrl.toString();
 }
 
+function parseConnectionConfig(rawValue) {
+  const normalized = toPgConnectionString(rawValue);
+  const parsed = new URL(normalized);
+  const sslMode = (parsed.searchParams.get('sslmode') || parsed.searchParams.get('ssl') || '').trim().toLowerCase();
+  const envSsl = (process.env.PGSSLMODE || process.env.DB_SSL || '').trim().toLowerCase();
+  const sslEnabled =
+    parseBoolean(sslMode) ||
+    sslMode === 'verify-ca' ||
+    sslMode === 'verify-full' ||
+    parseBoolean(envSsl) ||
+    envSsl === 'require' ||
+    envSsl === 'verify-ca' ||
+    envSsl === 'verify-full';
+
+  // Prevent pg connection string SSL params from overriding explicit TLS config.
+  parsed.searchParams.delete('ssl');
+  parsed.searchParams.delete('sslmode');
+
+  return {
+    connectionString: parsed.toString(),
+    sslEnabled
+  };
+}
+
 function buildPool() {
-  const connectionString = toPgConnectionString(process.env.DATABASE_URL || process.env.DB_URL);
-  const parsed = new URL(connectionString);
-  const sslMode = parsed.searchParams.get('sslmode') || parsed.searchParams.get('ssl') || '';
-  const sslEnabled = parseBoolean(sslMode);
+  const { connectionString, sslEnabled } = parseConnectionConfig(process.env.DATABASE_URL || process.env.DB_URL);
 
   return new Pool({
     connectionString,
@@ -74,4 +95,3 @@ export async function query(text, params = []) {
   const db = getPool();
   return db.query(text, params);
 }
-
