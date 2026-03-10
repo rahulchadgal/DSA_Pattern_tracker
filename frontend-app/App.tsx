@@ -566,6 +566,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!editingSolutionQuestion || !solutionEditorRef.current) return;
     solutionEditorRef.current.innerHTML = solutionMap[editingSolutionQuestion.id] || '';
+    solutionEditorRef.current.style.height = 'auto';
+    solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
   }, [editingSolutionQuestion, solutionMap]);
 
   // --- HANDLERS ---
@@ -596,6 +598,16 @@ const App: React.FC = () => {
 
   const applyEditorCommand = (command: string) => {
     document.execCommand(command, false);
+    if (!solutionEditorRef.current) return;
+    solutionEditorRef.current.focus();
+    solutionEditorRef.current.style.height = 'auto';
+    solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
+  };
+
+  const handleSolutionEditorInput = () => {
+    if (!solutionEditorRef.current) return;
+    solutionEditorRef.current.style.height = 'auto';
+    solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
   };
 
   const saveSolutionNote = async () => {
@@ -1009,8 +1021,8 @@ const App: React.FC = () => {
       </main>
 
       {editingSolutionQuestion && (
-        <div className="fixed inset-0 z-[106] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl">
-          <div className="w-full max-w-3xl rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-8">
+        <div className="fixed inset-0 z-[106] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
+          <div className="mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-6 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-8">
             <div className="flex items-start justify-between gap-4 mb-6">
               <div>
                 <h3 className="text-xl font-black text-white tracking-tight">Solution Notes</h3>
@@ -1048,8 +1060,9 @@ const App: React.FC = () => {
             <div
               ref={solutionEditorRef}
               contentEditable
+              onInput={handleSolutionEditorInput}
               suppressContentEditableWarning
-              className="min-h-[260px] w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 overflow-y-auto"
+              className="min-h-[55vh] w-full flex-1 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 overflow-hidden"
             />
 
             <div className="mt-5 flex items-center justify-between">
