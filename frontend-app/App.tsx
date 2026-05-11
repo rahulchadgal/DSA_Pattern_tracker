@@ -29,9 +29,12 @@ interface CustomQuestionRow extends LcMetadata {
 type CompanyTimeFilter = 'all' | '30d' | '3m' | '6m';
 type CompanyMetadata = {
   source?: string;
+  s?: string;
   company?: string;
   companies?: string[];
+  c?: string[];
   buckets?: CompanyTimeFilter[];
+  b?: number;
 };
 
 const CATEGORY_OPTIONS = [
@@ -188,7 +191,20 @@ const parseCompanyBuckets = (metadataJson?: string | null): CompanyTimeFilter[] 
   if (!metadataJson) return [];
   try {
     const parsed = JSON.parse(metadataJson) as CompanyMetadata;
-    if (!parsed || parsed.source !== 'company-bank-import-v1') return [];
+    if (!parsed) return [];
+    const compactSource = parsed.s === 'cb1';
+    const legacySource = parsed.source === 'company-bank-import-v1';
+    if (!compactSource && !legacySource) return [];
+
+    if (typeof parsed.b === 'number') {
+      const buckets: CompanyTimeFilter[] = [];
+      if (parsed.b & 1) buckets.push('all');
+      if (parsed.b & 2) buckets.push('30d');
+      if (parsed.b & 4) buckets.push('3m');
+      if (parsed.b & 8) buckets.push('6m');
+      return buckets;
+    }
+
     const rawBuckets = Array.isArray(parsed.buckets) ? parsed.buckets : [];
     const buckets = rawBuckets.filter((value: unknown): value is CompanyTimeFilter =>
       value === 'all' || value === '30d' || value === '3m' || value === '6m'
@@ -203,9 +219,20 @@ const parseCompanyNames = (metadataJson?: string | null, fallbackCompany?: strin
   if (!metadataJson) return fallbackCompany ? [fallbackCompany] : [];
   try {
     const parsed = JSON.parse(metadataJson) as CompanyMetadata;
-    if (!parsed || parsed.source !== 'company-bank-import-v1') {
+    if (!parsed) {
       return fallbackCompany ? [fallbackCompany] : [];
     }
+    const compactSource = parsed.s === 'cb1';
+    const legacySource = parsed.source === 'company-bank-import-v1';
+    if (!compactSource && !legacySource) return fallbackCompany ? [fallbackCompany] : [];
+
+    const compactCompanies = Array.isArray(parsed.c)
+      ? parsed.c.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim())
+      : [];
+    if (compactCompanies.length > 0) {
+      return Array.from(new Set(compactCompanies));
+    }
+
     const fromArray = Array.isArray(parsed.companies)
       ? parsed.companies.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim())
       : [];
@@ -341,6 +368,7 @@ const App: React.FC = () => {
   const [companyBucketsByQuestionId, setCompanyBucketsByQuestionId] = useState<Record<string, CompanyTimeFilter[]>>({});
   const [companyQuestionIds, setCompanyQuestionIds] = useState<Record<string, true>>({});
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
+  const [companySearchTerm, setCompanySearchTerm] = useState('');
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
@@ -498,7 +526,7 @@ const App: React.FC = () => {
           if (!pattern) {
             pattern = {
               id: `company-${company.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-              name: 'Company Tagged',
+              name: '',
               questions: []
             };
             companySectionsMap.set(company, pattern);
@@ -790,7 +818,12 @@ const App: React.FC = () => {
     ? Math.round((Object.keys(completedMap).length / totalQuestions) * 100)
     : 0;
 
-  const displayedSections = isProfile ? companySectionsData : sectionsData;
+  const displayedSections = useMemo(() => {
+    if (!isProfile) return sectionsData;
+    const search = companySearchTerm.trim().toLowerCase();
+    if (!search) return companySectionsData;
+    return companySectionsData.filter((section) => section.title.toLowerCase().includes(search));
+  }, [isProfile, sectionsData, companySectionsData, companySearchTerm]);
 
   useEffect(() => {
     if (displayedSections.length === 0) return;
@@ -809,6 +842,10 @@ const App: React.FC = () => {
   }, [displayedSections, selectedSectionId, selectedPattern.id]);
 
   const filteredPatternQuestions = useMemo(() => {
+    if (displayedSections.length === 0) {
+      return [];
+    }
+
     const visibleInMode = isProfile
       ? selectedPattern.questions.filter((question) => companyQuestionIds[question.id])
       : selectedPattern.questions;
@@ -821,7 +858,7 @@ const App: React.FC = () => {
       const buckets = companyBucketsByQuestionId[question.id];
       return Array.isArray(buckets) && buckets.includes(companyTimeFilter);
     });
-  }, [isProfile, selectedPattern.questions, companyTimeFilter, companyBucketsByQuestionId, companyQuestionIds]);
+  }, [displayedSections.length, isProfile, selectedPattern.questions, companyTimeFilter, companyBucketsByQuestionId, companyQuestionIds]);
 
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
     <>
@@ -937,6 +974,16 @@ const App: React.FC = () => {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-4">
+          {isProfile && (
+            <div className="mb-3">
+              <input
+                value={companySearchTerm}
+                onChange={(e) => setCompanySearchTerm(e.target.value)}
+                placeholder="Search companies..."
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-bold text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              />
+            </div>
+          )}
           {displayedSections.map(section => (
             <div key={section.id} className="space-y-1">
               <button
@@ -969,7 +1016,7 @@ const App: React.FC = () => {
                         className={`w-full group px-4 py-3 rounded-2xl text-[12px] text-left transition-all border ${active ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-lg shadow-indigo-500/5' : 'text-slate-500 hover:bg-slate-800/40 border-transparent'}`}
                       >
                         <div className="flex justify-between items-center mb-2">
-                          <span className="truncate font-bold tracking-tight pr-4">{pattern.name}</span>
+                          <span className="truncate font-bold tracking-tight pr-4">{isProfile ? section.title : pattern.name}</span>
                           <span className={`text-[9px] font-black font-mono ${pct === 100 ? 'text-emerald-500' : 'opacity-60'}`}>{pct}%</span>
                         </div>
                         <div className="h-1 w-full bg-slate-800/50 rounded-full overflow-hidden">

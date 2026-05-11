@@ -61,20 +61,27 @@ Seed question catalog from `frontend-app/constants.tsx`:
 ./dev/seed-aiven-questions.sh
 ```
 
-Import company question bank from public GitHub repo:
+Sync company question bank using protected API (no request params):
 
 ```bash
-# parse + summary only (no DB write)
-./dev/import-company-bank.sh --dry-run
-
-# clone/pull repo and upsert into question_catalog
-./dev/import-company-bank.sh
+curl -X POST "http://localhost:3000/api/company/sync" \
+  -H "x-company-sync-secret: <COMPANY_SYNC_SECRET>"
 ```
 
-Optional env overrides for importer:
+Check sync status:
+
+```bash
+curl "http://localhost:3000/api/company/sync/status"
+```
+
+Required server env:
+- `COMPANY_SYNC_SECRET`
+
+Optional sync env:
 - `COMPANY_BANK_REPO_URL`
 - `COMPANY_BANK_REPO_BRANCH`
 - `COMPANY_BANK_REPO_CACHE_DIR`
+- `COMPANY_SYNC_COOLDOWN_MS`
 
 Recommended for managed DB environments:
 - set `HIBERNATE_DDL_AUTO=validate` after schema is initialized.

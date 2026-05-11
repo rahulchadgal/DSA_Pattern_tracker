@@ -53,10 +53,15 @@ This app now includes Vercel serverless functions:
 - `GET /api/progress?handle=<handle>`
 - `POST /api/progress`
 - `GET /api/liveness`
+- `POST /api/company/sync` (requires `x-company-sync-secret` header)
+- `GET /api/company/sync/status`
 
 `backend-api/` is kept in the repo as-is, but frontend production can run independently via these serverless routes.
 
 ## Company Bank Filter
-When company-bank questions are imported into `question_catalog` with metadata source `company-bank-import-v1`,
-the Syllabus view shows time filters: `All`, `30 Days`, `3 Months`, `6 Months`.
+Company-bank questions are rendered in the `Companies` route with:
+- company search
+- time filters (`All`, `30 Days`, `3 Months`, `6 Months`)
+- same question cards as Syllabus
+
 Filtering uses DB-backed metadata only (no runtime GitHub calls).
