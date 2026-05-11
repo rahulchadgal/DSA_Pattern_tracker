@@ -115,6 +115,7 @@ for (const company of companyDirs) {
         mainPattern: company,
         subPattern: 'Company Tagged',
         buckets: new Set(),
+        companies: new Set(),
         sources: []
       };
 
@@ -124,6 +125,7 @@ for (const company of companyDirs) {
       existing.mainPattern = company;
       existing.subPattern = 'Company Tagged';
       existing.buckets.add(bucket);
+      existing.companies.add(company);
       existing.sources.push({
         company,
         file: fileName,
@@ -141,6 +143,7 @@ const records = Array.from(byQuestionId.values()).map((entry) => {
     source: 'company-bank-import-v1',
     repo: 'rahulchadgal/leetcode-companywise-interview-questions',
     company: entry.mainPattern,
+    companies: Array.from(entry.companies).sort(),
     buckets: Array.from(entry.buckets).sort(),
     files: Array.from(new Set(entry.sources.map((s) => s.file))).sort(),
     lastSeenFrequency: entry.sources[entry.sources.length - 1]?.frequency ?? null,
