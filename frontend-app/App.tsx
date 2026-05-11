@@ -846,7 +846,7 @@ const App: React.FC = () => {
               </button>
               <div>
                 <h2 className="text-xl md:text-2xl font-black text-white tracking-tighter">
-                  {isProfile ? 'Profile Settings' : isSyllabus ? (selectedPattern.name || 'Syllabus') : 'Objective Selection'}
+                  {isProfile ? 'Companies' : isSyllabus ? (selectedPattern.name || 'Syllabus') : 'Objective Selection'}
                 </h2>
                 <div className="flex items-center gap-3 mt-1.5">
                    <CloudStatus status={syncStatus} />
@@ -878,7 +878,7 @@ const App: React.FC = () => {
                     onClick={goProfile}
                     className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                   >
-                    Profile
+                    Companies
                   </button>
                </div>
                {!isProfile && (
@@ -905,7 +905,26 @@ const App: React.FC = () => {
            {isProfile ? (
              <div className="max-w-3xl mx-auto">
                <div className="rounded-[2.5rem] border border-slate-800/70 bg-slate-900/40 p-8 md:p-12">
-                 <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-black">Profile Settings</p>
+                 <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-black">Companies</p>
+                 <div className="mt-5 mb-6 flex flex-wrap items-center gap-3">
+                   <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Company Time Filter</span>
+                   <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
+                     {([
+                       ['all', 'All'],
+                       ['30d', '30 Days'],
+                       ['3m', '3 Months'],
+                       ['6m', '6 Months']
+                     ] as const).map(([value, label]) => (
+                       <button
+                         key={value}
+                         onClick={() => setCompanyTimeFilter(value)}
+                         className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                       >
+                         {label}
+                       </button>
+                     ))}
+                   </div>
+                 </div>
                  <h3 className="mt-3 text-3xl font-black text-white tracking-tight">Add New Question</h3>
                  <p className="mt-3 text-sm text-slate-400">Use a LeetCode ID and let AI suggest the pattern category. You can review and confirm before save.</p>
                  <button
@@ -930,22 +949,6 @@ const App: React.FC = () => {
                        key={mode}
                        onClick={() => setGridView(mode)}
                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
-                     >
-                       {label}
-                     </button>
-                   ))}
-                 </div>
-                 <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
-                   {([
-                     ['all', 'All'],
-                     ['30d', '30 Days'],
-                     ['3m', '3 Months'],
-                     ['6m', '6 Months']
-                   ] as const).map(([value, label]) => (
-                     <button
-                       key={value}
-                       onClick={() => setCompanyTimeFilter(value)}
-                       className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                      >
                        {label}
                      </button>
