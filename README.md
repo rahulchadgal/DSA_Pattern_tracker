@@ -61,6 +61,21 @@ Seed question catalog from `frontend-app/constants.tsx`:
 ./dev/seed-aiven-questions.sh
 ```
 
+Import company question bank from public GitHub repo:
+
+```bash
+# parse + summary only (no DB write)
+./dev/import-company-bank.sh --dry-run
+
+# clone/pull repo and upsert into question_catalog
+./dev/import-company-bank.sh
+```
+
+Optional env overrides for importer:
+- `COMPANY_BANK_REPO_URL`
+- `COMPANY_BANK_REPO_BRANCH`
+- `COMPANY_BANK_REPO_CACHE_DIR`
+
 Recommended for managed DB environments:
 - set `HIBERNATE_DDL_AUTO=validate` after schema is initialized.
 

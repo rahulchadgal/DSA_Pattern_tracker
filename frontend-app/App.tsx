@@ -26,6 +26,8 @@ interface CustomQuestionRow extends LcMetadata {
   patternId: string;
 }
 
+type CompanyTimeFilter = 'all' | '30d' | '3m' | '6m';
+
 const CATEGORY_OPTIONS = [
   'Dynamic Programming',
   'Sliding Window',
@@ -176,6 +178,21 @@ const mockClassifyQuestion = async (questionId: string): Promise<LcMetadata> => 
   };
 };
 
+const parseCompanyBuckets = (metadataJson?: string | null): CompanyTimeFilter[] => {
+  if (!metadataJson) return [];
+  try {
+    const parsed = JSON.parse(metadataJson);
+    if (!parsed || parsed.source !== 'company-bank-import-v1') return [];
+    const rawBuckets = Array.isArray(parsed.buckets) ? parsed.buckets : [];
+    const buckets = rawBuckets.filter((value: unknown): value is CompanyTimeFilter =>
+      value === 'all' || value === '30d' || value === '3m' || value === '6m'
+    );
+    return buckets;
+  } catch {
+    return [];
+  }
+};
+
 // --- UI COMPONENTS ---
 
 const CloudStatus: React.FC<{ status: 'syncing' | 'saved' | 'error' | 'idle' }> = ({ status }) => {
@@ -292,6 +309,8 @@ const App: React.FC = () => {
   const [isBackendWaking, setIsBackendWaking] = useState(false);
   const [editingSolutionQuestion, setEditingSolutionQuestion] = useState<Question | null>(null);
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
+  const [companyBucketsByQuestionId, setCompanyBucketsByQuestionId] = useState<Record<string, CompanyTimeFilter[]>>({});
+  const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
@@ -431,6 +450,22 @@ const App: React.FC = () => {
     }
   }, [baseSectionsData]);
 
+  const pullCompanyBucketMetadata = useCallback(async () => {
+    try {
+      const rows = await backendApi.getCompanyBankQuestions();
+      const map: Record<string, CompanyTimeFilter[]> = {};
+      rows.forEach((row) => {
+        const buckets = parseCompanyBuckets(row.metadataJson);
+        if (buckets.length > 0) {
+          map[row.leetcodeId] = buckets;
+        }
+      });
+      setCompanyBucketsByQuestionId(map);
+    } catch {
+      setCompanyBucketsByQuestionId({});
+    }
+  }, []);
+
   const handleClassifyQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!questionIdInput.trim()) return;
@@ -496,7 +531,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     pullBaseQuestions();
-  }, [pullBaseQuestions]);
+    pullCompanyBucketMetadata();
+  }, [pullBaseQuestions, pullCompanyBucketMetadata]);
 
   useEffect(() => {
     if (handle) {
@@ -703,6 +739,19 @@ const App: React.FC = () => {
     ? Math.round((Object.keys(completedMap).length / totalQuestions) * 100)
     : 0;
 
+  const filteredPatternQuestions = useMemo(() => {
+    if (companyTimeFilter === 'all') {
+      return selectedPattern.questions;
+    }
+    return selectedPattern.questions.filter((question) => {
+      const buckets = companyBucketsByQuestionId[question.id];
+      if (!buckets || buckets.length === 0) {
+        return true;
+      }
+      return buckets.includes(companyTimeFilter);
+    });
+  }, [selectedPattern.questions, companyTimeFilter, companyBucketsByQuestionId]);
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-indigo-500/30">
       
@@ -869,7 +918,7 @@ const App: React.FC = () => {
              </div>
            ) : isSyllabus ? (
              <>
-               <div className="mb-8 flex items-center gap-3">
+               <div className="mb-8 flex flex-wrap items-center gap-3">
                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">View Settings</span>
                  <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
                    {([
@@ -886,9 +935,25 @@ const App: React.FC = () => {
                      </button>
                    ))}
                  </div>
+                 <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
+                   {([
+                     ['all', 'All'],
+                     ['30d', '30 Days'],
+                     ['3m', '3 Months'],
+                     ['6m', '6 Months']
+                   ] as const).map(([value, label]) => (
+                     <button
+                       key={value}
+                       onClick={() => setCompanyTimeFilter(value)}
+                       className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                     >
+                       {label}
+                     </button>
+                   ))}
+                 </div>
                </div>
                <div className={`pb-32 ${gridView === 'list' ? 'flex flex-col gap-3 sm:gap-4 max-w-4xl' : gridView === 'small' ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6'}`}>
-                {selectedPattern.questions.map(q => {
+                {filteredPatternQuestions.map(q => {
                   const timestamp = completedMap[q.id];
                   const done = !!timestamp;
                   const hasSolution = Boolean(solutionMap[q.id] && solutionMap[q.id].trim().length > 0);

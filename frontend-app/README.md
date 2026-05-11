@@ -55,3 +55,8 @@ This app now includes Vercel serverless functions:
 - `GET /api/liveness`
 
 `backend-api/` is kept in the repo as-is, but frontend production can run independently via these serverless routes.
+
+## Company Bank Filter
+When company-bank questions are imported into `question_catalog` with metadata source `company-bank-import-v1`,
+the Syllabus view shows time filters: `All`, `30 Days`, `3 Months`, `6 Months`.
+Filtering uses DB-backed metadata only (no runtime GitHub calls).

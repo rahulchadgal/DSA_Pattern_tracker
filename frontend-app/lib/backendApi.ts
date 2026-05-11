@@ -132,6 +132,7 @@ export const backendApi = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   }),
+  getCompanyBankQuestions: () => apiRequest<QuestionV2Row[]>('/api/v2/questions?customOnly=true&importedByHandle=system-company-import'),
   getCustomQuestions: (handle: string) => apiRequest<QuestionV2Row[]>(`/api/v2/questions?customOnly=true&importedByHandle=${encodeURIComponent(handle.toLowerCase())}`),
   upsertQuestion: (payload: QuestionUpsertPayload) => apiRequest<QuestionV2Row>('/api/v2/questions', {
     method: 'POST',
