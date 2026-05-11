@@ -118,7 +118,13 @@ async function ensureSyncTable() {
        ) extracted
        WHERE extracted.company_name IS NOT NULL AND extracted.company_name <> ''
      ) names
-     WHERE q.imported_by_handle = 'system-company-import'
+     WHERE (
+       q.imported_by_handle = 'system-company-import'
+       OR (q.metadata_json::jsonb ? 'c')
+       OR (q.metadata_json::jsonb ? 'companies')
+       OR (q.metadata_json::jsonb ? 'company')
+       OR (q.metadata_json::jsonb->>'s' = 'cb1')
+     )
      ON CONFLICT (question_id, company_name) DO NOTHING`
   );
 
