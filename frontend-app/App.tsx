@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { backendApi, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
+import { backendApi, CompanyQuestionRow, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
 import { Pattern, Question, Section } from './types';
@@ -27,15 +27,6 @@ interface CustomQuestionRow extends LcMetadata {
 }
 
 type CompanyTimeFilter = 'all' | '30d' | '3m' | '6m';
-type CompanyMetadata = {
-  source?: string;
-  s?: string;
-  company?: string;
-  companies?: string[];
-  c?: string[];
-  buckets?: CompanyTimeFilter[];
-  b?: number;
-};
 
 const CATEGORY_OPTIONS = [
   'Dynamic Programming',
@@ -187,66 +178,6 @@ const mockClassifyQuestion = async (questionId: string): Promise<LcMetadata> => 
   };
 };
 
-const parseCompanyBuckets = (metadataJson?: string | null): CompanyTimeFilter[] => {
-  if (!metadataJson) return [];
-  try {
-    const parsed = JSON.parse(metadataJson) as CompanyMetadata;
-    if (!parsed) return [];
-    const compactSource = parsed.s === 'cb1';
-    const legacySource = parsed.source === 'company-bank-import-v1';
-    if (!compactSource && !legacySource) return [];
-
-    if (typeof parsed.b === 'number') {
-      const buckets: CompanyTimeFilter[] = [];
-      if (parsed.b & 1) buckets.push('all');
-      if (parsed.b & 2) buckets.push('30d');
-      if (parsed.b & 4) buckets.push('3m');
-      if (parsed.b & 8) buckets.push('6m');
-      return buckets;
-    }
-
-    const rawBuckets = Array.isArray(parsed.buckets) ? parsed.buckets : [];
-    const buckets = rawBuckets.filter((value: unknown): value is CompanyTimeFilter =>
-      value === 'all' || value === '30d' || value === '3m' || value === '6m'
-    );
-    return buckets;
-  } catch {
-    return [];
-  }
-};
-
-const parseCompanyNames = (metadataJson?: string | null, fallbackCompany?: string): string[] => {
-  if (!metadataJson) return fallbackCompany ? [fallbackCompany] : [];
-  try {
-    const parsed = JSON.parse(metadataJson) as CompanyMetadata;
-    if (!parsed) {
-      return fallbackCompany ? [fallbackCompany] : [];
-    }
-    const compactSource = parsed.s === 'cb1';
-    const legacySource = parsed.source === 'company-bank-import-v1';
-    if (!compactSource && !legacySource) return fallbackCompany ? [fallbackCompany] : [];
-
-    const compactCompanies = Array.isArray(parsed.c)
-      ? parsed.c.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim())
-      : [];
-    if (compactCompanies.length > 0) {
-      return Array.from(new Set(compactCompanies));
-    }
-
-    const fromArray = Array.isArray(parsed.companies)
-      ? parsed.companies.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim())
-      : [];
-    if (fromArray.length > 0) {
-      return Array.from(new Set(fromArray));
-    }
-    if (typeof parsed.company === 'string' && parsed.company.trim().length > 0) {
-      return [parsed.company.trim()];
-    }
-    return fallbackCompany ? [fallbackCompany] : [];
-  } catch {
-    return fallbackCompany ? [fallbackCompany] : [];
-  }
-};
 
 // --- UI COMPONENTS ---
 
@@ -365,8 +296,6 @@ const App: React.FC = () => {
   const [isBackendWaking, setIsBackendWaking] = useState(false);
   const [editingSolutionQuestion, setEditingSolutionQuestion] = useState<Question | null>(null);
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
-  const [companyBucketsByQuestionId, setCompanyBucketsByQuestionId] = useState<Record<string, CompanyTimeFilter[]>>({});
-  const [companyQuestionIds, setCompanyQuestionIds] = useState<Record<string, true>>({});
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
   const [companySearchTerm, setCompanySearchTerm] = useState('');
 
@@ -510,40 +439,29 @@ const App: React.FC = () => {
 
   const pullCompanyBucketMetadata = useCallback(async () => {
     try {
-      const rows = await backendApi.getCompanyBankQuestions();
-      const map: Record<string, CompanyTimeFilter[]> = {};
-      const companyIdMap: Record<string, true> = {};
+      const rows = await backendApi.getCompanyQuestions({ bucket: companyTimeFilter, search: companySearchTerm });
       const companySectionsMap = new Map<string, Pattern>();
-      rows.forEach((row) => {
-        const buckets = parseCompanyBuckets(row.metadataJson);
-        const companies = parseCompanyNames(row.metadataJson, row.mainPattern);
-        companyIdMap[row.leetcodeId] = true;
-        if (buckets.length > 0) {
-          map[row.leetcodeId] = buckets;
+      rows.forEach((row: CompanyQuestionRow) => {
+        const company = row.companyName;
+        let pattern = companySectionsMap.get(company);
+        if (!pattern) {
+          pattern = {
+            id: `company-${company.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+            name: '',
+            questions: []
+          };
+          companySectionsMap.set(company, pattern);
         }
-        companies.forEach((company) => {
-          let pattern = companySectionsMap.get(company);
-          if (!pattern) {
-            pattern = {
-              id: `company-${company.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-              name: '',
-              questions: []
-            };
-            companySectionsMap.set(company, pattern);
-          }
-          if (!pattern.questions.some((q) => q.id === row.leetcodeId)) {
-            pattern.questions.push({
-              id: row.leetcodeId,
-              title: row.title,
-              fullTitle: `${row.leetcodeId}. ${row.title}`,
-              link: row.link,
-              difficulty: normalizeDifficulty(row.difficulty)
-            });
-          }
-        });
+        if (!pattern.questions.some((q) => q.id === row.leetcodeId)) {
+          pattern.questions.push({
+            id: row.leetcodeId,
+            title: row.title,
+            fullTitle: `${row.leetcodeId}. ${row.title}`,
+            link: row.link,
+            difficulty: normalizeDifficulty(row.difficulty)
+          });
+        }
       });
-      setCompanyBucketsByQuestionId(map);
-      setCompanyQuestionIds(companyIdMap);
 
       const nextCompanySections: Section[] = Array.from(companySectionsMap.entries())
         .sort(([a], [b]) => a.localeCompare(b))
@@ -554,11 +472,9 @@ const App: React.FC = () => {
         }));
       setCompanySectionsData(nextCompanySections);
     } catch {
-      setCompanyBucketsByQuestionId({});
-      setCompanyQuestionIds({});
       setCompanySectionsData([]);
     }
-  }, []);
+  }, [companySearchTerm, companyTimeFilter]);
 
   const handleClassifyQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -625,8 +541,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     pullBaseQuestions();
+  }, [pullBaseQuestions]);
+
+  useEffect(() => {
     pullCompanyBucketMetadata();
-  }, [pullBaseQuestions, pullCompanyBucketMetadata]);
+  }, [pullCompanyBucketMetadata]);
 
   useEffect(() => {
     if (handle) {
@@ -845,25 +764,13 @@ const App: React.FC = () => {
     if (displayedSections.length === 0) {
       return [];
     }
-
-    const visibleInMode = isProfile
-      ? selectedPattern.questions.filter((question) => companyQuestionIds[question.id])
-      : selectedPattern.questions;
-
-    if (!isProfile || companyTimeFilter === 'all') {
-      return visibleInMode;
-    }
-
-    return visibleInMode.filter((question) => {
-      const buckets = companyBucketsByQuestionId[question.id];
-      return Array.isArray(buckets) && buckets.includes(companyTimeFilter);
-    });
-  }, [displayedSections.length, isProfile, selectedPattern.questions, companyTimeFilter, companyBucketsByQuestionId, companyQuestionIds]);
+    return selectedPattern.questions;
+  }, [displayedSections.length, selectedPattern.questions]);
 
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
     <>
       <div className="mb-8 flex flex-wrap items-center gap-3">
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">View Settings</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{showCompanyFilters ? 'Companies' : 'View Settings'}</span>
         <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
           {([
             ['list', 'List View'],
@@ -903,13 +810,20 @@ const App: React.FC = () => {
           const timestamp = completedMap[q.id];
           const done = !!timestamp;
           const hasSolution = Boolean(solutionMap[q.id] && solutionMap[q.id].trim().length > 0);
+          const neutralCardClass = showCompanyFilters
+            ? (done
+              ? 'bg-slate-900/65 border-slate-700/60'
+              : 'bg-slate-900/45 border-slate-700/60 hover:border-slate-600')
+            : (done
+              ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5'
+              : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600');
           return (
-            <div key={q.id} className={`group relative border transition-all duration-500 ${gridView === 'small' ? 'p-4 sm:p-5 rounded-2xl sm:rounded-3xl' : gridView === 'list' ? 'p-3.5 sm:p-5 rounded-2xl' : 'p-5 sm:p-8 rounded-3xl sm:rounded-[2.5rem] sm:hover:-translate-y-2'} ${done ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600'}`}>
+            <div key={q.id} className={`group relative border transition-all duration-500 ${gridView === 'small' ? 'p-4 sm:p-5 rounded-2xl sm:rounded-3xl' : gridView === 'list' ? 'p-3.5 sm:p-5 rounded-2xl' : 'p-5 sm:p-8 rounded-3xl sm:rounded-[2.5rem] sm:hover:-translate-y-1'} ${neutralCardClass}`}>
               <div className={`flex flex-col h-full ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
                 <div className={`flex items-start ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
                   <button
                     onClick={() => toggleQuestion(q.id)}
-                    className={`shrink-0 ${gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-14 h-14 rounded-3xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white shadow-xl shadow-emerald-500/20' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
+                    className={`shrink-0 ${gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-12 h-12 rounded-2xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
                   >
                     <svg className={`${gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-7 h-7'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                   </button>

@@ -72,6 +72,57 @@ function parseCsvRows(filePath) {
 
 async function ensureSyncTable() {
   await query(
+    `CREATE TABLE IF NOT EXISTS question_company_map (
+      id BIGSERIAL PRIMARY KEY,
+      question_id BIGINT NOT NULL REFERENCES question_catalog(id) ON DELETE CASCADE,
+      company_name VARCHAR(160) NOT NULL,
+      bucket_mask INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      CONSTRAINT uk_question_company UNIQUE (question_id, company_name)
+    )`
+  );
+  await query('CREATE INDEX IF NOT EXISTS idx_question_company_name ON question_company_map(company_name)');
+  await query('CREATE INDEX IF NOT EXISTS idx_question_company_question_id ON question_company_map(question_id)');
+  await query('CREATE INDEX IF NOT EXISTS idx_question_company_name_bucket ON question_company_map(company_name, bucket_mask)');
+
+  await query(
+    `INSERT INTO question_company_map (question_id, company_name, bucket_mask, created_at, updated_at)
+      SELECT
+        q.id,
+        names.company_name,
+        COALESCE(
+          CASE
+            WHEN q.metadata_json::jsonb ? 'b' THEN (q.metadata_json::jsonb->>'b')::INT
+            ELSE 1
+          END,
+          1
+        ),
+       NOW(),
+       NOW()
+     FROM question_catalog q
+     CROSS JOIN LATERAL (
+       SELECT company_name
+       FROM (
+         SELECT jsonb_array_elements_text(q.metadata_json::jsonb->'c') AS company_name
+         WHERE q.metadata_json::jsonb ? 'c'
+         UNION ALL
+         SELECT jsonb_array_elements_text(q.metadata_json::jsonb->'companies') AS company_name
+         WHERE q.metadata_json::jsonb ? 'companies'
+         UNION ALL
+         SELECT q.metadata_json::jsonb->>'company' AS company_name
+         WHERE q.metadata_json::jsonb ? 'company'
+         UNION ALL
+         SELECT q.main_pattern AS company_name
+         WHERE NOT (q.metadata_json::jsonb ? 'c' OR q.metadata_json::jsonb ? 'companies' OR q.metadata_json::jsonb ? 'company')
+       ) extracted
+       WHERE extracted.company_name IS NOT NULL AND extracted.company_name <> ''
+     ) names
+     WHERE q.imported_by_handle = 'system-company-import'
+     ON CONFLICT (question_id, company_name) DO NOTHING`
+  );
+
+  await query(
     `CREATE TABLE IF NOT EXISTS company_sync_state (
       id INT PRIMARY KEY,
       last_synced_sha TEXT,
@@ -181,34 +232,33 @@ function collectQuestionRecords() {
           title,
           link,
           difficulty: normalizeDifficulty(row.difficulty),
-          companies: new Set(),
-          bucketMask: 0
+          companyBuckets: new Map()
         };
         existing.title = title;
         existing.link = link;
         existing.difficulty = normalizeDifficulty(row.difficulty);
-        existing.companies.add(company);
-        existing.bucketMask |= bit;
+        const currentMask = existing.companyBuckets.get(company) || 0;
+        existing.companyBuckets.set(company, currentMask | bit);
         byQuestionId.set(leetcodeId, existing);
       }
     }
   }
 
   const records = Array.from(byQuestionId.values()).map((entry) => {
-    const companies = Array.from(entry.companies).sort();
-    const metadata = JSON.stringify({
-      s: 'cb1',
-      c: companies,
-      b: entry.bucketMask
-    });
+    const companyMappings = Array.from(entry.companyBuckets.entries()).map(([companyName, bucketMask]) => ({
+      companyName,
+      bucketMask
+    }));
+    const metadata = JSON.stringify({ s: 'cb1' });
     return {
       leetcodeId: entry.leetcodeId,
       title: entry.title,
       difficulty: entry.difficulty,
-      mainPattern: companies[0] || 'company',
+      mainPattern: 'Company',
       subPattern: '-',
       link: entry.link,
-      metadataJson: metadata
+      metadataJson: metadata,
+      companyMappings
     };
   });
 
@@ -228,7 +278,7 @@ async function writeImport(records) {
     await client.query('BEGIN');
     let insertedOrUpdated = 0;
     for (const record of records) {
-      await client.query(
+      const upsertQuestion = await client.query(
         `INSERT INTO question_catalog (
           leetcode_id, title, difficulty, main_pattern, sub_pattern, link,
           default_question, custom_imported, imported_by_handle, content_type, metadata_json,
@@ -237,17 +287,24 @@ async function writeImport(records) {
         ON CONFLICT (leetcode_id) DO UPDATE SET
           title = EXCLUDED.title,
           difficulty = EXCLUDED.difficulty,
-          main_pattern = EXCLUDED.main_pattern,
-          sub_pattern = EXCLUDED.sub_pattern,
           link = EXCLUDED.link,
-          default_question = EXCLUDED.default_question,
-          custom_imported = EXCLUDED.custom_imported,
-          imported_by_handle = EXCLUDED.imported_by_handle,
-          content_type = EXCLUDED.content_type,
           metadata_json = EXCLUDED.metadata_json,
-          updated_at = NOW()`,
+          updated_at = NOW()
+        RETURNING id`,
         [record.leetcodeId, record.title, record.difficulty, record.mainPattern, record.subPattern, record.link, record.metadataJson]
       );
+      const questionId = upsertQuestion.rows[0].id;
+
+      for (const mapping of record.companyMappings) {
+        await client.query(
+          `INSERT INTO question_company_map (question_id, company_name, bucket_mask, created_at, updated_at)
+           VALUES ($1, $2, $3, NOW(), NOW())
+           ON CONFLICT (question_id, company_name) DO UPDATE SET
+             bucket_mask = EXCLUDED.bucket_mask,
+             updated_at = NOW()`,
+          [questionId, mapping.companyName, mapping.bucketMask]
+        );
+      }
       insertedOrUpdated += 1;
     }
     await client.query('COMMIT');

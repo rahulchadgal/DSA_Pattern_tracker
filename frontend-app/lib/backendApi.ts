@@ -25,6 +25,16 @@ export interface QuestionV2Row {
   metadataJson?: string | null;
 }
 
+export interface CompanyQuestionRow {
+  questionId: number;
+  leetcodeId: string;
+  title: string;
+  difficulty: string;
+  link: string;
+  companyName: string;
+  bucketMask: number;
+}
+
 export interface ProgressUpsertPayload {
   handle: string;
   leetcodeId: string;
@@ -132,7 +142,14 @@ export const backendApi = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   }),
-  getCompanyBankQuestions: () => apiRequest<QuestionV2Row[]>('/api/v2/questions?customOnly=true&importedByHandle=system-company-import'),
+  getCompanyQuestions: (params?: { company?: string; bucket?: 'all' | '30d' | '3m' | '6m'; search?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.company) qs.set('company', params.company);
+    if (params?.bucket) qs.set('bucket', params.bucket);
+    if (params?.search) qs.set('search', params.search);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return apiRequest<CompanyQuestionRow[]>(`/api/company/questions${suffix}`);
+  },
   getCustomQuestions: (handle: string) => apiRequest<QuestionV2Row[]>(`/api/v2/questions?customOnly=true&importedByHandle=${encodeURIComponent(handle.toLowerCase())}`),
   upsertQuestion: (payload: QuestionUpsertPayload) => apiRequest<QuestionV2Row>('/api/v2/questions', {
     method: 'POST',
