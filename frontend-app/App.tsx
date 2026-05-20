@@ -773,8 +773,12 @@ const App: React.FC = () => {
     const activePattern = currentSection.patterns.find((pattern) => pattern.id === selectedPattern.id);
     if (!activePattern && currentSection.patterns[0]) {
       setSelectedPattern(currentSection.patterns[0]);
+      return;
     }
-  }, [displayedSections, selectedSectionId, selectedPattern.id]);
+    if (activePattern && activePattern !== selectedPattern) {
+      setSelectedPattern(activePattern);
+    }
+  }, [displayedSections, selectedSectionId, selectedPattern]);
 
   const filteredPatternQuestions = useMemo(() => {
     if (displayedSections.length === 0) {
