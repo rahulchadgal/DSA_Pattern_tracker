@@ -18,7 +18,7 @@ public class QuestionService {
     }
 
     public List<QuestionV1Response> getV1Questions() {
-        return questionRepository.findAll().stream()
+        return questionRepository.findPatternCatalogQuestions().stream()
                 .map(q -> new QuestionV1Response(q.getLeetcodeId(), q.getTitle(), q.getDifficulty(), q.getMainPattern(), q.getSubPattern(), q.getLink()))
                 .toList();
     }

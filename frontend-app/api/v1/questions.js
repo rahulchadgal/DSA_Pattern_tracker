@@ -16,7 +16,8 @@ export default async function handler(req, res) {
               sub_pattern AS "subPattern",
               link
        FROM question_catalog
-       WHERE imported_by_handle IS DISTINCT FROM 'system-company-import'
+       WHERE default_question = true
+          OR imported_by_handle IS DISTINCT FROM 'system-company-import'
        ORDER BY id ASC`
     );
     return sendJson(res, 200, result.rows);
