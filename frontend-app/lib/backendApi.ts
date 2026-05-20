@@ -1,3 +1,5 @@
+import { getCompanyQuestionsLocal } from './companyQuestionsLocalProvider';
+
 export interface QuestionV1Row {
   leetcodeId: string;
   title: string;
@@ -142,14 +144,8 @@ export const backendApi = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   }),
-  getCompanyQuestions: (params?: { company?: string; bucket?: 'all' | '30d' | '3m' | '6m'; search?: string }) => {
-    const qs = new URLSearchParams();
-    if (params?.company) qs.set('company', params.company);
-    if (params?.bucket) qs.set('bucket', params.bucket);
-    if (params?.search) qs.set('search', params.search);
-    const suffix = qs.toString() ? `?${qs.toString()}` : '';
-    return apiRequest<CompanyQuestionRow[]>(`/api/company/questions${suffix}`);
-  },
+  getCompanyQuestions: (params?: { company?: string; bucket?: 'all' | '30d' | '3m' | '6m'; search?: string }) =>
+    Promise.resolve(getCompanyQuestionsLocal(params)),
   getCustomQuestions: (handle: string) => apiRequest<QuestionV2Row[]>(`/api/v2/questions?customOnly=true&importedByHandle=${encodeURIComponent(handle.toLowerCase())}`),
   upsertQuestion: (payload: QuestionUpsertPayload) => apiRequest<QuestionV2Row>('/api/v2/questions', {
     method: 'POST',

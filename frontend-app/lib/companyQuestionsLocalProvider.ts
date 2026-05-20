@@ -11,12 +11,21 @@
 import { COMPANY_DATA, CompanyQuestion } from '../constants.company';
 
 export interface CompanyQuestionRow {
+  questionId: number;
   leetcodeId: string;
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   link: string;
   companyName: string;
+  bucketMask: number;
 }
+
+const bucketToMask = (bucket: 'all' | '30d' | '3m' | '6m'): number => {
+  if (bucket === '30d') return 2;
+  if (bucket === '3m') return 4;
+  if (bucket === '6m') return 8;
+  return 1;
+};
 
 const generateLeetCodeLink = (title: string): string => {
   const slug = title
@@ -33,14 +42,14 @@ const generateLeetCodeLink = (title: string): string => {
  * @param params.search - company name search term (case-insensitive)
  * @returns Array of company question rows matching filters
  */
-export const getCompanyQuestionsLocal = (params: {
+export const getCompanyQuestionsLocal = (params?: {
+  company?: string;
   bucket?: 'all' | '30d' | '3m' | '6m';
   search?: string;
 }): CompanyQuestionRow[] => {
-  const { bucket = 'all', search = '' } = params;
+  const { company = '', bucket = 'all', search = '' } = params || {};
   const rows: CompanyQuestionRow[] = [];
-
-  const searchLower = search.toLowerCase().trim();
+  const searchLower = (company || search).toLowerCase().trim();
 
   COMPANY_DATA.forEach((entry) => {
     // Filter by company name if search term provided
@@ -56,11 +65,13 @@ export const getCompanyQuestionsLocal = (params: {
       // - question's bucket is 'all' (always-asked questions)
       if (bucket === 'all' || question.bucket === bucket || question.bucket === 'all') {
         rows.push({
+          questionId: Number(question.id),
           leetcodeId: question.id,
           title: question.title,
           difficulty: question.difficulty,
           link: generateLeetCodeLink(question.title),
           companyName: entry.company,
+          bucketMask: bucketToMask(question.bucket),
         });
       }
     });

@@ -453,7 +453,7 @@ const App: React.FC = () => {
 
   const pullCompanyBucketMetadata = useCallback(async () => {
     try {
-      const rows = await backendApi.getCompanyQuestions({ bucket: companyTimeFilter, search: companySearchTerm });
+      const rows = await backendApi.getCompanyQuestions({ bucket: companyTimeFilter });
       const companySectionsMap = new Map<string, Pattern>();
       rows.forEach((row: CompanyQuestionRow) => {
         const company = row.companyName;
@@ -489,7 +489,7 @@ const App: React.FC = () => {
     } catch {
       setCompanySectionsData([]);
     }
-  }, [companySearchTerm, companyTimeFilter]);
+  }, [companyTimeFilter]);
 
   const handleClassifyQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
