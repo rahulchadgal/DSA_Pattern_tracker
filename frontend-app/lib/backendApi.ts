@@ -1,3 +1,5 @@
+import { getCompanyQuestionsLocal } from './companyQuestionsLocalProvider';
+
 export interface QuestionV1Row {
   leetcodeId: string;
   title: string;
@@ -25,11 +27,27 @@ export interface QuestionV2Row {
   metadataJson?: string | null;
 }
 
+export interface CompanyQuestionRow {
+  questionId: number;
+  leetcodeId: string;
+  title: string;
+  difficulty: string;
+  link: string;
+  companyName: string;
+  bucketMask: number;
+}
+
 export interface ProgressUpsertPayload {
   handle: string;
   leetcodeId: string;
   completed: boolean;
   solutionRichText?: string | null;
+  title?: string;
+  difficulty?: string;
+  link?: string;
+  mainPattern?: string;
+  subPattern?: string;
+  metadataJson?: string | null;
 }
 
 export interface QuestionUpsertPayload {
@@ -132,6 +150,8 @@ export const backendApi = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   }),
+  getCompanyQuestions: (params?: { company?: string; bucket?: 'all' | '30d' | '3m' | '6m'; search?: string }) =>
+    Promise.resolve(getCompanyQuestionsLocal(params)),
   getCustomQuestions: (handle: string) => apiRequest<QuestionV2Row[]>(`/api/v2/questions?customOnly=true&importedByHandle=${encodeURIComponent(handle.toLowerCase())}`),
   upsertQuestion: (payload: QuestionUpsertPayload) => apiRequest<QuestionV2Row>('/api/v2/questions', {
     method: 'POST',

@@ -16,6 +16,8 @@ export default async function handler(req, res) {
               sub_pattern AS "subPattern",
               link
        FROM question_catalog
+       WHERE default_question = true
+          OR imported_by_handle IS DISTINCT FROM 'system-company-import'
        ORDER BY id ASC`
     );
     return sendJson(res, 200, result.rows);
@@ -23,4 +25,3 @@ export default async function handler(req, res) {
     return sendError(res, 500, error instanceof Error ? error.message : 'Unable to load questions');
   }
 }
-

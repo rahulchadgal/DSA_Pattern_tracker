@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { backendApi, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
+import { backendApi, CompanyQuestionRow, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
+import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
 import { Pattern, Question, Section } from './types';
@@ -25,6 +26,17 @@ interface CustomQuestionRow extends LcMetadata {
   sectionId: string;
   patternId: string;
 }
+
+interface QuestionProgressMetadata {
+  title: string;
+  difficulty: DifficultyLevel;
+  link: string;
+  mainPattern: string;
+  subPattern: string;
+  metadataJson?: string | null;
+}
+
+type CompanyTimeFilter = 'all' | '30d' | '3m' | '6m';
 
 const CATEGORY_OPTIONS = [
   'Dynamic Programming',
@@ -55,8 +67,19 @@ const formatDate = (dateStr: string) => {
   return `${day}-${month}-${year} / ${pad(hours)}:${minutes} ${ampm}`;
 };
 
+const normalizeQuestionId = (id: string | number): string => String(id).trim().replace(/^0+(?=\d)/, '');
+
+const normalizeStoredMap = (raw: string | null): Record<string, string> => {
+  if (!raw) return {};
+  const parsed = JSON.parse(raw) as Record<string, string>;
+  return Object.entries(parsed).reduce<Record<string, string>>((acc, [id, value]) => {
+    acc[normalizeQuestionId(id)] = value;
+    return acc;
+  }, {});
+};
 
 const cloneSections = (sections: Section[]): Section[] => JSON.parse(JSON.stringify(sections));
+const getInitialSections = (): Section[] => cloneSections(DSA_DATA);
 
 const findSectionIdByCategory = (sections: Section[], category: string): string => {
   if (sections.length === 0) return '';
@@ -88,6 +111,7 @@ const buildSectionsFromQuestions = (questions: QuestionV1Row[]): Section[] => {
   let patternCounter = 1;
 
   questions.forEach((row) => {
+    const leetcodeId = normalizeQuestionId(row.leetcodeId);
     const sectionTitle = row.mainPattern?.trim() || 'General';
     const patternName = row.subPattern?.trim() || 'General Pattern';
 
@@ -116,9 +140,9 @@ const buildSectionsFromQuestions = (questions: QuestionV1Row[]): Section[] => {
     }
 
     pattern.questions.push({
-      id: row.leetcodeId,
+      id: leetcodeId,
       title: row.title,
-      fullTitle: `${row.leetcodeId}. ${row.title}`,
+      fullTitle: `${leetcodeId}. ${row.title}`,
       link: row.link,
       difficulty: normalizeDifficulty(row.difficulty)
     });
@@ -143,13 +167,14 @@ const addCustomQuestionToSections = (sections: Section[], customQuestion: Custom
     next[sectionIndex].patterns = [pattern, ...next[sectionIndex].patterns];
   }
 
-  const alreadyExists = pattern.questions.some(q => q.id === customQuestion.questionId);
+  const questionId = normalizeQuestionId(customQuestion.questionId);
+  const alreadyExists = pattern.questions.some(q => q.id === questionId);
   if (alreadyExists) return next;
 
   pattern.questions.unshift({
-    id: customQuestion.questionId,
+    id: questionId,
     title: customQuestion.title,
-    fullTitle: `${customQuestion.questionId}. ${customQuestion.title}`,
+    fullTitle: `${questionId}. ${customQuestion.title}`,
     link: customQuestion.link,
     difficulty: customQuestion.difficulty
   });
@@ -158,7 +183,7 @@ const addCustomQuestionToSections = (sections: Section[], customQuestion: Custom
 };
 
 const mockClassifyQuestion = async (questionId: string): Promise<LcMetadata> => {
-  const normalized = questionId.trim();
+  const normalized = normalizeQuestionId(questionId);
   await new Promise(resolve => setTimeout(resolve, 400));
 
   const category = Number(normalized) % 3 === 0
@@ -175,6 +200,7 @@ const mockClassifyQuestion = async (questionId: string): Promise<LcMetadata> => 
     link: `https://leetcode.com/problems/${normalized}/`
   };
 };
+
 
 // --- UI COMPONENTS ---
 
@@ -262,20 +288,19 @@ const App: React.FC = () => {
 
   // --- PROGRESS STATE (Map of ID -> Timestamp) ---
   const [completedMap, setCompletedMap] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem(LOCAL_CACHE_KEY);
-    return saved ? JSON.parse(saved) : {};
+    return normalizeStoredMap(localStorage.getItem(LOCAL_CACHE_KEY));
   });
   const [solutionMap, setSolutionMap] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem(SOLUTION_CACHE_KEY);
-    return saved ? JSON.parse(saved) : {};
+    return normalizeStoredMap(localStorage.getItem(SOLUTION_CACHE_KEY));
   });
   
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'saved' | 'error' | 'idle'>('idle');
-  const [baseSectionsData, setBaseSectionsData] = useState<Section[]>([]);
-  const [sectionsData, setSectionsData] = useState<Section[]>([]);
-  const [selectedPattern, setSelectedPattern] = useState<Pattern>({ id: '', name: 'Loading...', questions: [] });
-  const [selectedSectionId, setSelectedSectionId] = useState<string>('');
-  const [openSections, setOpenSections] = useState<string[]>([]);
+  const [baseSectionsData, setBaseSectionsData] = useState<Section[]>(() => getInitialSections());
+  const [sectionsData, setSectionsData] = useState<Section[]>(() => getInitialSections());
+  const [companySectionsData, setCompanySectionsData] = useState<Section[]>([]);
+  const [selectedPattern, setSelectedPattern] = useState<Pattern>(() => getInitialSections()[0]?.patterns[0] || { id: '', name: 'Loading...', questions: [] });
+  const [selectedSectionId, setSelectedSectionId] = useState<string>(() => getInitialSections()[0]?.id || '');
+  const [openSections, setOpenSections] = useState<string[]>(() => getInitialSections()[0]?.id ? [getInitialSections()[0].id] : []);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => localStorage.getItem(NAVBAR_COLLAPSED_KEY) === 'true');
   const [randomPick, setRandomPick] = useState<Question | null>(null);
@@ -292,28 +317,26 @@ const App: React.FC = () => {
   const [isBackendWaking, setIsBackendWaking] = useState(false);
   const [editingSolutionQuestion, setEditingSolutionQuestion] = useState<Question | null>(null);
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
+  const pendingProgressRef = useRef<Record<string, { completed: boolean; solutionRichText: string | null }>>({});
+  const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
+  const [companySearchTerm, setCompanySearchTerm] = useState('');
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
   const pullBaseQuestions = useCallback(async () => {
-    try {
-      const rows = await backendApi.getQuestionsV1();
-      const nextSections = buildSectionsFromQuestions(rows);
-      setBaseSectionsData(nextSections);
-      setSectionsData(nextSections);
+    const nextSections = getInitialSections();
+    setBaseSectionsData(nextSections);
+    setSectionsData(nextSections);
 
-      if (nextSections.length > 0 && nextSections[0].patterns.length > 0) {
-        const firstSection = nextSections[0];
-        setSelectedSectionId(firstSection.id);
-        setSelectedPattern(firstSection.patterns[0]);
-        setOpenSections([firstSection.id]);
-      } else {
-        setSelectedSectionId('');
-        setSelectedPattern({ id: '', name: 'No Patterns', questions: [] });
-        setOpenSections([]);
-      }
-    } catch {
-      setSyncStatus('error');
+    if (nextSections.length > 0 && nextSections[0].patterns.length > 0) {
+      const firstSection = nextSections[0];
+      setSelectedSectionId(firstSection.id);
+      setSelectedPattern(firstSection.patterns[0]);
+      setOpenSections([firstSection.id]);
+    } else {
+      setSelectedSectionId('');
+      setSelectedPattern({ id: '', name: 'No Patterns', questions: [] });
+      setOpenSections([]);
     }
   }, []);
 
@@ -325,11 +348,24 @@ const App: React.FC = () => {
       const completionMap: Record<string, string> = {};
       const solutionNotesMap: Record<string, string> = {};
       rows.forEach((r) => {
+        const leetcodeId = normalizeQuestionId(r.leetcodeId);
         if (r.completed) {
-          completionMap[r.leetcodeId] = r.updatedAt;
+          completionMap[leetcodeId] = r.updatedAt;
         }
         if (r.solutionRichText && r.solutionRichText.trim().length > 0) {
-          solutionNotesMap[r.leetcodeId] = r.solutionRichText;
+          solutionNotesMap[leetcodeId] = r.solutionRichText;
+        }
+      });
+      Object.entries(pendingProgressRef.current).forEach(([leetcodeId, pending]) => {
+        if (pending.completed) {
+          completionMap[leetcodeId] = completionMap[leetcodeId] || new Date().toISOString();
+        } else {
+          delete completionMap[leetcodeId];
+        }
+        if (pending.solutionRichText && pending.solutionRichText.trim().length > 0) {
+          solutionNotesMap[leetcodeId] = pending.solutionRichText;
+        } else if (pending.solutionRichText === null) {
+          delete solutionNotesMap[leetcodeId];
         }
       });
       
@@ -343,16 +379,33 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const atomicUpdate = async (qId: string, isChecked: boolean, solutionRichText?: string | null) => {
+  const atomicUpdate = async (
+    qId: string,
+    isChecked: boolean,
+    solutionRichText?: string | null,
+    metadata?: QuestionProgressMetadata
+  ) => {
     if (!handle) return;
+    const leetcodeId = normalizeQuestionId(qId);
+    pendingProgressRef.current[leetcodeId] = {
+      completed: isChecked,
+      solutionRichText: solutionRichText ?? null
+    };
     setSyncStatus('syncing');
     try {
       await backendApi.upsertProgress({
         handle: handle.toLowerCase(),
-        leetcodeId: qId,
+        leetcodeId,
         completed: isChecked,
-        solutionRichText: solutionRichText ?? null
+        solutionRichText: solutionRichText ?? null,
+        title: metadata?.title,
+        difficulty: metadata?.difficulty,
+        link: metadata?.link,
+        mainPattern: metadata?.mainPattern,
+        subPattern: metadata?.subPattern,
+        metadataJson: metadata?.metadataJson ?? null
       });
+      delete pendingProgressRef.current[leetcodeId];
       setSyncStatus('saved');
     } catch (e) {
       setSyncStatus('error');
@@ -362,9 +415,10 @@ const App: React.FC = () => {
 
   const saveCustomQuestion = async (question: CustomQuestionRow) => {
     if (!handle) return;
+    const questionId = normalizeQuestionId(question.questionId);
     try {
       await backendApi.upsertQuestion({
-        leetcodeId: question.questionId,
+        leetcodeId: questionId,
         title: question.title,
         difficulty: question.difficulty,
         mainPattern: question.category,
@@ -410,8 +464,9 @@ const App: React.FC = () => {
           }
         }
         const inferredSectionId = sectionId || findSectionIdByCategory(baseSectionsData, row.mainPattern);
+        const questionId = normalizeQuestionId(row.leetcodeId);
         return {
-          questionId: row.leetcodeId,
+          questionId,
         title: row.title,
         difficulty: normalizeDifficulty(row.difficulty),
         category: row.mainPattern,
@@ -430,6 +485,46 @@ const App: React.FC = () => {
       // keep cached/local data only
     }
   }, [baseSectionsData]);
+
+  const pullCompanyBucketMetadata = useCallback(async () => {
+    try {
+      const rows = await backendApi.getCompanyQuestions({ bucket: companyTimeFilter });
+      const companySectionsMap = new Map<string, Pattern>();
+      rows.forEach((row: CompanyQuestionRow) => {
+        const company = row.companyName;
+        const leetcodeId = normalizeQuestionId(row.leetcodeId);
+        let pattern = companySectionsMap.get(company);
+        if (!pattern) {
+          pattern = {
+            id: `company-${company.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+            name: '',
+            questions: []
+          };
+          companySectionsMap.set(company, pattern);
+        }
+        if (!pattern.questions.some((q) => q.id === leetcodeId)) {
+          pattern.questions.push({
+            id: leetcodeId,
+            title: row.title,
+            fullTitle: `${leetcodeId}. ${row.title}`,
+            link: row.link,
+            difficulty: normalizeDifficulty(row.difficulty)
+          });
+        }
+      });
+
+      const nextCompanySections: Section[] = Array.from(companySectionsMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([company, pattern], index) => ({
+          id: `C${index + 1}`,
+          title: company,
+          patterns: [pattern]
+        }));
+      setCompanySectionsData(nextCompanySections);
+    } catch {
+      setCompanySectionsData([]);
+    }
+  }, [companyTimeFilter]);
 
   const handleClassifyQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -499,6 +594,10 @@ const App: React.FC = () => {
   }, [pullBaseQuestions]);
 
   useEffect(() => {
+    pullCompanyBucketMetadata();
+  }, [pullCompanyBucketMetadata]);
+
+  useEffect(() => {
     if (handle) {
       pullRelationalProgress(handle);
       pullCustomQuestions(handle);
@@ -506,7 +605,7 @@ const App: React.FC = () => {
       window.addEventListener('focus', onFocus);
       return () => window.removeEventListener('focus', onFocus);
     }
-  }, [handle, pullRelationalProgress, pullCustomQuestions, baseSectionsData]);
+  }, [handle, pullRelationalProgress, pullCustomQuestions]);
 
   useEffect(() => {
     const cachedRows: CustomQuestionRow[] = JSON.parse(localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY) || '[]');
@@ -515,21 +614,6 @@ const App: React.FC = () => {
       setSectionsData(merged);
     }
   }, [baseSectionsData]);
-
-  useEffect(() => {
-    if (sectionsData.length === 0) return;
-    const selectedSection = sectionsData.find(s => s.id === selectedSectionId) || sectionsData[0];
-    if (!selectedSection) return;
-
-    if (selectedSection.id !== selectedSectionId) {
-      setSelectedSectionId(selectedSection.id);
-    }
-
-    const matchedPattern = selectedSection.patterns.find(p => p.id === selectedPattern.id) || selectedSection.patterns[0];
-    if (matchedPattern && matchedPattern.id !== selectedPattern.id) {
-      setSelectedPattern(matchedPattern);
-    }
-  }, [sectionsData, selectedSectionId, selectedPattern.id]);
 
   useEffect(() => {
     localStorage.setItem(NAVBAR_COLLAPSED_KEY, String(isSidebarCollapsed));
@@ -572,20 +656,43 @@ const App: React.FC = () => {
 
   // --- HANDLERS ---
 
-  const toggleQuestion = (id: string) => {
-    const isNowChecked = !completedMap[id];
+  const buildProgressMetadata = (question: Question): QuestionProgressMetadata => {
+    const activeSection = displayedSections.find((section) => section.id === selectedSectionId);
+    if (isProfile) {
+      const companyName = activeSection?.title || 'Company';
+      return {
+        title: question.title,
+        difficulty: question.difficulty,
+        link: question.link,
+        mainPattern: 'Company',
+        subPattern: companyName,
+        metadataJson: JSON.stringify({ company: companyName, source: 'local-company-bank' })
+      };
+    }
+    return {
+      title: question.title,
+      difficulty: question.difficulty,
+      link: question.link,
+      mainPattern: activeSection?.title || 'General',
+      subPattern: selectedPattern.name || 'General Pattern'
+    };
+  };
+
+  const toggleQuestion = (question: Question) => {
+    const questionId = normalizeQuestionId(question.id);
+    const isNowChecked = !completedMap[questionId];
     const timestamp = new Date().toISOString();
     const nextMap = { ...completedMap };
     
     if (isNowChecked) {
-      nextMap[id] = timestamp;
+      nextMap[questionId] = timestamp;
     } else {
-      delete nextMap[id];
+      delete nextMap[questionId];
     }
     
     setCompletedMap(nextMap);
     localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(nextMap));
-    atomicUpdate(id, isNowChecked, solutionMap[id] ?? null);
+    atomicUpdate(questionId, isNowChecked, solutionMap[questionId] ?? null, buildProgressMetadata(question));
   };
 
   const openSolutionEditor = (question: Question) => {
@@ -613,7 +720,7 @@ const App: React.FC = () => {
   const saveSolutionNote = async () => {
     if (!editingSolutionQuestion) return;
 
-    const questionId = editingSolutionQuestion.id;
+    const questionId = normalizeQuestionId(editingSolutionQuestion.id);
     const nextHtml = solutionEditorRef.current?.innerHTML.trim() || '';
     const nextMap = { ...solutionMap };
     if (nextHtml) {
@@ -625,7 +732,7 @@ const App: React.FC = () => {
     localStorage.setItem(SOLUTION_CACHE_KEY, JSON.stringify(nextMap));
 
     if (handle) {
-      await atomicUpdate(questionId, Boolean(completedMap[questionId]), nextHtml || null);
+      await atomicUpdate(questionId, Boolean(completedMap[questionId]), nextHtml || null, buildProgressMetadata(editingSolutionQuestion));
     }
 
     closeSolutionEditor();
@@ -703,6 +810,131 @@ const App: React.FC = () => {
     ? Math.round((Object.keys(completedMap).length / totalQuestions) * 100)
     : 0;
 
+  const displayedSections = useMemo(() => {
+    if (!isProfile) return sectionsData;
+    const search = companySearchTerm.trim().toLowerCase();
+    if (!search) return companySectionsData;
+    return companySectionsData.filter((section) => section.title.toLowerCase().includes(search));
+  }, [isProfile, sectionsData, companySectionsData, companySearchTerm]);
+
+  useEffect(() => {
+    if (displayedSections.length === 0) return;
+    const currentSection = displayedSections.find((section) => section.id === selectedSectionId);
+    if (!currentSection) {
+      const firstSection = displayedSections[0];
+      setSelectedSectionId(firstSection.id);
+      setSelectedPattern(firstSection.patterns[0] || { id: '', name: 'No Patterns', questions: [] });
+      setOpenSections([firstSection.id]);
+      return;
+    }
+    const activePattern = currentSection.patterns.find((pattern) => pattern.id === selectedPattern.id);
+    if (!activePattern && currentSection.patterns[0]) {
+      setSelectedPattern(currentSection.patterns[0]);
+      return;
+    }
+    if (activePattern && activePattern !== selectedPattern) {
+      setSelectedPattern(activePattern);
+    }
+  }, [displayedSections, selectedSectionId, selectedPattern]);
+
+  const filteredPatternQuestions = useMemo(() => {
+    if (displayedSections.length === 0) {
+      return [];
+    }
+    return selectedPattern.questions;
+  }, [displayedSections.length, selectedPattern.questions]);
+
+  const renderQuestionGrid = (showCompanyFilters: boolean) => (
+    <>
+      <div className="mb-8 flex flex-wrap items-center gap-3">
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{showCompanyFilters ? 'Companies' : 'View Settings'}</span>
+        <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
+          {([
+            ['list', 'List View'],
+            ['small', 'Small Icons'],
+            ['big', 'Big Icons']
+          ] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              onClick={() => setGridView(mode)}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {showCompanyFilters && (
+          <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
+            {([
+              ['all', 'All'],
+              ['30d', '30 Days'],
+              ['3m', '3 Months'],
+              ['6m', '6 Months']
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setCompanyTimeFilter(value)}
+                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className={`pb-32 ${gridView === 'list' ? 'flex flex-col gap-3 sm:gap-4 max-w-4xl' : gridView === 'small' ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6'}`}>
+        {filteredPatternQuestions.map(q => {
+          const timestamp = completedMap[q.id];
+          const done = !!timestamp;
+          const hasSolution = Boolean(solutionMap[q.id] && solutionMap[q.id].trim().length > 0);
+          const neutralCardClass = showCompanyFilters
+            ? (done
+              ? 'bg-slate-900/65 border-slate-700/60'
+              : 'bg-slate-900/45 border-slate-700/60 hover:border-slate-600')
+            : (done
+              ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5'
+              : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600');
+          return (
+            <div key={q.id} className={`group relative border transition-all duration-500 ${gridView === 'small' ? 'p-4 sm:p-5 rounded-2xl sm:rounded-3xl' : gridView === 'list' ? 'p-3.5 sm:p-5 rounded-2xl' : 'p-5 sm:p-8 rounded-3xl sm:rounded-[2.5rem] sm:hover:-translate-y-1'} ${neutralCardClass}`}>
+              <div className={`flex flex-col h-full ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
+                <div className={`flex items-start ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
+                  <button
+                    onClick={() => toggleQuestion(q)}
+                    className={`shrink-0 ${gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-12 h-12 rounded-2xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
+                  >
+                    <svg className={`${gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-7 h-7'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                  </button>
+                  <div className="flex-1 min-w-0 pt-1">
+                    <a href={q.link} target="_blank" rel="noreferrer" className={`block ${gridView === 'small' || isMobile ? 'text-[13px] sm:text-sm' : 'text-base sm:text-lg'} font-bold leading-tight mb-1.5 sm:mb-2 transition-all ${done ? 'text-slate-600 line-through opacity-60 italic' : 'text-slate-100 group-hover:text-indigo-400'}`}>{q.title}</a>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <span className="text-[10px] font-bold text-slate-700 font-mono tracking-tighter">LC #{q.id}</span>
+                      <DifficultyBadge diff={q.difficulty} />
+                      <button
+                        onClick={() => openSolutionEditor(q)}
+                        title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
+                        className={`ml-auto p-2 rounded-xl border transition-all ${hasSolution ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'}`}
+                      >
+                        <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {done && gridView !== 'small' && (
+                  <div className="flex flex-col gap-1 border-t border-emerald-500/10 pt-3 sm:pt-4 animate-in fade-in slide-in-from-top-1 duration-700">
+                    <span className="text-[8px] font-black uppercase text-emerald-500/50 tracking-[0.2em]">Last Updated</span>
+                    <span className="text-[10px] font-bold text-slate-400 font-mono italic">{formatDate(timestamp)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-indigo-500/30">
       
@@ -733,7 +965,17 @@ const App: React.FC = () => {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-4">
-          {sectionsData.map(section => (
+          {isProfile && (
+            <div className="mb-3">
+              <input
+                value={companySearchTerm}
+                onChange={(e) => setCompanySearchTerm(e.target.value)}
+                placeholder="Search companies..."
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-bold text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              />
+            </div>
+          )}
+          {displayedSections.map(section => (
             <div key={section.id} className="space-y-1">
               <button
                 title={section.title}
@@ -754,11 +996,18 @@ const App: React.FC = () => {
                     return (
                       <button 
                         key={pattern.id} 
-                        onClick={() => { setSelectedPattern(pattern); setSelectedSectionId(section.id); goSyllabus(); setIsSidebarOpen(false); }}
+                        onClick={() => {
+                          setSelectedPattern(pattern);
+                          setSelectedSectionId(section.id);
+                          if (!isProfile) {
+                            goSyllabus();
+                          }
+                          setIsSidebarOpen(false);
+                        }}
                         className={`w-full group px-4 py-3 rounded-2xl text-[12px] text-left transition-all border ${active ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-lg shadow-indigo-500/5' : 'text-slate-500 hover:bg-slate-800/40 border-transparent'}`}
                       >
                         <div className="flex justify-between items-center mb-2">
-                          <span className="truncate font-bold tracking-tight pr-4">{pattern.name}</span>
+                          <span className="truncate font-bold tracking-tight pr-4">{isProfile ? section.title : pattern.name}</span>
                           <span className={`text-[9px] font-black font-mono ${pct === 100 ? 'text-emerald-500' : 'opacity-60'}`}>{pct}%</span>
                         </div>
                         <div className="h-1 w-full bg-slate-800/50 rounded-full overflow-hidden">
@@ -797,7 +1046,7 @@ const App: React.FC = () => {
               </button>
               <div>
                 <h2 className="text-xl md:text-2xl font-black text-white tracking-tighter">
-                  {isProfile ? 'Profile Settings' : isSyllabus ? (selectedPattern.name || 'Syllabus') : 'Objective Selection'}
+                  {isProfile ? 'Companies' : isSyllabus ? (selectedPattern.name || 'Syllabus') : 'Objective Selection'}
                 </h2>
                 <div className="flex items-center gap-3 mt-1.5">
                    <CloudStatus status={syncStatus} />
@@ -829,7 +1078,7 @@ const App: React.FC = () => {
                     onClick={goProfile}
                     className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                   >
-                    Profile
+                    Companies
                   </button>
                </div>
                {!isProfile && (
@@ -854,91 +1103,9 @@ const App: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-8 md:p-14 custom-scrollbar">
            {isProfile ? (
-             <div className="max-w-3xl mx-auto">
-               <div className="rounded-[2.5rem] border border-slate-800/70 bg-slate-900/40 p-8 md:p-12">
-                 <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-black">Profile Settings</p>
-                 <h3 className="mt-3 text-3xl font-black text-white tracking-tight">Add New Question</h3>
-                 <p className="mt-3 text-sm text-slate-400">Use a LeetCode ID and let AI suggest the pattern category. You can review and confirm before save.</p>
-                 <button
-                   onClick={() => { setShowAddQuestionModal(true); setAiSuggestion(null); }}
-                   className="mt-8 px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-[0.2em]"
-                 >
-                   Add New Question
-                 </button>
-               </div>
-             </div>
+             renderQuestionGrid(true)
            ) : isSyllabus ? (
-             <>
-               <div className="mb-8 flex items-center gap-3">
-                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">View Settings</span>
-                 <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
-                   {([
-                     ['list', 'List View'],
-                     ['small', 'Small Icons'],
-                     ['big', 'Big Icons']
-                   ] as const).map(([mode, label]) => (
-                     <button
-                       key={mode}
-                       onClick={() => setGridView(mode)}
-                       className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
-                     >
-                       {label}
-                     </button>
-                   ))}
-                 </div>
-               </div>
-               <div className={`pb-32 ${gridView === 'list' ? 'flex flex-col gap-3 sm:gap-4 max-w-4xl' : gridView === 'small' ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6'}`}>
-                {selectedPattern.questions.map(q => {
-                  const timestamp = completedMap[q.id];
-                  const done = !!timestamp;
-                  const hasSolution = Boolean(solutionMap[q.id] && solutionMap[q.id].trim().length > 0);
-                  return (
-                    <div key={q.id} className={`group relative border transition-all duration-500 ${gridView === 'small' ? 'p-4 sm:p-5 rounded-2xl sm:rounded-3xl' : gridView === 'list' ? 'p-3.5 sm:p-5 rounded-2xl' : 'p-5 sm:p-8 rounded-3xl sm:rounded-[2.5rem] sm:hover:-translate-y-2'} ${done ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600'}`}>
-                       <div className={`flex flex-col h-full ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
-                          <div className={`flex items-start ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
-                             <button 
-                               onClick={() => toggleQuestion(q.id)}
-                               className={`shrink-0 ${gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-14 h-14 rounded-3xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white shadow-xl shadow-emerald-500/20' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
-                             >
-                                <svg className={`${gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-7 h-7'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                             </button>
-                             <div className="flex-1 min-w-0 pt-1">
-                                <a href={q.link} target="_blank" rel="noreferrer" className={`block ${gridView === 'small' || isMobile ? 'text-[13px] sm:text-sm' : 'text-base sm:text-lg'} font-bold leading-tight mb-1.5 sm:mb-2 transition-all ${done ? 'text-slate-600 line-through opacity-60 italic' : 'text-slate-100 group-hover:text-indigo-400'}`}>{q.title}</a>
-                                <div className="flex items-center gap-2 sm:gap-3">
-                                   <span className="text-[10px] font-bold text-slate-700 font-mono tracking-tighter">LC #{q.id}</span>
-                                   <DifficultyBadge diff={q.difficulty} />
-                                   <button
-                                     onClick={() => openSolutionEditor(q)}
-                                     title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
-                                     className={`ml-auto p-2 rounded-xl border transition-all ${
-                                       hasSolution
-                                         ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
-                                         : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'
-                                     }`}
-                                   >
-                                     <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
-                                     </svg>
-                                   </button>
-                                </div>
-                             </div>
-                          </div>
-                          
-                          {/* Last Updated Timestamp */}
-                          {done && gridView !== 'small' && (
-                            <div className="flex flex-col gap-1 border-t border-emerald-500/10 pt-3 sm:pt-4 animate-in fade-in slide-in-from-top-1 duration-700">
-                               <span className="text-[8px] font-black uppercase text-emerald-500/50 tracking-[0.2em]">Last Updated</span>
-                               <span className="text-[10px] font-bold text-slate-400 font-mono italic">
-                                  {formatDate(timestamp)}
-                               </span>
-                            </div>
-                          )}
-                       </div>
-                    </div>
-                  );
-                })}
-               </div>
-             </>
+             renderQuestionGrid(false)
            ) : (
              <div className="h-full flex flex-col items-center pt-10 md:pt-16 px-4">
                 

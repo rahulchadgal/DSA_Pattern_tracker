@@ -85,6 +85,12 @@ async function upsertProgress(req, res) {
     typeof body.solutionRichText === 'string' && body.solutionRichText.trim().length > 0
       ? body.solutionRichText
       : null;
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const difficulty = typeof body.difficulty === 'string' ? body.difficulty.trim() : '';
+  const link = typeof body.link === 'string' ? body.link.trim() : '';
+  const mainPattern = typeof body.mainPattern === 'string' ? body.mainPattern.trim() : '';
+  const subPattern = typeof body.subPattern === 'string' ? body.subPattern.trim() : '';
+  const metadataJson = body.metadataJson == null ? null : String(body.metadataJson);
 
   if (!handle) {
     return sendError(res, 400, 'Handle is required');
@@ -95,9 +101,31 @@ async function upsertProgress(req, res) {
 
   try {
     await ensureSchema();
-    const questionResult = await query('SELECT id, leetcode_id FROM question_catalog WHERE leetcode_id = $1', [leetcodeId]);
+    let questionResult = await query('SELECT id, leetcode_id FROM question_catalog WHERE leetcode_id = $1', [leetcodeId]);
     if (!questionResult.rows[0]) {
-      return sendError(res, 404, 'Question not found in catalog');
+      if (!title || !difficulty || !link) {
+        return sendError(res, 404, 'Question not found in catalog');
+      }
+      questionResult = await query(
+        `INSERT INTO question_catalog (
+           leetcode_id, title, difficulty, main_pattern, sub_pattern, link,
+           default_question, custom_imported, imported_by_handle, content_type, metadata_json,
+           created_at, updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, false, true, 'system-local-progress', 'QUESTION_ONLY', $7, NOW(), NOW())
+         ON CONFLICT (leetcode_id) DO UPDATE SET
+           updated_at = NOW()
+         RETURNING id, leetcode_id`,
+        [
+          leetcodeId,
+          title,
+          difficulty,
+          mainPattern || 'Company',
+          subPattern || '-',
+          link,
+          metadataJson
+        ]
+      );
     }
     const questionId = questionResult.rows[0].id;
     const userId = await resolveOrCreateUserId(handle);
