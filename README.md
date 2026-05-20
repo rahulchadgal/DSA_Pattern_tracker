@@ -30,3 +30,7 @@ To get your app live on your **GoDaddy Domain** for free:
 - **SSL Included:** You get a free Padlock (HTTPS) automatically.
 - **Auto-Update:** Whenever you change your code on GitHub, your website updates automatically.
 - **Zero Cost:** The hosting is free forever as long as you aren't getting millions of hits.
+
+## Backend API (Spring Boot)
+A backend scaffold is available under `backend/` with JWT auth, CORS, PostgreSQL entities, and Render/Aiven deployment notes.
+See: `backend/README.md`.

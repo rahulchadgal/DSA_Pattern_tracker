@@ -10,6 +10,38 @@ const PROFILE_KEY = 'dsa-handle-v4';
 const LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
 const NAVBAR_COLLAPSED_KEY = 'dsa-navbar-collapsed-v1';
 const GRID_VIEW_KEY = 'dsa-grid-view-v1';
+const CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
+const CUSTOM_QUESTION_TABLE = 'dsa_custom_questions_v1';
+
+type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
+
+interface LcMetadata {
+  questionId: string;
+  title: string;
+  difficulty: DifficultyLevel;
+  category: string;
+  link: string;
+}
+
+interface CustomQuestionRow extends LcMetadata {
+  sectionId: string;
+  patternId: string;
+}
+
+const CATEGORY_TO_SECTION_ID: Record<string, string> = {
+  'Dynamic Programming': 'S5',
+  'Sliding Window': 'S2',
+  'Graphs': 'S4',
+  'Trees': 'S3',
+  'Binary Search': 'S9',
+  'Greedy': 'S8',
+  'Backtracking': 'S7',
+  'Stacks': 'S10',
+  'Two Pointers': 'S1',
+  'Heaps': 'S6'
+};
+
+const CATEGORY_OPTIONS = Object.keys(CATEGORY_TO_SECTION_ID);
 
 // --- UTILS ---
 const formatDate = (dateStr: string) => {
@@ -25,6 +57,64 @@ const formatDate = (dateStr: string) => {
   hours = hours % 12;
   hours = hours ? hours : 12;
   return `${day}-${month}-${year} / ${pad(hours)}:${minutes} ${ampm}`;
+};
+
+const canonicalQuestionId = (rawId: string): string => {
+  const clean = String(rawId || '').trim();
+  const numeric = clean.match(/\d+/)?.[0];
+  return numeric || clean.toLowerCase();
+};
+
+
+const cloneSections = (sections: Section[]): Section[] => JSON.parse(JSON.stringify(sections));
+
+const addCustomQuestionToSections = (sections: Section[], customQuestion: CustomQuestionRow): Section[] => {
+  const next = cloneSections(sections);
+  const sectionIndex = next.findIndex(section => section.id === customQuestion.sectionId);
+  if (sectionIndex === -1) return next;
+
+  const customPatternId = `custom-${customQuestion.sectionId}`;
+  let pattern = next[sectionIndex].patterns.find(p => p.id === customPatternId);
+  if (!pattern) {
+    pattern = {
+      id: customPatternId,
+      name: `AI Added • ${customQuestion.category}`,
+      questions: []
+    };
+    next[sectionIndex].patterns = [pattern, ...next[sectionIndex].patterns];
+  }
+
+  const alreadyExists = pattern.questions.some(q => q.id === customQuestion.questionId);
+  if (alreadyExists) return next;
+
+  pattern.questions.unshift({
+    id: customQuestion.questionId,
+    title: customQuestion.title,
+    fullTitle: `${customQuestion.questionId}. ${customQuestion.title}`,
+    link: customQuestion.link,
+    difficulty: customQuestion.difficulty
+  });
+
+  return next;
+};
+
+const mockClassifyQuestion = async (questionId: string): Promise<LcMetadata> => {
+  const normalized = questionId.trim();
+  await new Promise(resolve => setTimeout(resolve, 400));
+
+  const category = Number(normalized) % 3 === 0
+    ? 'Dynamic Programming'
+    : Number(normalized) % 3 === 1
+      ? 'Sliding Window'
+      : 'Graphs';
+
+  return {
+    questionId: normalized,
+    title: `LeetCode Problem ${normalized}`,
+    difficulty: Number(normalized) % 2 === 0 ? 'Medium' : 'Easy',
+    category,
+    link: `https://leetcode.com/problems/${normalized}/`
+  };
 };
 
 // --- UI COMPONENTS ---
@@ -98,6 +188,7 @@ const App: React.FC = () => {
   });
   
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'saved' | 'error' | 'idle'>('idle');
+  const [sectionsData, setSectionsData] = useState<Section[]>(() => cloneSections(DSA_DATA));
   const [selectedPattern, setSelectedPattern] = useState<Pattern>(DSA_DATA[0].patterns[0]);
   const [selectedSectionId, setSelectedSectionId] = useState<string>(DSA_DATA[0].id);
   const [openSections, setOpenSections] = useState<string[]>([DSA_DATA[0].id]);
@@ -110,6 +201,13 @@ const App: React.FC = () => {
     const saved = localStorage.getItem(GRID_VIEW_KEY);
     return saved === 'list' || saved === 'small' || saved === 'big' ? saved : 'big';
   });
+  const [activeScreen, setActiveScreen] = useState<'main' | 'profile'>('main');
+  const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
+  const [questionIdInput, setQuestionIdInput] = useState('');
+  const [aiSuggestion, setAiSuggestion] = useState<LcMetadata | null>(null);
+  const [manualCategory, setManualCategory] = useState<string>('Dynamic Programming');
+  const [isClassifying, setIsClassifying] = useState(false);
+  const [isSavingQuestion, setIsSavingQuestion] = useState(false);
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
@@ -123,7 +221,7 @@ const App: React.FC = () => {
       const rows = await response.json();
       const map: Record<string, string> = {};
       rows.forEach((r: { question_id: string, updated_at: string }) => {
-        map[r.question_id] = r.updated_at;
+        map[canonicalQuestionId(r.question_id)] = r.updated_at;
       });
       
       setCompletedMap(map);
@@ -148,7 +246,7 @@ const App: React.FC = () => {
         },
         body: JSON.stringify({ 
           handle: handle.toLowerCase(), 
-          question_id: qId, 
+          question_id: canonicalQuestionId(qId), 
           is_completed: isChecked,
           updated_at: timestamp
         })
@@ -161,16 +259,143 @@ const App: React.FC = () => {
     }
   };
 
+
+  const saveCustomQuestion = async (question: CustomQuestionRow) => {
+    if (!handle) return;
+    try {
+      await fetch(`${SB_URL}/rest/v1/${CUSTOM_QUESTION_TABLE}`, {
+        method: 'POST',
+        headers: {
+          'apikey': SB_KEY,
+          'Authorization': `Bearer ${SB_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({
+          handle: handle.toLowerCase(),
+          question_id: question.questionId,
+          title: question.title,
+          difficulty: question.difficulty,
+          category: question.category,
+          section_id: question.sectionId,
+          pattern_id: question.patternId,
+          link: question.link,
+          updated_at: new Date().toISOString()
+        })
+      });
+    } catch (error) {
+      // local-first fallback; keeps UI responsive even if network fails
+    }
+  };
+
+  const pullCustomQuestions = useCallback(async (userHandle: string) => {
+    const fromCache = localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY);
+    if (fromCache) {
+      const cachedRows: CustomQuestionRow[] = JSON.parse(fromCache);
+      setSectionsData(prev => cachedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), prev));
+    }
+
+    if (!userHandle) return;
+
+    try {
+      const response = await fetch(`${SB_URL}/rest/v1/${CUSTOM_QUESTION_TABLE}?handle=eq.${userHandle.toLowerCase()}&select=question_id,title,difficulty,category,section_id,pattern_id,link`, {
+        headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+      });
+      if (!response.ok) return;
+      const rows = await response.json();
+      const normalizedRows: CustomQuestionRow[] = rows.map((row: any) => ({
+        questionId: row.question_id,
+        title: row.title,
+        difficulty: row.difficulty,
+        category: row.category,
+        sectionId: row.section_id,
+        patternId: row.pattern_id,
+        link: row.link
+      }));
+
+      localStorage.setItem(CUSTOM_QUESTIONS_CACHE_KEY, JSON.stringify(normalizedRows));
+      setSectionsData(cloneSections(DSA_DATA));
+      setSectionsData(prev => normalizedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), prev));
+    } catch (error) {
+      // keep cached/local data only
+    }
+  }, []);
+
+  const handleClassifyQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!questionIdInput.trim()) return;
+    setIsClassifying(true);
+    const suggestion = await mockClassifyQuestion(questionIdInput);
+    setAiSuggestion(suggestion);
+    setManualCategory(suggestion.category);
+    setIsClassifying(false);
+  };
+
+  const handleSaveNewQuestion = async () => {
+    if (!aiSuggestion || !handle) return;
+    setIsSavingQuestion(true);
+
+    const selectedCategory = manualCategory in CATEGORY_TO_SECTION_ID ? manualCategory : 'Dynamic Programming';
+    const sectionId = CATEGORY_TO_SECTION_ID[selectedCategory] || 'S5';
+    const patternId = `custom-${sectionId}`;
+
+    const newRow: CustomQuestionRow = {
+      ...aiSuggestion,
+      category: selectedCategory,
+      sectionId,
+      patternId
+    };
+
+    setSectionsData(prev => addCustomQuestionToSections(prev, newRow));
+    const cachedRows: CustomQuestionRow[] = JSON.parse(localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY) || '[]');
+    const deduped = [...cachedRows.filter(row => row.questionId !== newRow.questionId), newRow];
+    localStorage.setItem(CUSTOM_QUESTIONS_CACHE_KEY, JSON.stringify(deduped));
+
+    await saveCustomQuestion(newRow);
+
+    const targetPattern = sectionId === selectedSectionId ? patternId : selectedPattern.id;
+    if (targetPattern === patternId) {
+      const section = sectionsData.find(s => s.id === sectionId);
+      if (section) {
+        const nextPattern: Pattern = {
+          id: patternId,
+          name: `AI Added • ${selectedCategory}`,
+          questions: [{
+            id: newRow.questionId,
+            title: newRow.title,
+            fullTitle: `${newRow.questionId}. ${newRow.title}`,
+            link: newRow.link,
+            difficulty: newRow.difficulty
+          }]
+        };
+        setSelectedPattern(nextPattern);
+      }
+    }
+
+    setQuestionIdInput('');
+    setAiSuggestion(null);
+    setShowAddQuestionModal(false);
+    setIsSavingQuestion(false);
+  };
+
   // --- SYNC TRIGGERS ---
 
   useEffect(() => {
     if (handle) {
       pullRelationalProgress(handle);
+      pullCustomQuestions(handle);
       const onFocus = () => pullRelationalProgress(handle);
       window.addEventListener('focus', onFocus);
       return () => window.removeEventListener('focus', onFocus);
     }
-  }, [handle, pullRelationalProgress]);
+  }, [handle, pullRelationalProgress, pullCustomQuestions]);
+
+  useEffect(() => {
+    const cachedRows: CustomQuestionRow[] = JSON.parse(localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY) || '[]');
+    if (cachedRows.length) {
+      setSectionsData(prev => cachedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), prev));
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(NAVBAR_COLLAPSED_KEY, String(isSidebarCollapsed));
@@ -183,19 +408,20 @@ const App: React.FC = () => {
   // --- HANDLERS ---
 
   const toggleQuestion = (id: string) => {
-    const isNowChecked = !completedMap[id];
+    const normalizedId = canonicalQuestionId(id);
+    const isNowChecked = !completedMap[normalizedId];
     const timestamp = new Date().toISOString();
     const nextMap = { ...completedMap };
     
     if (isNowChecked) {
-      nextMap[id] = timestamp;
+      nextMap[normalizedId] = timestamp;
     } else {
-      delete nextMap[id];
+      delete nextMap[normalizedId];
     }
     
     setCompletedMap(nextMap);
     localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(nextMap));
-    atomicUpdate(id, isNowChecked, timestamp);
+    atomicUpdate(normalizedId, isNowChecked, timestamp);
   };
 
   const setupHandle = (e: React.FormEvent) => {
@@ -206,6 +432,7 @@ const App: React.FC = () => {
       localStorage.setItem(PROFILE_KEY, cleanHandle);
       setShowWelcome(false);
       pullRelationalProgress(cleanHandle);
+      pullCustomQuestions(cleanHandle);
     }
   };
 
@@ -214,13 +441,13 @@ const App: React.FC = () => {
   const pickRandom = (scope: 'section' | 'global') => {
     let pool: Question[] = [];
     if (scope === 'section') {
-      const section = DSA_DATA.find(s => s.id === selectedSectionId);
+      const section = sectionsData.find(s => s.id === selectedSectionId);
       section?.patterns.forEach(p => p.questions.forEach(q => {
-        if (!completedMap[q.id]) pool.push(q);
+        if (!completedMap[canonicalQuestionId(q.id)]) pool.push(q);
       }));
     } else {
-      DSA_DATA.forEach(s => s.patterns.forEach(p => p.questions.forEach(q => {
-        if (!completedMap[q.id]) pool.push(q);
+      sectionsData.forEach(s => s.patterns.forEach(p => p.questions.forEach(q => {
+        if (!completedMap[canonicalQuestionId(q.id)]) pool.push(q);
       })));
     }
 
@@ -234,16 +461,16 @@ const App: React.FC = () => {
   // --- STATS ---
 
   const sectionStats = useMemo(() => {
-    return DSA_DATA.map(section => {
+    return sectionsData.map(section => {
       let total = 0;
       let solved = 0;
       section.patterns.forEach(p => p.questions.forEach(q => {
         total++;
-        if (completedMap[q.id]) solved++;
+        if (completedMap[canonicalQuestionId(q.id)]) solved++;
       }));
       return { id: section.id, title: section.title, solved, total };
     });
-  }, [completedMap]);
+  }, [completedMap, sectionsData]);
 
   const currentSectionData = useMemo(() => {
     return sectionStats.find(s => s.id === selectedSectionId);
@@ -253,14 +480,14 @@ const App: React.FC = () => {
     const stats: Record<string, { total: number; solved: number }> = {
       Easy: { total: 0, solved: 0 }, Medium: { total: 0, solved: 0 }, Hard: { total: 0, solved: 0 }
     };
-    DSA_DATA.forEach(s => s.patterns.forEach(p => p.questions.forEach(q => {
+    sectionsData.forEach(s => s.patterns.forEach(p => p.questions.forEach(q => {
       if (stats[q.difficulty]) {
         stats[q.difficulty].total++;
-        if (completedMap[q.id]) stats[q.difficulty].solved++;
+        if (completedMap[canonicalQuestionId(q.id)]) stats[q.difficulty].solved++;
       }
     })));
     return stats;
-  }, [completedMap]);
+  }, [completedMap, sectionsData]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-indigo-500/30">
@@ -292,7 +519,7 @@ const App: React.FC = () => {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-4">
-          {DSA_DATA.map(section => (
+          {sectionsData.map(section => (
             <div key={section.id} className="space-y-1">
               <button
                 title={section.title}
@@ -307,7 +534,7 @@ const App: React.FC = () => {
                 <div className="space-y-1 ml-2">
                   {section.patterns.map(pattern => {
                     const active = selectedPattern.id === pattern.id;
-                    const doneCount = pattern.questions.filter(q => completedMap[q.id]).length;
+                    const doneCount = pattern.questions.filter(q => completedMap[canonicalQuestionId(q.id)]).length;
                     const total = pattern.questions.length;
                     const pct = Math.round((doneCount/total)*100);
                     return (
@@ -356,7 +583,7 @@ const App: React.FC = () => {
               </button>
               <div>
                 <h2 className="text-xl md:text-2xl font-black text-white tracking-tighter">
-                  {viewMode === 'syllabus' ? selectedPattern.name : 'Objective Selection'}
+                  {activeScreen === 'profile' ? 'Profile Settings' : viewMode === 'syllabus' ? selectedPattern.name : 'Objective Selection'}
                 </h2>
                 <div className="flex items-center gap-3 mt-1.5">
                    <CloudStatus status={syncStatus} />
@@ -377,25 +604,55 @@ const App: React.FC = () => {
 
                {/* Header Mode Switcher */}
                <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
-                  <button 
-                    onClick={() => setViewMode('syllabus')}
-                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'syllabus' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                  <button
+                    onClick={() => setActiveScreen('main')}
+                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeScreen === 'main' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                   >
-                    Syllabus
+                    Main
                   </button>
-                  <button 
-                    onClick={() => setViewMode('random')}
-                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'random' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                  <button
+                    onClick={() => setActiveScreen('profile')}
+                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeScreen === 'profile' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                   >
-                    Roulette
+                    Profile
                   </button>
                </div>
+               {activeScreen === 'main' && (
+                 <div className="hidden sm:flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
+                    <button 
+                      onClick={() => setViewMode('syllabus')}
+                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'syllabus' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                      Syllabus
+                    </button>
+                    <button 
+                      onClick={() => setViewMode('random')}
+                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'random' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                      Roulette
+                    </button>
+                 </div>
+               )}
             </div>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-8 md:p-14 custom-scrollbar">
-           {viewMode === 'syllabus' ? (
+           {activeScreen === 'profile' ? (
+             <div className="max-w-3xl mx-auto">
+               <div className="rounded-[2.5rem] border border-slate-800/70 bg-slate-900/40 p-8 md:p-12">
+                 <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-black">Profile Settings</p>
+                 <h3 className="mt-3 text-3xl font-black text-white tracking-tight">Add New Question</h3>
+                 <p className="mt-3 text-sm text-slate-400">Use a LeetCode ID and let AI suggest the pattern category. You can review and confirm before save.</p>
+                 <button
+                   onClick={() => { setShowAddQuestionModal(true); setAiSuggestion(null); }}
+                   className="mt-8 px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-[0.2em]"
+                 >
+                   Add New Question
+                 </button>
+               </div>
+             </div>
+           ) : viewMode === 'syllabus' ? (
              <>
                <div className="mb-8 flex items-center gap-3">
                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">View Settings</span>
@@ -417,7 +674,7 @@ const App: React.FC = () => {
                </div>
                <div className={`pb-32 ${gridView === 'list' ? 'flex flex-col gap-4 max-w-4xl' : gridView === 'small' ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6'}`}>
                 {selectedPattern.questions.map(q => {
-                  const timestamp = completedMap[q.id];
+                  const timestamp = completedMap[canonicalQuestionId(q.id)];
                   const done = !!timestamp;
                   return (
                     <div key={q.id} className={`group relative border transition-all duration-500 ${gridView === 'small' ? 'p-5 rounded-3xl' : gridView === 'list' ? 'p-5 rounded-2xl' : 'p-8 rounded-[2.5rem] hover:-translate-y-2'} ${done ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600'}`}>
@@ -490,7 +747,7 @@ const App: React.FC = () => {
                               onChange={(e) => setSelectedSectionId(e.target.value)}
                               className="w-full bg-slate-950 border border-slate-800 text-slate-100 py-4 md:py-5 px-8 rounded-[1.8rem] appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all cursor-pointer font-bold text-sm tracking-tight hover:border-slate-700"
                             >
-                                {DSA_DATA.map(s => (
+                                {sectionsData.map(s => (
                                   <option key={s.id} value={s.id}>{s.title}</option>
                                 ))}
                             </select>
@@ -533,6 +790,52 @@ const App: React.FC = () => {
            )}
         </div>
       </main>
+
+
+      {showAddQuestionModal && (
+        <div className="fixed inset-0 z-[105] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl">
+          <div className="w-full max-w-lg rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-white tracking-tight">Add New Question</h3>
+              <button onClick={() => setShowAddQuestionModal(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <form onSubmit={handleClassifyQuestion} className="space-y-4">
+              <label className="block text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black">LeetCode Question ID</label>
+              <input
+                value={questionIdInput}
+                onChange={(e) => setQuestionIdInput(e.target.value)}
+                placeholder="e.g. 76"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+              />
+              <button type="submit" disabled={isClassifying} className="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
+                {isClassifying ? 'Classifying...' : 'Get AI Suggestion'}
+              </button>
+            </form>
+
+            {aiSuggestion && (
+              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+                <p className="text-xs text-slate-300"><span className="text-slate-500">Title:</span> {aiSuggestion.title}</p>
+                <p className="text-xs text-slate-300"><span className="text-slate-500">Difficulty:</span> {aiSuggestion.difficulty}</p>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black mb-2">Confirm Category</label>
+                  <select
+                    value={manualCategory}
+                    onChange={(e) => setManualCategory(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                  >
+                    {CATEGORY_OPTIONS.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </div>
+                <button onClick={handleSaveNewQuestion} disabled={isSavingQuestion} className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
+                  {isSavingQuestion ? 'Saving...' : 'Confirm & Save'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Global Handle Setup Modal */}
       {showWelcome && (
