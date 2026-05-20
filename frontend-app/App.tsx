@@ -57,6 +57,16 @@ const formatDate = (dateStr: string) => {
   return `${day}-${month}-${year} / ${pad(hours)}:${minutes} ${ampm}`;
 };
 
+const normalizeQuestionId = (id: string | number): string => String(id).trim().replace(/^0+(?=\d)/, '');
+
+const normalizeStoredMap = (raw: string | null): Record<string, string> => {
+  if (!raw) return {};
+  const parsed = JSON.parse(raw) as Record<string, string>;
+  return Object.entries(parsed).reduce<Record<string, string>>((acc, [id, value]) => {
+    acc[normalizeQuestionId(id)] = value;
+    return acc;
+  }, {});
+};
 
 const cloneSections = (sections: Section[]): Section[] => JSON.parse(JSON.stringify(sections));
 
@@ -90,6 +100,7 @@ const buildSectionsFromQuestions = (questions: QuestionV1Row[]): Section[] => {
   let patternCounter = 1;
 
   questions.forEach((row) => {
+    const leetcodeId = normalizeQuestionId(row.leetcodeId);
     const sectionTitle = row.mainPattern?.trim() || 'General';
     const patternName = row.subPattern?.trim() || 'General Pattern';
 
@@ -118,9 +129,9 @@ const buildSectionsFromQuestions = (questions: QuestionV1Row[]): Section[] => {
     }
 
     pattern.questions.push({
-      id: row.leetcodeId,
+      id: leetcodeId,
       title: row.title,
-      fullTitle: `${row.leetcodeId}. ${row.title}`,
+      fullTitle: `${leetcodeId}. ${row.title}`,
       link: row.link,
       difficulty: normalizeDifficulty(row.difficulty)
     });
@@ -145,13 +156,14 @@ const addCustomQuestionToSections = (sections: Section[], customQuestion: Custom
     next[sectionIndex].patterns = [pattern, ...next[sectionIndex].patterns];
   }
 
-  const alreadyExists = pattern.questions.some(q => q.id === customQuestion.questionId);
+  const questionId = normalizeQuestionId(customQuestion.questionId);
+  const alreadyExists = pattern.questions.some(q => q.id === questionId);
   if (alreadyExists) return next;
 
   pattern.questions.unshift({
-    id: customQuestion.questionId,
+    id: questionId,
     title: customQuestion.title,
-    fullTitle: `${customQuestion.questionId}. ${customQuestion.title}`,
+    fullTitle: `${questionId}. ${customQuestion.title}`,
     link: customQuestion.link,
     difficulty: customQuestion.difficulty
   });
@@ -160,7 +172,7 @@ const addCustomQuestionToSections = (sections: Section[], customQuestion: Custom
 };
 
 const mockClassifyQuestion = async (questionId: string): Promise<LcMetadata> => {
-  const normalized = questionId.trim();
+  const normalized = normalizeQuestionId(questionId);
   await new Promise(resolve => setTimeout(resolve, 400));
 
   const category = Number(normalized) % 3 === 0
@@ -265,12 +277,10 @@ const App: React.FC = () => {
 
   // --- PROGRESS STATE (Map of ID -> Timestamp) ---
   const [completedMap, setCompletedMap] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem(LOCAL_CACHE_KEY);
-    return saved ? JSON.parse(saved) : {};
+    return normalizeStoredMap(localStorage.getItem(LOCAL_CACHE_KEY));
   });
   const [solutionMap, setSolutionMap] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem(SOLUTION_CACHE_KEY);
-    return saved ? JSON.parse(saved) : {};
+    return normalizeStoredMap(localStorage.getItem(SOLUTION_CACHE_KEY));
   });
   
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'saved' | 'error' | 'idle'>('idle');
@@ -331,11 +341,12 @@ const App: React.FC = () => {
       const completionMap: Record<string, string> = {};
       const solutionNotesMap: Record<string, string> = {};
       rows.forEach((r) => {
+        const leetcodeId = normalizeQuestionId(r.leetcodeId);
         if (r.completed) {
-          completionMap[r.leetcodeId] = r.updatedAt;
+          completionMap[leetcodeId] = r.updatedAt;
         }
         if (r.solutionRichText && r.solutionRichText.trim().length > 0) {
-          solutionNotesMap[r.leetcodeId] = r.solutionRichText;
+          solutionNotesMap[leetcodeId] = r.solutionRichText;
         }
       });
       
@@ -351,11 +362,12 @@ const App: React.FC = () => {
 
   const atomicUpdate = async (qId: string, isChecked: boolean, solutionRichText?: string | null) => {
     if (!handle) return;
+    const leetcodeId = normalizeQuestionId(qId);
     setSyncStatus('syncing');
     try {
       await backendApi.upsertProgress({
         handle: handle.toLowerCase(),
-        leetcodeId: qId,
+        leetcodeId,
         completed: isChecked,
         solutionRichText: solutionRichText ?? null
       });
@@ -368,9 +380,10 @@ const App: React.FC = () => {
 
   const saveCustomQuestion = async (question: CustomQuestionRow) => {
     if (!handle) return;
+    const questionId = normalizeQuestionId(question.questionId);
     try {
       await backendApi.upsertQuestion({
-        leetcodeId: question.questionId,
+        leetcodeId: questionId,
         title: question.title,
         difficulty: question.difficulty,
         mainPattern: question.category,
@@ -416,8 +429,9 @@ const App: React.FC = () => {
           }
         }
         const inferredSectionId = sectionId || findSectionIdByCategory(baseSectionsData, row.mainPattern);
+        const questionId = normalizeQuestionId(row.leetcodeId);
         return {
-          questionId: row.leetcodeId,
+          questionId,
         title: row.title,
         difficulty: normalizeDifficulty(row.difficulty),
         category: row.mainPattern,
@@ -443,6 +457,7 @@ const App: React.FC = () => {
       const companySectionsMap = new Map<string, Pattern>();
       rows.forEach((row: CompanyQuestionRow) => {
         const company = row.companyName;
+        const leetcodeId = normalizeQuestionId(row.leetcodeId);
         let pattern = companySectionsMap.get(company);
         if (!pattern) {
           pattern = {
@@ -452,11 +467,11 @@ const App: React.FC = () => {
           };
           companySectionsMap.set(company, pattern);
         }
-        if (!pattern.questions.some((q) => q.id === row.leetcodeId)) {
+        if (!pattern.questions.some((q) => q.id === leetcodeId)) {
           pattern.questions.push({
-            id: row.leetcodeId,
+            id: leetcodeId,
             title: row.title,
-            fullTitle: `${row.leetcodeId}. ${row.title}`,
+            fullTitle: `${leetcodeId}. ${row.title}`,
             link: row.link,
             difficulty: normalizeDifficulty(row.difficulty)
           });
@@ -607,19 +622,20 @@ const App: React.FC = () => {
   // --- HANDLERS ---
 
   const toggleQuestion = (id: string) => {
-    const isNowChecked = !completedMap[id];
+    const questionId = normalizeQuestionId(id);
+    const isNowChecked = !completedMap[questionId];
     const timestamp = new Date().toISOString();
     const nextMap = { ...completedMap };
     
     if (isNowChecked) {
-      nextMap[id] = timestamp;
+      nextMap[questionId] = timestamp;
     } else {
-      delete nextMap[id];
+      delete nextMap[questionId];
     }
     
     setCompletedMap(nextMap);
     localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(nextMap));
-    atomicUpdate(id, isNowChecked, solutionMap[id] ?? null);
+    atomicUpdate(questionId, isNowChecked, solutionMap[questionId] ?? null);
   };
 
   const openSolutionEditor = (question: Question) => {
@@ -647,7 +663,7 @@ const App: React.FC = () => {
   const saveSolutionNote = async () => {
     if (!editingSolutionQuestion) return;
 
-    const questionId = editingSolutionQuestion.id;
+    const questionId = normalizeQuestionId(editingSolutionQuestion.id);
     const nextHtml = solutionEditorRef.current?.innerHTML.trim() || '';
     const nextMap = { ...solutionMap };
     if (nextHtml) {
