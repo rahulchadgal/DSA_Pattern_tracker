@@ -42,6 +42,12 @@ export interface ProgressUpsertPayload {
   leetcodeId: string;
   completed: boolean;
   solutionRichText?: string | null;
+  title?: string;
+  difficulty?: string;
+  link?: string;
+  mainPattern?: string;
+  subPattern?: string;
+  metadataJson?: string | null;
 }
 
 export interface QuestionUpsertPayload {

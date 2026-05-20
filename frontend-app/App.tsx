@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { backendApi, CompanyQuestionRow, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
+import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
 import { Pattern, Question, Section } from './types';
@@ -24,6 +25,15 @@ interface LcMetadata {
 interface CustomQuestionRow extends LcMetadata {
   sectionId: string;
   patternId: string;
+}
+
+interface QuestionProgressMetadata {
+  title: string;
+  difficulty: DifficultyLevel;
+  link: string;
+  mainPattern: string;
+  subPattern: string;
+  metadataJson?: string | null;
 }
 
 type CompanyTimeFilter = 'all' | '30d' | '3m' | '6m';
@@ -69,6 +79,7 @@ const normalizeStoredMap = (raw: string | null): Record<string, string> => {
 };
 
 const cloneSections = (sections: Section[]): Section[] => JSON.parse(JSON.stringify(sections));
+const getInitialSections = (): Section[] => cloneSections(DSA_DATA);
 
 const findSectionIdByCategory = (sections: Section[], category: string): string => {
   if (sections.length === 0) return '';
@@ -284,12 +295,12 @@ const App: React.FC = () => {
   });
   
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'saved' | 'error' | 'idle'>('idle');
-  const [baseSectionsData, setBaseSectionsData] = useState<Section[]>([]);
-  const [sectionsData, setSectionsData] = useState<Section[]>([]);
+  const [baseSectionsData, setBaseSectionsData] = useState<Section[]>(() => getInitialSections());
+  const [sectionsData, setSectionsData] = useState<Section[]>(() => getInitialSections());
   const [companySectionsData, setCompanySectionsData] = useState<Section[]>([]);
-  const [selectedPattern, setSelectedPattern] = useState<Pattern>({ id: '', name: 'Loading...', questions: [] });
-  const [selectedSectionId, setSelectedSectionId] = useState<string>('');
-  const [openSections, setOpenSections] = useState<string[]>([]);
+  const [selectedPattern, setSelectedPattern] = useState<Pattern>(() => getInitialSections()[0]?.patterns[0] || { id: '', name: 'Loading...', questions: [] });
+  const [selectedSectionId, setSelectedSectionId] = useState<string>(() => getInitialSections()[0]?.id || '');
+  const [openSections, setOpenSections] = useState<string[]>(() => getInitialSections()[0]?.id ? [getInitialSections()[0].id] : []);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => localStorage.getItem(NAVBAR_COLLAPSED_KEY) === 'true');
   const [randomPick, setRandomPick] = useState<Question | null>(null);
@@ -306,30 +317,26 @@ const App: React.FC = () => {
   const [isBackendWaking, setIsBackendWaking] = useState(false);
   const [editingSolutionQuestion, setEditingSolutionQuestion] = useState<Question | null>(null);
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
+  const pendingProgressRef = useRef<Record<string, { completed: boolean; solutionRichText: string | null }>>({});
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
   const [companySearchTerm, setCompanySearchTerm] = useState('');
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
   const pullBaseQuestions = useCallback(async () => {
-    try {
-      const rows = await backendApi.getQuestionsV1();
-      const nextSections = buildSectionsFromQuestions(rows);
-      setBaseSectionsData(nextSections);
-      setSectionsData(nextSections);
+    const nextSections = getInitialSections();
+    setBaseSectionsData(nextSections);
+    setSectionsData(nextSections);
 
-      if (nextSections.length > 0 && nextSections[0].patterns.length > 0) {
-        const firstSection = nextSections[0];
-        setSelectedSectionId(firstSection.id);
-        setSelectedPattern(firstSection.patterns[0]);
-        setOpenSections([firstSection.id]);
-      } else {
-        setSelectedSectionId('');
-        setSelectedPattern({ id: '', name: 'No Patterns', questions: [] });
-        setOpenSections([]);
-      }
-    } catch {
-      setSyncStatus('error');
+    if (nextSections.length > 0 && nextSections[0].patterns.length > 0) {
+      const firstSection = nextSections[0];
+      setSelectedSectionId(firstSection.id);
+      setSelectedPattern(firstSection.patterns[0]);
+      setOpenSections([firstSection.id]);
+    } else {
+      setSelectedSectionId('');
+      setSelectedPattern({ id: '', name: 'No Patterns', questions: [] });
+      setOpenSections([]);
     }
   }, []);
 
@@ -349,6 +356,18 @@ const App: React.FC = () => {
           solutionNotesMap[leetcodeId] = r.solutionRichText;
         }
       });
+      Object.entries(pendingProgressRef.current).forEach(([leetcodeId, pending]) => {
+        if (pending.completed) {
+          completionMap[leetcodeId] = completionMap[leetcodeId] || new Date().toISOString();
+        } else {
+          delete completionMap[leetcodeId];
+        }
+        if (pending.solutionRichText && pending.solutionRichText.trim().length > 0) {
+          solutionNotesMap[leetcodeId] = pending.solutionRichText;
+        } else if (pending.solutionRichText === null) {
+          delete solutionNotesMap[leetcodeId];
+        }
+      });
       
       setCompletedMap(completionMap);
       setSolutionMap(solutionNotesMap);
@@ -360,17 +379,33 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const atomicUpdate = async (qId: string, isChecked: boolean, solutionRichText?: string | null) => {
+  const atomicUpdate = async (
+    qId: string,
+    isChecked: boolean,
+    solutionRichText?: string | null,
+    metadata?: QuestionProgressMetadata
+  ) => {
     if (!handle) return;
     const leetcodeId = normalizeQuestionId(qId);
+    pendingProgressRef.current[leetcodeId] = {
+      completed: isChecked,
+      solutionRichText: solutionRichText ?? null
+    };
     setSyncStatus('syncing');
     try {
       await backendApi.upsertProgress({
         handle: handle.toLowerCase(),
         leetcodeId,
         completed: isChecked,
-        solutionRichText: solutionRichText ?? null
+        solutionRichText: solutionRichText ?? null,
+        title: metadata?.title,
+        difficulty: metadata?.difficulty,
+        link: metadata?.link,
+        mainPattern: metadata?.mainPattern,
+        subPattern: metadata?.subPattern,
+        metadataJson: metadata?.metadataJson ?? null
       });
+      delete pendingProgressRef.current[leetcodeId];
       setSyncStatus('saved');
     } catch (e) {
       setSyncStatus('error');
@@ -570,7 +605,7 @@ const App: React.FC = () => {
       window.addEventListener('focus', onFocus);
       return () => window.removeEventListener('focus', onFocus);
     }
-  }, [handle, pullRelationalProgress, pullCustomQuestions, baseSectionsData]);
+  }, [handle, pullRelationalProgress, pullCustomQuestions]);
 
   useEffect(() => {
     const cachedRows: CustomQuestionRow[] = JSON.parse(localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY) || '[]');
@@ -621,8 +656,30 @@ const App: React.FC = () => {
 
   // --- HANDLERS ---
 
-  const toggleQuestion = (id: string) => {
-    const questionId = normalizeQuestionId(id);
+  const buildProgressMetadata = (question: Question): QuestionProgressMetadata => {
+    const activeSection = displayedSections.find((section) => section.id === selectedSectionId);
+    if (isProfile) {
+      const companyName = activeSection?.title || 'Company';
+      return {
+        title: question.title,
+        difficulty: question.difficulty,
+        link: question.link,
+        mainPattern: 'Company',
+        subPattern: companyName,
+        metadataJson: JSON.stringify({ company: companyName, source: 'local-company-bank' })
+      };
+    }
+    return {
+      title: question.title,
+      difficulty: question.difficulty,
+      link: question.link,
+      mainPattern: activeSection?.title || 'General',
+      subPattern: selectedPattern.name || 'General Pattern'
+    };
+  };
+
+  const toggleQuestion = (question: Question) => {
+    const questionId = normalizeQuestionId(question.id);
     const isNowChecked = !completedMap[questionId];
     const timestamp = new Date().toISOString();
     const nextMap = { ...completedMap };
@@ -635,7 +692,7 @@ const App: React.FC = () => {
     
     setCompletedMap(nextMap);
     localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(nextMap));
-    atomicUpdate(questionId, isNowChecked, solutionMap[questionId] ?? null);
+    atomicUpdate(questionId, isNowChecked, solutionMap[questionId] ?? null, buildProgressMetadata(question));
   };
 
   const openSolutionEditor = (question: Question) => {
@@ -675,7 +732,7 @@ const App: React.FC = () => {
     localStorage.setItem(SOLUTION_CACHE_KEY, JSON.stringify(nextMap));
 
     if (handle) {
-      await atomicUpdate(questionId, Boolean(completedMap[questionId]), nextHtml || null);
+      await atomicUpdate(questionId, Boolean(completedMap[questionId]), nextHtml || null, buildProgressMetadata(editingSolutionQuestion));
     }
 
     closeSolutionEditor();
@@ -842,7 +899,7 @@ const App: React.FC = () => {
               <div className={`flex flex-col h-full ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
                 <div className={`flex items-start ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
                   <button
-                    onClick={() => toggleQuestion(q.id)}
+                    onClick={() => toggleQuestion(q)}
                     className={`shrink-0 ${gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-12 h-12 rounded-2xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
                   >
                     <svg className={`${gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-7 h-7'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
