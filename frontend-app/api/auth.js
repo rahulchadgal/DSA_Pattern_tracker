@@ -59,8 +59,8 @@ async function register(body, res) {
   if (!handle || handle.length < 3 || handle.length > 64) {
     return sendError(res, 400, 'Username must be 3-64 characters');
   }
-  if (password.length < 8 || password.length > 120) {
-    return sendError(res, 400, 'Password must be 8-120 characters');
+  if (password.length < 4 || password.length > 10) {
+    return sendError(res, 400, 'Password must be 4-10 characters');
   }
 
   try {
@@ -98,6 +98,9 @@ async function login(body, res) {
   const password = typeof body.password === 'string' ? body.password : '';
   if (!handle || !password) {
     return sendError(res, 400, 'Username and password are required');
+  }
+  if (password.length < 4 || password.length > 10) {
+    return sendError(res, 400, 'Password must be 4-10 characters');
   }
 
   try {

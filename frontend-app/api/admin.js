@@ -64,8 +64,8 @@ async function handlePost(req, res) {
 function login(body, res) {
   const expected = process.env.ADMIN_ACCESS_KEY || '';
   const provided = String(body.adminKey || '');
-  if (!expected) {
-    return sendError(res, 500, 'Admin access is not configured');
+  if (expected.length < 6 || expected.length > 12) {
+    return sendError(res, 500, 'ADMIN_ACCESS_KEY must be 6-12 characters');
   }
   const valid =
     provided.length === expected.length &&
@@ -82,8 +82,8 @@ async function resetPassword(req, body, res) {
     await requireAdmin(req);
     const handle = normalizeHandle(body.handle);
     const password = typeof body.password === 'string' ? body.password : '';
-    if (!handle || password.length < 8 || password.length > 120) {
-      return sendError(res, 400, 'Valid handle and 8-120 character password are required');
+    if (!handle || password.length < 4 || password.length > 10) {
+      return sendError(res, 400, 'Valid handle and 4-10 character password are required');
     }
     const result = await query(
       `UPDATE user_handles

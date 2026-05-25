@@ -480,8 +480,9 @@ const App: React.FC = () => {
       setAuthPassword('');
       pullRelationalProgress(cleanHandle);
       pullCustomQuestions(cleanHandle);
-    } catch {
-      setAuthError(authMode === 'signup' ? 'Unable to create account.' : 'Invalid username or password.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      setAuthError(message || (authMode === 'signup' ? 'Unable to create account.' : 'Invalid username or password.'));
     } finally {
       setIsAuthBusy(false);
     }
@@ -1417,9 +1418,6 @@ const App: React.FC = () => {
            <div className="bg-[#0f172a] border border-slate-800/80 rounded-[3.5rem] w-full max-w-md p-14 shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-indigo-500" />
               <div className="text-center mb-12">
-                 <div className="w-20 h-20 bg-emerald-500/10 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 border border-emerald-500/20 text-emerald-500">
-                    <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
-                 </div>
                  <h3 className="text-4xl font-black text-white mb-4 tracking-tighter leading-none">DSA Login</h3>
                  <p className="text-sm text-slate-500 leading-relaxed font-medium">Sign in with your username and password to sync progress across devices.</p>
               </div>
@@ -1447,7 +1445,7 @@ const App: React.FC = () => {
                     <input
                       autoFocus
                       type="password"
-                      placeholder="Vercel admin key"
+                      placeholder="6-12 character access key"
                       value={adminKey}
                       onChange={(e) => setAdminKey(e.target.value)}
                       className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800"
@@ -1496,7 +1494,7 @@ const App: React.FC = () => {
                             value={adminResetPassword}
                             onChange={(e) => setAdminResetPassword(e.target.value)}
                             type="password"
-                            placeholder="new password"
+                            placeholder="new password (4-10 chars)"
                             className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                           />
                           <button
@@ -1523,7 +1521,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
                     <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Password</label>
-                    <input type="password" placeholder="8+ characters" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
+                    <input type="password" placeholder="4-10 characters" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
                   </div>
                   {authError && <p className="text-center text-xs font-bold text-rose-400">{authError}</p>}
                   <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-indigo-600/20 transition-all active:scale-95">

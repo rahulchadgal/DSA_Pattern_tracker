@@ -163,7 +163,16 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
           await sleep(RETRY_DELAYS_MS[attempt]);
           continue;
         }
-        throw new Error(`API request failed: ${response.status}`);
+        let message = `API request failed: ${response.status}`;
+        try {
+          const payload = await response.json();
+          if (payload && typeof payload.error === 'string') {
+            message = payload.error;
+          }
+        } catch {
+          // keep the status-based fallback
+        }
+        throw new Error(message);
       }
 
       notifyWakeStatus('awake');
