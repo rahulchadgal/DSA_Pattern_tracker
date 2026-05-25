@@ -498,8 +498,8 @@ const App: React.FC = () => {
       setAdminKey('');
       setAdminMessage('Admin access unlocked.');
       await loadAdminUsers();
-    } catch {
-      setAuthError('Invalid admin key.');
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Invalid admin key.');
     } finally {
       setIsAuthBusy(false);
     }

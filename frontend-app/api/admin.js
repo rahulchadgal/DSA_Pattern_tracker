@@ -62,8 +62,8 @@ async function handlePost(req, res) {
 }
 
 function login(body, res) {
-  const expected = process.env.ADMIN_ACCESS_KEY || '';
-  const provided = String(body.adminKey || '');
+  const expected = String(process.env.ADMIN_ACCESS_KEY || '').trim();
+  const provided = String(body.adminKey || '').trim();
   if (expected.length < 6 || expected.length > 12) {
     return sendError(res, 500, 'ADMIN_ACCESS_KEY must be 6-12 characters');
   }
@@ -74,7 +74,11 @@ function login(body, res) {
     return sendError(res, 401, 'Invalid admin key');
   }
 
-  return sendJson(res, 200, { token: createAdminToken() });
+  try {
+    return sendJson(res, 200, { token: createAdminToken() });
+  } catch (error) {
+    return sendError(res, 500, error instanceof Error ? error.message : 'Unable to create admin session');
+  }
 }
 
 async function resetPassword(req, body, res) {

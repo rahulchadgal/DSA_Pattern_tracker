@@ -18,10 +18,16 @@ function fromBase64url(input) {
 
 function getAuthSecret() {
   const secret = process.env.AUTH_TOKEN_SECRET || process.env.JWT_SECRET;
-  if (!secret || secret.length < 24) {
-    throw new Error('Missing AUTH_TOKEN_SECRET');
+  if (secret) {
+    return secret;
   }
-  return secret;
+
+  const adminKey = String(process.env.ADMIN_ACCESS_KEY || '').trim();
+  if (adminKey.length >= 6 && adminKey.length <= 12) {
+    return crypto.createHash('sha256').update(`dsa-admin:${adminKey}`).digest('hex');
+  }
+
+  throw new Error('Missing ADMIN_ACCESS_KEY');
 }
 
 function signPayload(payload) {
