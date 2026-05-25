@@ -11,7 +11,9 @@ Client (`frontend-app/.env`):
 Serverless (`Vercel Project > Settings > Environment Variables`):
 - `DATABASE_URL` (recommended) as Postgres URL
 - `DB_URL` (optional compatibility) if you want to reuse JDBC-style value
-- `PG_POOL_MAX` (optional) pool size
+- `ADMIN_ACCESS_KEY` for admin access
+- `CRON_SECRET` for the daily database keepalive cron
+- `PG_POOL_MAX=1` (optional) serverless-safe pool size
 
 Example serverless env file is available at `frontend-app/.env.server.example`.
 
@@ -47,16 +49,20 @@ To get your app live on your **GoDaddy Domain** for free:
 
 ## API routes now hosted in frontend deployment
 This app now includes Vercel serverless functions:
-- `GET /api/v1/questions`
 - `GET /api/v2/questions`
 - `POST /api/v2/questions`
-- `GET /api/progress?handle=<handle>`
+- `GET /api/progress`
 - `POST /api/progress`
-- `GET /api/liveness`
-- `POST /api/company/sync` (requires `x-company-sync-secret` header)
-- `GET /api/company/sync/status`
+- `GET /api/cron/keep-db-awake` (scheduled by Vercel Cron)
+- `GET/POST /api/auth`
+- `GET/POST /api/admin`
 
 `backend-api/` is kept in the repo as-is, but frontend production can run independently via these serverless routes.
+
+## Vercel Cron Keepalive
+`frontend-app/vercel.json` registers one daily cron job at `0 3 * * *` UTC. It calls `/api/cron/keep-db-awake`, which runs `SELECT 1` against Postgres so the database receives a request every day.
+
+When `CRON_SECRET` is set in Vercel, Vercel automatically sends it as `Authorization: Bearer <CRON_SECRET>` for cron invocations.
 
 ## Company Bank Filter
 Company-bank questions are rendered in the `Companies` route with:
@@ -64,4 +70,4 @@ Company-bank questions are rendered in the `Companies` route with:
 - time filters (`All`, `30 Days`, `3 Months`, `6 Months`)
 - same question cards as Syllabus
 
-Filtering uses DB-backed metadata only (no runtime GitHub calls).
+Filtering uses the local company question bank in the frontend; database sync for company-bank data is handled outside Vercel serverless APIs.
