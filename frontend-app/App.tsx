@@ -430,27 +430,23 @@ const App: React.FC = () => {
   const saveCustomQuestion = async (question: CustomQuestionRow) => {
     if (!handle) return;
     const questionId = normalizeQuestionId(question.questionId);
-    try {
-      await backendApi.upsertQuestion({
-        leetcodeId: questionId,
-        title: question.title,
-        difficulty: question.difficulty,
-        mainPattern: question.category,
-        subPattern: question.patternId,
-        link: question.link,
-        defaultQuestion: false,
-        customImported: true,
-        importedByHandle: handle.toLowerCase(),
-        contentType: 'QUESTION_ONLY',
-        metadataJson: JSON.stringify({
-          sectionId: question.sectionId,
-          patternId: question.patternId,
-          source: 'frontend-app'
-        })
-      });
-    } catch (error) {
-      // local-first fallback; keeps UI responsive even if network fails
-    }
+    await backendApi.upsertQuestion({
+      leetcodeId: questionId,
+      title: question.title,
+      difficulty: question.difficulty,
+      mainPattern: question.category,
+      subPattern: question.patternId,
+      link: question.link,
+      defaultQuestion: false,
+      customImported: true,
+      importedByHandle: handle.toLowerCase(),
+      contentType: 'QUESTION_ONLY',
+      metadataJson: JSON.stringify({
+        sectionId: question.sectionId,
+        patternId: question.patternId,
+        source: 'frontend-app'
+      })
+    });
   };
 
   const loadAdminUsers = useCallback(async () => {
@@ -671,31 +667,38 @@ const App: React.FC = () => {
     const deduped = [...cachedRows.filter(row => row.questionId !== newRow.questionId), newRow];
     localStorage.setItem(CUSTOM_QUESTIONS_CACHE_KEY, JSON.stringify(deduped));
 
-    await saveCustomQuestion(newRow);
+    try {
+      await saveCustomQuestion(newRow);
 
-    const targetPattern = sectionId === selectedSectionId ? patternId : selectedPattern.id;
-    if (targetPattern === patternId) {
-      const section = sectionsData.find(s => s.id === sectionId);
-      if (section) {
-        const nextPattern: Pattern = {
-          id: patternId,
-          name: `AI Added • ${selectedCategory}`,
-          questions: [{
-            id: newRow.questionId,
-            title: newRow.title,
-            fullTitle: `${newRow.questionId}. ${newRow.title}`,
-            link: newRow.link,
-            difficulty: newRow.difficulty
-          }]
-        };
-        setSelectedPattern(nextPattern);
+      const targetPattern = sectionId === selectedSectionId ? patternId : selectedPattern.id;
+      if (targetPattern === patternId) {
+        const section = sectionsData.find(s => s.id === sectionId);
+        if (section) {
+          const nextPattern: Pattern = {
+            id: patternId,
+            name: `AI Added • ${selectedCategory}`,
+            questions: [{
+              id: newRow.questionId,
+              title: newRow.title,
+              fullTitle: `${newRow.questionId}. ${newRow.title}`,
+              link: newRow.link,
+              difficulty: newRow.difficulty
+            }]
+          };
+          setSelectedPattern(nextPattern);
+        }
       }
-    }
 
-    setQuestionIdInput('');
-    setAiSuggestion(null);
-    setShowAddQuestionModal(false);
-    setIsSavingQuestion(false);
+      setQuestionIdInput('');
+      setAiSuggestion(null);
+      setShowAddQuestionModal(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to sync question to database.';
+      setAuthError(message);
+      alert(`Question was added locally, but DB sync failed: ${message}`);
+    } finally {
+      setIsSavingQuestion(false);
+    }
   };
 
   // --- SYNC TRIGGERS ---
