@@ -38,7 +38,7 @@ export interface CompanyQuestionRow {
 }
 
 export interface ProgressUpsertPayload {
-  handle: string;
+  handle?: string;
   leetcodeId: string;
   completed: boolean;
   solutionRichText?: string | null;
@@ -64,8 +64,28 @@ export interface QuestionUpsertPayload {
   metadataJson: string;
 }
 
+export interface AuthResponse {
+  token: string;
+  handle: string;
+}
+
+export interface AdminLoginResponse {
+  token: string;
+}
+
+export interface AdminUserRow {
+  handle: string;
+  fullName: string;
+  disabledAt?: string | null;
+  createdAt: string;
+  progressCount: number;
+  completedCount: number;
+}
+
 const DEFAULT_API_BASE_URL = '';
 const RETRY_DELAYS_MS = [1200, 2500, 4000];
+const AUTH_SESSION_KEY = 'dsa-auth-session-v1';
+const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
 
 export type BackendWakeStatus = 'idle' | 'waking' | 'awake';
 type WakeStatusListener = (status: BackendWakeStatus) => void;
@@ -98,6 +118,27 @@ const isRetriableStatus = (status: number) => {
 };
 
 const isNetworkError = (error: unknown): error is TypeError => error instanceof TypeError;
+
+const getStoredToken = (key: string) => {
+  if (typeof localStorage === 'undefined') return '';
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '{}');
+    return typeof parsed.token === 'string' ? parsed.token : '';
+  } catch {
+    return '';
+  }
+};
+
+const authHeaders = (admin = false): HeadersInit => {
+  const token = getStoredToken(admin ? ADMIN_SESSION_KEY : AUTH_SESSION_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const withJson = (body: unknown, admin = false): RequestInit => ({
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', ...authHeaders(admin) },
+  body: JSON.stringify(body)
+});
 
 export const subscribeBackendWakeStatus = (listener: WakeStatusListener) => {
   wakeStatusListeners.add(listener);
@@ -143,19 +184,29 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const backendApi = {
+  authSessionKey: AUTH_SESSION_KEY,
+  adminSessionKey: ADMIN_SESSION_KEY,
+  register: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth/register', withJson(payload)),
+  login: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth/login', withJson(payload)),
+  me: () => apiRequest<{ handle: string }>('/api/auth/me', { headers: authHeaders() }),
+  adminLogin: (adminKey: string) => apiRequest<AdminLoginResponse>('/api/admin/login', withJson({ adminKey })),
+  getAdminUsers: () => apiRequest<AdminUserRow[]>('/api/admin/users', { headers: authHeaders(true) }),
+  resetAdminUserPassword: (handle: string, password: string) => apiRequest<{ handle: string }>('/api/admin/users/reset-password', withJson({ handle, password }, true)),
+  disableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string }>('/api/admin/users/disable', withJson({ handle }, true)),
+  enableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string | null }>('/api/admin/users/enable', withJson({ handle }, true)),
   getQuestionsV1: () => apiRequest<QuestionV1Row[]>('/api/v1/questions'),
-  getProgress: (handle: string) => apiRequest<ProgressRow[]>(`/api/progress?handle=${encodeURIComponent(handle.toLowerCase())}`),
+  getProgress: (_handle?: string) => apiRequest<ProgressRow[]>('/api/progress', { headers: authHeaders() }),
   upsertProgress: (payload: ProgressUpsertPayload) => apiRequest<ProgressRow>('/api/progress', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload)
   }),
   getCompanyQuestions: (params?: { company?: string; bucket?: 'all' | '30d' | '3m' | '6m'; search?: string }) =>
     Promise.resolve(getCompanyQuestionsLocal(params)),
-  getCustomQuestions: (handle: string) => apiRequest<QuestionV2Row[]>(`/api/v2/questions?customOnly=true&importedByHandle=${encodeURIComponent(handle.toLowerCase())}`),
+  getCustomQuestions: (_handle?: string) => apiRequest<QuestionV2Row[]>('/api/v2/questions?customOnly=true', { headers: authHeaders() }),
   upsertQuestion: (payload: QuestionUpsertPayload) => apiRequest<QuestionV2Row>('/api/v2/questions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload)
   })
 };
