@@ -455,9 +455,12 @@ const App: React.FC = () => {
     try {
       const rows = await backendApi.getAdminUsers();
       setAdminUsers(rows);
-    } catch {
-      setAdminMessage('Admin session expired or invalid.');
-      localStorage.removeItem(ADMIN_SESSION_KEY);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Admin session expired or invalid.';
+      setAdminMessage(message);
+      if (message === 'Unauthorized' || message.toLowerCase().includes('token')) {
+        localStorage.removeItem(ADMIN_SESSION_KEY);
+      }
     } finally {
       setIsAdminBusy(false);
     }

@@ -76,11 +76,15 @@ function parseConnectionConfig(rawValue) {
 
 function buildPool() {
   const { connectionString, sslEnabled } = parseConnectionConfig(process.env.DATABASE_URL || process.env.DB_URL);
+  const max = Number(process.env.PG_POOL_MAX || 1);
 
   return new Pool({
     connectionString,
     ssl: sslEnabled ? { rejectUnauthorized: false } : undefined,
-    max: Number(process.env.PG_POOL_MAX || 10)
+    max: Number.isFinite(max) && max > 0 ? max : 1,
+    idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 5000),
+    connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS || 5000),
+    allowExitOnIdle: true
   });
 }
 
