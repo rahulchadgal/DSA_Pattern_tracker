@@ -1,40 +1,17 @@
 import { query } from '../server/db.js';
-import { allowMethods, normalizeHandle, parseBody, sendError, sendJson } from '../server/http.js';
+import { allowMethods, parseBody, sendError, sendJson } from '../server/http.js';
+import { ensureAuthSchema, requireUser } from '../server/auth.js';
 
 let schemaReadyPromise;
 
-function randomSuffix() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
 async function ensureSchema() {
   if (!schemaReadyPromise) {
-    schemaReadyPromise = query(
-      'ALTER TABLE progress_records ADD COLUMN IF NOT EXISTS solution_rich_text TEXT'
-    ).catch((error) => {
+    schemaReadyPromise = ensureAuthSchema().catch((error) => {
       schemaReadyPromise = undefined;
       throw error;
     });
   }
   await schemaReadyPromise;
-}
-
-async function resolveOrCreateUserId(handle) {
-  const existing = await query('SELECT id FROM user_handles WHERE handle = $1', [handle]);
-  if (existing.rows[0]) {
-    return existing.rows[0].id;
-  }
-
-  const emailLocalPart = handle.replace(/[^a-z0-9._-]/g, '-') || `user-${randomSuffix()}`;
-  const inserted = await query(
-    `INSERT INTO user_handles (handle, email, full_name, password_hash, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, NOW(), NOW())
-     ON CONFLICT (handle) DO UPDATE SET handle = EXCLUDED.handle
-     RETURNING id`,
-    [handle, `${emailLocalPart}@local.dsa`, handle, `shadow-${randomSuffix()}`]
-  );
-
-  return inserted.rows[0].id;
 }
 
 export default async function handler(req, res) {
@@ -50,14 +27,9 @@ export default async function handler(req, res) {
 }
 
 async function getProgress(req, res) {
-  const handle = normalizeHandle(req.query.handle);
-  if (!handle) {
-    return sendError(res, 400, 'Handle is required');
-  }
-
   try {
     await ensureSchema();
-    const userId = await resolveOrCreateUserId(handle);
+    const user = await requireUser(req);
     const result = await query(
       `SELECT q.leetcode_id AS "leetcodeId",
               p.completed,
@@ -68,17 +40,17 @@ async function getProgress(req, res) {
        JOIN question_catalog q ON q.id = p.question_id
        WHERE p.user_id = $1
        ORDER BY p.updated_at DESC`,
-      [userId]
+      [user.id]
     );
     return sendJson(res, 200, result.rows);
   } catch (error) {
-    return sendError(res, 500, error instanceof Error ? error.message : 'Unable to load progress');
+    const message = error instanceof Error ? error.message : 'Unable to load progress';
+    return sendError(res, message === 'Unauthorized' ? 401 : 500, message);
   }
 }
 
 async function upsertProgress(req, res) {
   const body = parseBody(req);
-  const handle = normalizeHandle(body.handle);
   const leetcodeId = typeof body.leetcodeId === 'string' ? body.leetcodeId.trim() : '';
   const completed = Boolean(body.completed);
   const solutionRichText =
@@ -92,15 +64,13 @@ async function upsertProgress(req, res) {
   const subPattern = typeof body.subPattern === 'string' ? body.subPattern.trim() : '';
   const metadataJson = body.metadataJson == null ? null : String(body.metadataJson);
 
-  if (!handle) {
-    return sendError(res, 400, 'Handle is required');
-  }
   if (!leetcodeId) {
     return sendError(res, 400, 'leetcodeId is required');
   }
 
   try {
     await ensureSchema();
+    const user = await requireUser(req);
     let questionResult = await query('SELECT id, leetcode_id FROM question_catalog WHERE leetcode_id = $1', [leetcodeId]);
     if (!questionResult.rows[0]) {
       if (!title || !difficulty || !link) {
@@ -128,7 +98,6 @@ async function upsertProgress(req, res) {
       );
     }
     const questionId = questionResult.rows[0].id;
-    const userId = await resolveOrCreateUserId(handle);
 
     const result = await query(
       `INSERT INTO progress_records (user_id, question_id, completed, updated_at, completed_at, solution_rich_text)
@@ -144,11 +113,12 @@ async function upsertProgress(req, res) {
          updated_at AS "updatedAt",
          completed_at AS "completedAt",
          solution_rich_text AS "solutionRichText"`,
-      [userId, questionId, completed, solutionRichText]
+      [user.id, questionId, completed, solutionRichText]
     );
 
     return sendJson(res, 200, result.rows[0]);
   } catch (error) {
-    return sendError(res, 500, error instanceof Error ? error.message : 'Unable to save progress');
+    const message = error instanceof Error ? error.message : 'Unable to save progress';
+    return sendError(res, message === 'Unauthorized' ? 401 : 500, message);
   }
 }

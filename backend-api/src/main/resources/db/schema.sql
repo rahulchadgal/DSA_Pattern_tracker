@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS user_handles (
   bio TEXT,
   avatar_url VARCHAR(500),
   password_hash TEXT NOT NULL,
+  disabled_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );

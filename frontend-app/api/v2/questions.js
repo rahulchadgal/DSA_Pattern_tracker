@@ -1,5 +1,6 @@
 import { query } from '../../server/db.js';
-import { allowMethods, normalizeHandle, parseBody, sendError, sendJson } from '../../server/http.js';
+import { allowMethods, parseBody, sendError, sendJson } from '../../server/http.js';
+import { requireUser } from '../../server/auth.js';
 
 function validateText(value, fieldName) {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -22,9 +23,9 @@ export default async function handler(req, res) {
 
 async function listQuestions(req, res) {
   const customOnly = String(req.query.customOnly || '').toLowerCase() === 'true';
-  const importedByHandle = normalizeHandle(req.query.importedByHandle);
 
   try {
+    const user = customOnly ? await requireUser(req) : null;
     let sql = `SELECT leetcode_id AS "leetcodeId",
                       title,
                       difficulty,
@@ -42,10 +43,8 @@ async function listQuestions(req, res) {
 
     if (customOnly) {
       sql += ' WHERE custom_imported = true';
-      if (importedByHandle) {
-        params.push(importedByHandle);
-        sql += ` AND imported_by_handle = $${params.length}`;
-      }
+      params.push(user.handle);
+      sql += ` AND imported_by_handle = $${params.length}`;
     }
 
     sql += ' ORDER BY id ASC';
@@ -53,7 +52,8 @@ async function listQuestions(req, res) {
     const result = await query(sql, params);
     return sendJson(res, 200, result.rows);
   } catch (error) {
-    return sendError(res, 500, error instanceof Error ? error.message : 'Unable to load questions');
+    const message = error instanceof Error ? error.message : 'Unable to load questions';
+    return sendError(res, message === 'Unauthorized' ? 401 : 500, message);
   }
 }
 
@@ -61,6 +61,7 @@ async function upsertQuestion(req, res) {
   const body = parseBody(req);
 
   try {
+    const user = await requireUser(req);
     const leetcodeId = validateText(body.leetcodeId, 'leetcodeId');
     const title = validateText(body.title, 'title');
     const difficulty = validateText(body.difficulty, 'difficulty');
@@ -69,7 +70,7 @@ async function upsertQuestion(req, res) {
     const link = validateText(body.link, 'link');
     const defaultQuestion = Boolean(body.defaultQuestion);
     const customImported = Boolean(body.customImported);
-    const importedByHandle = normalizeHandle(body.importedByHandle);
+    const importedByHandle = user.handle;
     const contentType =
       typeof body.contentType === 'string' && body.contentType.trim().length > 0
         ? body.contentType.trim()
@@ -128,8 +129,7 @@ async function upsertQuestion(req, res) {
     return sendJson(res, 200, result.rows[0]);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to upsert question';
-    const status = message.endsWith('is required') ? 400 : 500;
+    const status = message === 'Unauthorized' ? 401 : message.endsWith('is required') ? 400 : 500;
     return sendError(res, status, message);
   }
 }
-

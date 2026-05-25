@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { backendApi, CompanyQuestionRow, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
+import { AdminUserRow, backendApi, CompanyQuestionRow, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
 import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
@@ -11,8 +11,10 @@ const SOLUTION_CACHE_KEY = 'dsa-solution-notes-v1';
 const NAVBAR_COLLAPSED_KEY = 'dsa-navbar-collapsed-v1';
 const GRID_VIEW_KEY = 'dsa-grid-view-v1';
 const CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
+const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
 
 type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
+type AuthMode = 'login' | 'signup' | 'admin';
 
 interface LcMetadata {
   questionId: string;
@@ -282,7 +284,7 @@ const WakeBanner: React.FC<{ visible: boolean }> = ({ visible }) => {
 };
 
 const App: React.FC = () => {
-  const { handle, setHandle, showWelcome, setShowWelcome, persistHandle } = useProfileHandle();
+  const { handle, setHandle, showWelcome, setShowWelcome, persistHandle, clearHandle } = useProfileHandle();
   const { isProfile, isRoulette, isSyllabus, goMain, goProfile, goSyllabus, goRoulette } = useAppRoute();
   const isMobile = useIsMobile();
 
@@ -320,6 +322,18 @@ const App: React.FC = () => {
   const pendingProgressRef = useRef<Record<string, { completed: boolean; solutionRichText: string | null }>>({});
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
   const [companySearchTerm, setCompanySearchTerm] = useState('');
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [authUsername, setAuthUsername] = useState(handle);
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isAuthBusy, setIsAuthBusy] = useState(false);
+  const [adminKey, setAdminKey] = useState('');
+  const [adminUsers, setAdminUsers] = useState<AdminUserRow[]>([]);
+  const [adminSearchTerm, setAdminSearchTerm] = useState('');
+  const [adminResetHandle, setAdminResetHandle] = useState('');
+  const [adminResetPassword, setAdminResetPassword] = useState('');
+  const [adminMessage, setAdminMessage] = useState('');
+  const [isAdminBusy, setIsAdminBusy] = useState(false);
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
@@ -437,6 +451,102 @@ const App: React.FC = () => {
     } catch (error) {
       // local-first fallback; keeps UI responsive even if network fails
     }
+  };
+
+  const loadAdminUsers = useCallback(async () => {
+    setIsAdminBusy(true);
+    setAdminMessage('');
+    try {
+      const rows = await backendApi.getAdminUsers();
+      setAdminUsers(rows);
+    } catch {
+      setAdminMessage('Admin session expired or invalid.');
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+    } finally {
+      setIsAdminBusy(false);
+    }
+  }, []);
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsAuthBusy(true);
+    try {
+      const username = authUsername.trim().toLowerCase();
+      const response = authMode === 'signup'
+        ? await backendApi.register({ username, password: authPassword })
+        : await backendApi.login({ username, password: authPassword });
+      const cleanHandle = persistHandle(response.handle, response.token);
+      setAuthPassword('');
+      pullRelationalProgress(cleanHandle);
+      pullCustomQuestions(cleanHandle);
+    } catch {
+      setAuthError(authMode === 'signup' ? 'Unable to create account.' : 'Invalid username or password.');
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsAuthBusy(true);
+    try {
+      const response = await backendApi.adminLogin(adminKey);
+      localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token: response.token }));
+      setAdminKey('');
+      setAdminMessage('Admin access unlocked.');
+      await loadAdminUsers();
+    } catch {
+      setAuthError('Invalid admin key.');
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
+
+  const handleAdminResetPassword = async (e: React.FormEvent | React.MouseEvent) => {
+    e.preventDefault();
+    setAdminMessage('');
+    setIsAdminBusy(true);
+    try {
+      await backendApi.resetAdminUserPassword(adminResetHandle, adminResetPassword);
+      setAdminResetPassword('');
+      setAdminMessage(`Password reset for @${adminResetHandle.trim().toLowerCase()}.`);
+      await loadAdminUsers();
+    } catch {
+      setAdminMessage('Unable to reset password.');
+    } finally {
+      setIsAdminBusy(false);
+    }
+  };
+
+  const toggleAdminUser = async (row: AdminUserRow) => {
+    setAdminMessage('');
+    setIsAdminBusy(true);
+    try {
+      if (row.disabledAt) {
+        await backendApi.enableAdminUser(row.handle);
+        setAdminMessage(`Enabled @${row.handle}.`);
+      } else {
+        await backendApi.disableAdminUser(row.handle);
+        setAdminMessage(`Disabled @${row.handle}. Progress was preserved.`);
+      }
+      await loadAdminUsers();
+    } catch {
+      setAdminMessage('Unable to update user.');
+    } finally {
+      setIsAdminBusy(false);
+    }
+  };
+
+  const logout = () => {
+    clearHandle();
+    setAuthUsername('');
+    setAuthPassword('');
+    setCompletedMap({});
+    setSolutionMap({});
+    localStorage.removeItem(LOCAL_CACHE_KEY);
+    localStorage.removeItem(SOLUTION_CACHE_KEY);
   };
 
   const pullCustomQuestions = useCallback(async (userHandle: string) => {
@@ -740,11 +850,7 @@ const App: React.FC = () => {
 
   const setupHandle = (e: React.FormEvent) => {
     e.preventDefault();
-    if (handle.trim()) {
-      const cleanHandle = persistHandle(handle);
-      pullRelationalProgress(cleanHandle);
-      pullCustomQuestions(cleanHandle);
-    }
+    handleAuthSubmit(e);
   };
 
   // --- SEARCH LOGIC ---
@@ -805,6 +911,12 @@ const App: React.FC = () => {
       sum + section.patterns.reduce((patternSum, pattern) => patternSum + pattern.questions.length, 0)
     ), 0);
   }, [sectionsData]);
+
+  const filteredAdminUsers = useMemo(() => {
+    const search = adminSearchTerm.trim().toLowerCase();
+    if (!search) return adminUsers;
+    return adminUsers.filter((user) => user.handle.toLowerCase().includes(search));
+  }, [adminSearchTerm, adminUsers]);
 
   const overallPercent = totalQuestions > 0
     ? Math.round((Object.keys(completedMap).length / totalQuestions) * 100)
@@ -1308,19 +1420,117 @@ const App: React.FC = () => {
                  <div className="w-20 h-20 bg-emerald-500/10 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 border border-emerald-500/20 text-emerald-500">
                     <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
                  </div>
-                 <h3 className="text-4xl font-black text-white mb-4 tracking-tighter leading-none">Universal Link</h3>
-                 <p className="text-sm text-slate-500 leading-relaxed font-medium">Use a unique handle to sync your progress question-by-question across all your devices.</p>
+                 <h3 className="text-4xl font-black text-white mb-4 tracking-tighter leading-none">DSA Login</h3>
+                 <p className="text-sm text-slate-500 leading-relaxed font-medium">Sign in with your username and password to sync progress across devices.</p>
               </div>
-              <form onSubmit={setupHandle} className="space-y-8">
-                 <div className="bg-slate-950 p-8 rounded-[2.5rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
-                    <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Global Handle</label>
-                    <div className="flex items-center gap-3 text-2xl font-mono">
-                       <span className="text-emerald-500/40">@</span>
-                       <input autoFocus type="text" placeholder="yourname-dsa" value={handle} onChange={(e) => setHandle(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
+              <div className="mb-8 grid grid-cols-3 gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-1">
+                {([
+                  ['login', 'Login'],
+                  ['signup', 'Signup'],
+                  ['admin', 'Admin']
+                ] as const).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => { setAuthMode(mode); setAuthError(''); }}
+                    className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-[0.2em] ${authMode === mode ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {authMode === 'admin' ? (
+                <form onSubmit={handleAdminLogin} className="space-y-6">
+                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
+                    <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Admin Key</label>
+                    <input
+                      autoFocus
+                      type="password"
+                      placeholder="Vercel admin key"
+                      value={adminKey}
+                      onChange={(e) => setAdminKey(e.target.value)}
+                      className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800"
+                    />
+                  </div>
+                  {authError && <p className="text-center text-xs font-bold text-rose-400">{authError}</p>}
+                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-indigo-600/20 transition-all active:scale-95">
+                    {isAuthBusy ? 'Checking...' : 'Unlock Admin'}
+                  </button>
+                  {adminMessage && <p className="text-center text-xs font-bold text-amber-300">{adminMessage}</p>}
+                  {adminUsers.length > 0 && (
+                    <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70">
+                      <div className="sticky top-0 border-b border-slate-800 bg-slate-950 p-3">
+                        <input
+                          value={adminSearchTerm}
+                          onChange={(e) => setAdminSearchTerm(e.target.value)}
+                          placeholder="Search users..."
+                          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                        />
+                      </div>
+                      {filteredAdminUsers.map((user) => (
+                        <div key={user.handle} className="flex items-center justify-between gap-3 border-b border-slate-800 p-3 last:border-b-0">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-black text-slate-100">@{user.handle}</div>
+                            <div className="text-[10px] font-bold text-slate-500">{user.completedCount}/{user.progressCount} done {user.disabledAt ? '- disabled' : '- active'}</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleAdminUser(user)}
+                            disabled={isAdminBusy}
+                            className={`shrink-0 rounded-xl px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60 ${user.disabledAt ? 'bg-emerald-600' : 'bg-rose-600'}`}
+                          >
+                            {user.disabledAt ? 'Enable' : 'Disable'}
+                          </button>
+                        </div>
+                      ))}
+                      <div className="border-t border-slate-800 p-3">
+                        <div className="grid gap-2">
+                          <input
+                            value={adminResetHandle}
+                            onChange={(e) => setAdminResetHandle(e.target.value)}
+                            placeholder="username"
+                            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          />
+                          <input
+                            value={adminResetPassword}
+                            onChange={(e) => setAdminResetPassword(e.target.value)}
+                            type="password"
+                            placeholder="new password"
+                            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAdminResetPassword}
+                            disabled={isAdminBusy}
+                            className="rounded-xl bg-emerald-600 px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60"
+                          >
+                            Reset Password
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                 </div>
-                 <button type="submit" className="w-full py-7 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[2.5rem] font-black text-sm tracking-[0.4em] uppercase shadow-2xl shadow-indigo-600/20 transition-all active:scale-95">Connect Profile</button>
+                  )}
+                </form>
+              ) : (
+                <form onSubmit={setupHandle} className="space-y-6">
+                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
+                    <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Username</label>
+                    <div className="flex items-center gap-3 text-xl font-mono">
+                      <span className="text-emerald-500/40">@</span>
+                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
+                    </div>
+                  </div>
+                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
+                    <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Password</label>
+                    <input type="password" placeholder="8+ characters" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
+                  </div>
+                  {authError && <p className="text-center text-xs font-bold text-rose-400">{authError}</p>}
+                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-indigo-600/20 transition-all active:scale-95">
+                    {isAuthBusy ? 'Working...' : authMode === 'signup' ? 'Create Account' : 'Login'}
+                  </button>
               </form>
+              )}
            </div>
         </div>
       )}
