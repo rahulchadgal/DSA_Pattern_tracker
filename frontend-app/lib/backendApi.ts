@@ -1,14 +1,5 @@
 import { getCompanyQuestionsLocal } from './companyQuestionsLocalProvider';
 
-export interface QuestionV1Row {
-  leetcodeId: string;
-  title: string;
-  difficulty: string;
-  mainPattern: string;
-  subPattern: string;
-  link: string;
-}
-
 export interface ProgressRow {
   leetcodeId: string;
   completed: boolean;
@@ -203,7 +194,6 @@ export const backendApi = {
   resetAdminUserPassword: (handle: string, password: string) => apiRequest<{ handle: string }>('/api/admin', withJson({ handle, password, action: 'reset-password' }, true)),
   disableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string }>('/api/admin', withJson({ handle, action: 'disable' }, true)),
   enableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string | null }>('/api/admin', withJson({ handle, action: 'enable' }, true)),
-  getQuestionsV1: () => apiRequest<QuestionV1Row[]>('/api/v1/questions'),
   getProgress: (_handle?: string) => apiRequest<ProgressRow[]>('/api/progress', { headers: authHeaders() }),
   upsertProgress: (payload: ProgressUpsertPayload) => apiRequest<ProgressRow>('/api/progress', {
     method: 'POST',

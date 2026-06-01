@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { AdminUserRow, backendApi, CompanyQuestionRow, QuestionV1Row, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
+import { AdminUserRow, backendApi, CompanyQuestionRow, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
 import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
@@ -105,52 +105,6 @@ const normalizeDifficulty = (difficulty: string): DifficultyLevel => {
     return difficulty;
   }
   return 'Medium';
-};
-
-const buildSectionsFromQuestions = (questions: QuestionV1Row[]): Section[] => {
-  const sectionMap = new Map<string, { section: Section; patternMap: Map<string, Pattern> }>();
-  let sectionCounter = 1;
-  let patternCounter = 1;
-
-  questions.forEach((row) => {
-    const leetcodeId = normalizeQuestionId(row.leetcodeId);
-    const sectionTitle = row.mainPattern?.trim() || 'General';
-    const patternName = row.subPattern?.trim() || 'General Pattern';
-
-    let sectionEntry = sectionMap.get(sectionTitle);
-    if (!sectionEntry) {
-      sectionEntry = {
-        section: {
-          id: `S${sectionCounter++}`,
-          title: sectionTitle,
-          patterns: []
-        },
-        patternMap: new Map<string, Pattern>()
-      };
-      sectionMap.set(sectionTitle, sectionEntry);
-    }
-
-    let pattern = sectionEntry.patternMap.get(patternName);
-    if (!pattern) {
-      pattern = {
-        id: `P${patternCounter++}`,
-        name: patternName,
-        questions: []
-      };
-      sectionEntry.patternMap.set(patternName, pattern);
-      sectionEntry.section.patterns.push(pattern);
-    }
-
-    pattern.questions.push({
-      id: leetcodeId,
-      title: row.title,
-      fullTitle: `${leetcodeId}. ${row.title}`,
-      link: row.link,
-      difficulty: normalizeDifficulty(row.difficulty)
-    });
-  });
-
-  return Array.from(sectionMap.values()).map((entry) => entry.section);
 };
 
 const addCustomQuestionToSections = (sections: Section[], customQuestion: CustomQuestionRow): Section[] => {
