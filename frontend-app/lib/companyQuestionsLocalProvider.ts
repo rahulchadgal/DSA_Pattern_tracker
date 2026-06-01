@@ -80,7 +80,7 @@ export const getCompanyQuestionsLocal = async (params?: {
 
     entry.questions.forEach((question) => {
       const buckets = question.buckets || ['all'];
-      if (bucket === 'all' || buckets.includes(bucket) || buckets.includes('all')) {
+      if (bucket === 'all' || buckets.includes(bucket)) {
         rows.push({
           questionId: Number(question.id),
           leetcodeId: question.id,
