@@ -558,13 +558,15 @@ const App: React.FC = () => {
     try {
       const rows = await backendApi.getCompanyQuestions({ bucket: companyTimeFilter });
       const companySectionsMap = new Map<string, Pattern>();
+      const companySlug = (company: string) => company.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       rows.forEach((row: CompanyQuestionRow) => {
         const company = row.companyName;
         const leetcodeId = normalizeQuestionId(row.leetcodeId);
         let pattern = companySectionsMap.get(company);
         if (!pattern) {
+          const slug = companySlug(company);
           pattern = {
-            id: `company-${company.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+            id: `company-${slug}`,
             name: '',
             questions: []
           };
@@ -583,8 +585,8 @@ const App: React.FC = () => {
 
       const nextCompanySections: Section[] = Array.from(companySectionsMap.entries())
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([company, pattern], index) => ({
-          id: `C${index + 1}`,
+        .map(([company, pattern]) => ({
+          id: `company-${companySlug(company)}`,
           title: company,
           patterns: [pattern]
         }));
