@@ -4,6 +4,7 @@ import { AdminUserRow, backendApi, CompanyQuestionRow, QuestionV2Row, subscribeB
 import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
+import { getOfficialSolution, OfficialSolutionEntry } from './lib/officialSolutions';
 import { Pattern, Question, Section } from './types';
 
 const LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
@@ -272,6 +273,9 @@ const App: React.FC = () => {
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
   const [isBackendWaking, setIsBackendWaking] = useState(false);
   const [editingSolutionQuestion, setEditingSolutionQuestion] = useState<Question | null>(null);
+  const [officialSolutionQuestion, setOfficialSolutionQuestion] = useState<Question | null>(null);
+  const [officialSolution, setOfficialSolution] = useState<OfficialSolutionEntry | null>(null);
+  const [officialSolutionStatus, setOfficialSolutionStatus] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle');
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
   const pendingProgressRef = useRef<Record<string, { completed: boolean; solutionRichText: string | null }>>({});
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
@@ -774,6 +778,25 @@ const App: React.FC = () => {
     setEditingSolutionQuestion(null);
   };
 
+  const openOfficialSolution = async (question: Question) => {
+    setOfficialSolutionQuestion(question);
+    setOfficialSolution(null);
+    setOfficialSolutionStatus('loading');
+    try {
+      const entry = await getOfficialSolution(question.id);
+      setOfficialSolution(entry);
+      setOfficialSolutionStatus(entry ? 'ready' : 'missing');
+    } catch {
+      setOfficialSolutionStatus('error');
+    }
+  };
+
+  const closeOfficialSolution = () => {
+    setOfficialSolutionQuestion(null);
+    setOfficialSolution(null);
+    setOfficialSolutionStatus('idle');
+  };
+
   const applyEditorCommand = (command: string) => {
     document.execCommand(command, false);
     if (!solutionEditorRef.current) return;
@@ -983,9 +1006,18 @@ const App: React.FC = () => {
                       <span className="text-[10px] font-bold text-slate-700 font-mono tracking-tighter">LC #{q.id}</span>
                       <DifficultyBadge diff={q.difficulty} />
                       <button
+                        onClick={() => openOfficialSolution(q)}
+                        title="View official English and Java solution"
+                        className="ml-auto p-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 transition-all hover:border-indigo-400 hover:bg-indigo-500/20"
+                      >
+                        <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.75v10.5M8.25 9.75h7.5M5.25 4.5h13.5A1.5 1.5 0 0120.25 6v13.5l-3.75-2.25-4.5 2.25-4.5-2.25-3.75 2.25V6a1.5 1.5 0 011.5-1.5z" />
+                        </svg>
+                      </button>
+                      <button
                         onClick={() => openSolutionEditor(q)}
                         title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
-                        className={`ml-auto p-2 rounded-xl border transition-all ${hasSolution ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'}`}
+                        className={`p-2 rounded-xl border transition-all ${hasSolution ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'}`}
                       >
                         <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
@@ -1259,6 +1291,84 @@ const App: React.FC = () => {
            )}
         </div>
       </main>
+
+      {officialSolutionQuestion && (
+        <div className="fixed inset-0 z-[106] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
+          <div className="mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-6 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-8">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-black tracking-tight text-white">Official Solution</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  LC #{officialSolutionQuestion.id} • {officialSolutionQuestion.title}
+                </p>
+              </div>
+              <button onClick={closeOfficialSolution} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            {officialSolutionStatus === 'loading' && (
+              <div className="flex flex-1 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 p-8 text-sm font-bold text-slate-400">
+                Loading official solution...
+              </div>
+            )}
+
+            {officialSolutionStatus === 'missing' && (
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6 text-sm text-amber-100">
+                Official solution data is not available for this question yet.
+              </div>
+            )}
+
+            {officialSolutionStatus === 'error' && (
+              <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-6 text-sm text-rose-100">
+                Unable to load official solution data.
+              </div>
+            )}
+
+            {officialSolutionStatus === 'ready' && officialSolution && (
+              <div className="flex flex-1 flex-col gap-5 overflow-hidden">
+                <div className="flex flex-wrap items-center gap-2">
+                  <DifficultyBadge diff={officialSolution.difficulty} />
+                  {officialSolution.tags.map((tag) => (
+                    <span key={tag} className="rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="grid flex-1 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
+                  <div className="min-h-0 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                    <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">English Problem & Explanation</h4>
+                    <div
+                      className="prose prose-invert max-w-none text-sm leading-7 text-slate-200 prose-p:text-slate-300 prose-li:text-slate-300 prose-pre:border prose-pre:border-slate-800 prose-pre:bg-slate-900"
+                      dangerouslySetInnerHTML={{ __html: officialSolution.descriptionHtml }}
+                    />
+                    {officialSolution.solutionMarkdown && (
+                      <pre className="mt-6 whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm leading-7 text-slate-200">
+                        {officialSolution.solutionMarkdown}
+                      </pre>
+                    )}
+                  </div>
+
+                  <div className="min-h-0 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                    <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Java Solution</h4>
+                    {officialSolution.hasJava ? (
+                      <pre className="overflow-x-auto rounded-2xl border border-slate-800 bg-[#020617] p-4 text-[12px] leading-6 text-slate-100">
+                        <code>{officialSolution.java}</code>
+                      </pre>
+                    ) : (
+                      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-sm text-amber-100">
+                        Java solution is unavailable for this problem in the source repo.
+                      </div>
+                    )}
+                    <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                      Source: {officialSolution.sourcePath}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {editingSolutionQuestion && (
         <div className="fixed inset-0 z-[106] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">

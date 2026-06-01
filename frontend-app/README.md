@@ -70,4 +70,18 @@ Company-bank questions are rendered in the `Companies` route with:
 - time filters (`All`, `30 Days`, `3 Months`, `6 Months`)
 - same question cards as Syllabus
 
-Filtering uses the local company question bank in the frontend; database sync for company-bank data is handled outside Vercel serverless APIs.
+Filtering uses the generated static company question bank in `public/generated/company-questions.json`; database sync for company-bank data is handled outside Vercel serverless APIs.
+
+## Generated LeetCode Data
+Official solution content and company-bank data are static frontend assets so the 1 GB database can stay focused on users, progress, custom questions, and personal notes.
+
+Refresh generated data after updating the sibling source repos:
+
+```bash
+cd /Users/rahulchadgal/WorkSpace/DSA_Pattern_tracker
+node dev/generate-static-leetcode-data.mjs
+```
+
+The generator expects these sibling checkouts by default:
+- `/Users/rahulchadgal/WorkSpace/leetcode`
+- `/Users/rahulchadgal/WorkSpace/leetcode-companywise-interview-questions`
