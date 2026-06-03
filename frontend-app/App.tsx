@@ -276,6 +276,7 @@ const App: React.FC = () => {
   const [officialSolutionQuestion, setOfficialSolutionQuestion] = useState<Question | null>(null);
   const [officialSolution, setOfficialSolution] = useState<OfficialSolutionEntry | null>(null);
   const [officialSolutionStatus, setOfficialSolutionStatus] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle');
+  const [officialSolutionView, setOfficialSolutionView] = useState<'question' | 'hint' | 'solution'>('question');
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
   const pendingProgressRef = useRef<Record<string, { completed: boolean; solutionRichText: string | null }>>({});
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
@@ -784,6 +785,7 @@ const App: React.FC = () => {
     setOfficialSolutionQuestion(question);
     setOfficialSolution(null);
     setOfficialSolutionStatus('loading');
+    setOfficialSolutionView('question');
     try {
       const entry = await getOfficialSolution(question.id);
       setOfficialSolution(entry);
@@ -797,6 +799,17 @@ const App: React.FC = () => {
     setOfficialSolutionQuestion(null);
     setOfficialSolution(null);
     setOfficialSolutionStatus('idle');
+    setOfficialSolutionView('question');
+  };
+
+  const hasMeaningfulHint = (solution: OfficialSolutionEntry) => {
+    const normalized = solution.solutionMarkdown
+      .replace(/^#{1,6}\s*Solution\s*\d*[:\s-]*/gim, '')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/[#*_`>\-[\]()]/g, '')
+      .trim();
+    return normalized.length > 24;
   };
 
   const applyEditorCommand = (command: string) => {
@@ -1340,35 +1353,69 @@ const App: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="grid flex-1 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
-                  <div className="min-h-0 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                    <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">English Problem & Explanation</h4>
-                    <div
-                      className="prose prose-invert max-w-none text-sm leading-7 text-slate-200 prose-p:text-slate-300 prose-li:text-slate-300 prose-pre:border prose-pre:border-slate-800 prose-pre:bg-slate-900"
-                      dangerouslySetInnerHTML={{ __html: officialSolution.descriptionHtml }}
-                    />
-                    {officialSolution.solutionMarkdown && (
-                      <pre className="mt-6 whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm leading-7 text-slate-200">
+                <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-2">
+                  <button
+                    type="button"
+                    onClick={() => setOfficialSolutionView('question')}
+                    className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${officialSolutionView === 'question' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    Question
+                  </button>
+                  {hasMeaningfulHint(officialSolution) && (
+                    <button
+                      type="button"
+                      onClick={() => setOfficialSolutionView('hint')}
+                      className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${officialSolutionView === 'hint' ? 'bg-amber-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                      Show Hint
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setOfficialSolutionView('solution')}
+                    className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${officialSolutionView === 'solution' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    Show Solution
+                  </button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  {officialSolutionView === 'question' && (
+                    <>
+                      <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">Question</h4>
+                      <div
+                        className="prose prose-invert max-w-none text-sm leading-7 text-slate-200 prose-p:text-slate-300 prose-li:text-slate-300 prose-pre:border prose-pre:border-slate-800 prose-pre:bg-slate-900"
+                        dangerouslySetInnerHTML={{ __html: officialSolution.descriptionHtml }}
+                      />
+                    </>
+                  )}
+
+                  {officialSolutionView === 'hint' && (
+                    <>
+                      <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Hint / Approach</h4>
+                      <pre className="whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm leading-7 text-slate-200">
                         {officialSolution.solutionMarkdown}
                       </pre>
-                    )}
-                  </div>
+                    </>
+                  )}
 
-                  <div className="min-h-0 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                    <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Java Solution</h4>
-                    {officialSolution.hasJava ? (
-                      <pre className="overflow-x-auto rounded-2xl border border-slate-800 bg-[#020617] p-4 text-[12px] leading-6 text-slate-100">
-                        <code>{officialSolution.java}</code>
-                      </pre>
-                    ) : (
-                      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-sm text-amber-100">
-                        Java solution is unavailable for this problem in the source repo.
-                      </div>
-                    )}
-                    <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-slate-600">
-                      Source: {officialSolution.sourcePath}
-                    </p>
-                  </div>
+                  {officialSolutionView === 'solution' && (
+                    <>
+                      <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Java Solution</h4>
+                      {officialSolution.hasJava ? (
+                        <pre className="overflow-x-auto rounded-2xl border border-slate-800 bg-[#020617] p-4 text-[12px] leading-6 text-slate-100">
+                          <code>{officialSolution.java}</code>
+                        </pre>
+                      ) : (
+                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-sm text-amber-100">
+                          Java solution is unavailable for this problem in the source repo.
+                        </div>
+                      )}
+                      <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                        Source: {officialSolution.sourcePath}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             )}
