@@ -4,6 +4,7 @@ import { AdminUserRow, backendApi, CompanyQuestionRow, QuestionV2Row, subscribeB
 import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
+import { getOfficialSolution, OfficialSolutionEntry } from './lib/officialSolutions';
 import { Pattern, Question, Section } from './types';
 
 const LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
@@ -272,6 +273,10 @@ const App: React.FC = () => {
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
   const [isBackendWaking, setIsBackendWaking] = useState(false);
   const [editingSolutionQuestion, setEditingSolutionQuestion] = useState<Question | null>(null);
+  const [officialSolutionQuestion, setOfficialSolutionQuestion] = useState<Question | null>(null);
+  const [officialSolution, setOfficialSolution] = useState<OfficialSolutionEntry | null>(null);
+  const [officialSolutionStatus, setOfficialSolutionStatus] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle');
+  const [officialSolutionView, setOfficialSolutionView] = useState<'question' | 'hint' | 'solution'>('question');
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
   const pendingProgressRef = useRef<Record<string, { completed: boolean; solutionRichText: string | null }>>({});
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
@@ -554,13 +559,15 @@ const App: React.FC = () => {
     try {
       const rows = await backendApi.getCompanyQuestions({ bucket: companyTimeFilter });
       const companySectionsMap = new Map<string, Pattern>();
+      const companySlug = (company: string) => company.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       rows.forEach((row: CompanyQuestionRow) => {
         const company = row.companyName;
         const leetcodeId = normalizeQuestionId(row.leetcodeId);
         let pattern = companySectionsMap.get(company);
         if (!pattern) {
+          const slug = companySlug(company);
           pattern = {
-            id: `company-${company.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+            id: `company-${slug}`,
             name: '',
             questions: []
           };
@@ -579,8 +586,8 @@ const App: React.FC = () => {
 
       const nextCompanySections: Section[] = Array.from(companySectionsMap.entries())
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([company, pattern], index) => ({
-          id: `C${index + 1}`,
+        .map(([company, pattern]) => ({
+          id: `company-${companySlug(company)}`,
           title: company,
           patterns: [pattern]
         }));
@@ -772,6 +779,37 @@ const App: React.FC = () => {
 
   const closeSolutionEditor = () => {
     setEditingSolutionQuestion(null);
+  };
+
+  const openOfficialSolution = async (question: Question) => {
+    setOfficialSolutionQuestion(question);
+    setOfficialSolution(null);
+    setOfficialSolutionStatus('loading');
+    setOfficialSolutionView('question');
+    try {
+      const entry = await getOfficialSolution(question.id);
+      setOfficialSolution(entry);
+      setOfficialSolutionStatus(entry ? 'ready' : 'missing');
+    } catch {
+      setOfficialSolutionStatus('error');
+    }
+  };
+
+  const closeOfficialSolution = () => {
+    setOfficialSolutionQuestion(null);
+    setOfficialSolution(null);
+    setOfficialSolutionStatus('idle');
+    setOfficialSolutionView('question');
+  };
+
+  const hasMeaningfulHint = (solution: OfficialSolutionEntry) => {
+    const normalized = solution.solutionMarkdown
+      .replace(/^#{1,6}\s*Solution\s*\d*[:\s-]*/gim, '')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/[#*_`>\-[\]()]/g, '')
+      .trim();
+    return normalized.length > 24;
   };
 
   const applyEditorCommand = (command: string) => {
@@ -978,19 +1016,32 @@ const App: React.FC = () => {
                     <svg className={`${gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-7 h-7'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                   </button>
                   <div className="flex-1 min-w-0 pt-1">
-                    <a href={q.link} target="_blank" rel="noreferrer" className={`block ${gridView === 'small' || isMobile ? 'text-[13px] sm:text-sm' : 'text-base sm:text-lg'} font-bold leading-tight mb-1.5 sm:mb-2 transition-all ${done ? 'text-slate-600 line-through opacity-60 italic' : 'text-slate-100 group-hover:text-indigo-400'}`}>{q.title}</a>
-                    <div className="flex items-center gap-2 sm:gap-3">
+                    <div className={`flex items-start ${gridView === 'small' || isMobile ? 'gap-2' : 'gap-3'}`}>
+                      <a href={q.link} target="_blank" rel="noreferrer" className={`block min-w-0 flex-1 ${gridView === 'small' || isMobile ? 'text-[13px] sm:text-sm' : 'text-base sm:text-lg'} font-bold leading-tight mb-1.5 sm:mb-2 transition-all ${done ? 'text-slate-600 line-through opacity-60 italic' : 'text-slate-100 group-hover:text-indigo-400'}`}>{q.title}</a>
+                      <div className={`shrink-0 flex items-center ${gridView === 'small' || isMobile ? 'gap-1' : 'gap-1.5'}`}>
+                        <button
+                          onClick={() => openOfficialSolution(q)}
+                          title="View official English and Java solution"
+                          className={`${gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 transition-all hover:border-indigo-400 hover:bg-indigo-500/20`}
+                        >
+                          <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.75v10.5M8.25 9.75h7.5M5.25 4.5h13.5A1.5 1.5 0 0120.25 6v13.5l-3.75-2.25-4.5 2.25-4.5-2.25-3.75 2.25V6a1.5 1.5 0 011.5-1.5z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => openSolutionEditor(q)}
+                          title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
+                          className={`${gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border transition-all ${hasSolution ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'}`}
+                        >
+                          <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                       <span className="text-[10px] font-bold text-slate-700 font-mono tracking-tighter">LC #{q.id}</span>
                       <DifficultyBadge diff={q.difficulty} />
-                      <button
-                        onClick={() => openSolutionEditor(q)}
-                        title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
-                        className={`ml-auto p-2 rounded-xl border transition-all ${hasSolution ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'}`}
-                      >
-                        <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
-                        </svg>
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -1259,6 +1310,118 @@ const App: React.FC = () => {
            )}
         </div>
       </main>
+
+      {officialSolutionQuestion && (
+        <div className="fixed inset-0 z-[106] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
+          <div className="mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-6 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-8">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-black tracking-tight text-white">Official Solution</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  LC #{officialSolutionQuestion.id} • {officialSolutionQuestion.title}
+                </p>
+              </div>
+              <button onClick={closeOfficialSolution} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            {officialSolutionStatus === 'loading' && (
+              <div className="flex flex-1 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 p-8 text-sm font-bold text-slate-400">
+                Loading official solution...
+              </div>
+            )}
+
+            {officialSolutionStatus === 'missing' && (
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6 text-sm text-amber-100">
+                Official solution data is not available for this question yet.
+              </div>
+            )}
+
+            {officialSolutionStatus === 'error' && (
+              <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-6 text-sm text-rose-100">
+                Unable to load official solution data.
+              </div>
+            )}
+
+            {officialSolutionStatus === 'ready' && officialSolution && (
+              <div className="flex flex-1 flex-col gap-5 overflow-hidden">
+                <div className="flex flex-wrap items-center gap-2">
+                  <DifficultyBadge diff={officialSolution.difficulty} />
+                  {officialSolution.tags.map((tag) => (
+                    <span key={tag} className="rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-2">
+                  <button
+                    type="button"
+                    onClick={() => setOfficialSolutionView('question')}
+                    className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${officialSolutionView === 'question' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    Question
+                  </button>
+                  {hasMeaningfulHint(officialSolution) && (
+                    <button
+                      type="button"
+                      onClick={() => setOfficialSolutionView('hint')}
+                      className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${officialSolutionView === 'hint' ? 'bg-amber-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                      Show Hint
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setOfficialSolutionView('solution')}
+                    className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${officialSolutionView === 'solution' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    Show Solution
+                  </button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  {officialSolutionView === 'question' && (
+                    <>
+                      <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">Question</h4>
+                      <div
+                        className="prose prose-invert max-w-none text-sm leading-7 text-slate-200 prose-p:text-slate-300 prose-li:text-slate-300 prose-pre:border prose-pre:border-slate-800 prose-pre:bg-slate-900"
+                        dangerouslySetInnerHTML={{ __html: officialSolution.descriptionHtml }}
+                      />
+                    </>
+                  )}
+
+                  {officialSolutionView === 'hint' && (
+                    <>
+                      <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Hint / Approach</h4>
+                      <pre className="whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm leading-7 text-slate-200">
+                        {officialSolution.solutionMarkdown}
+                      </pre>
+                    </>
+                  )}
+
+                  {officialSolutionView === 'solution' && (
+                    <>
+                      <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Java Solution</h4>
+                      {officialSolution.hasJava ? (
+                        <pre className="overflow-x-auto rounded-2xl border border-slate-800 bg-[#020617] p-4 text-[12px] leading-6 text-slate-100">
+                          <code>{officialSolution.java}</code>
+                        </pre>
+                      ) : (
+                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-sm text-amber-100">
+                          Java solution is unavailable for this problem in the source repo.
+                        </div>
+                      )}
+                      <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                        Source: {officialSolution.sourcePath}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {editingSolutionQuestion && (
         <div className="fixed inset-0 z-[106] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">

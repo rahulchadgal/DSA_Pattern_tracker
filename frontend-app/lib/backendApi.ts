@@ -201,7 +201,7 @@ export const backendApi = {
     body: JSON.stringify(payload)
   }),
   getCompanyQuestions: (params?: { company?: string; bucket?: 'all' | '30d' | '3m' | '6m'; search?: string }) =>
-    Promise.resolve(getCompanyQuestionsLocal(params)),
+    getCompanyQuestionsLocal(params),
   getCustomQuestions: (_handle?: string) => apiRequest<QuestionV2Row[]>('/api/v2/questions?customOnly=true', { headers: authHeaders() }),
   upsertQuestion: (payload: QuestionUpsertPayload) => apiRequest<QuestionV2Row>('/api/v2/questions', {
     method: 'POST',
