@@ -4,7 +4,7 @@ export const useAppRoute = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isProfile = location.pathname === '/profile';
+  const isProfile = location.pathname === '/profile' || location.pathname === '/companies';
   const isRoulette = location.pathname === '/roulette';
   const isSyllabus = !isProfile && !isRoulette;
 
@@ -13,7 +13,7 @@ export const useAppRoute = () => {
     isRoulette,
     isSyllabus,
     goMain: () => navigate('/'),
-    goProfile: () => navigate('/profile'),
+    goProfile: () => navigate('/companies'),
     goSyllabus: () => navigate('/'),
     goRoulette: () => navigate('/roulette')
   };
