@@ -3,8 +3,8 @@
 Backend scaffold for migration from frontend-managed persistence to secure API-driven architecture.
 
 ## Stack baseline
-- Java 21 (compatible with Java 25 in later upgrade)
-- Spring Boot 4.0 / Spring Framework 7
+- Java 25 LTS
+- Spring Boot 4.0.6 / Spring Framework 7
 - Jakarta EE 11 APIs (via Spring Boot 4 platform)
 - PostgreSQL + Spring Data JPA
 
