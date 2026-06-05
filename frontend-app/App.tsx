@@ -13,9 +13,11 @@ const NAVBAR_COLLAPSED_KEY = 'dsa-navbar-collapsed-v1';
 const GRID_VIEW_KEY = 'dsa-grid-view-v1';
 const CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
 const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
+const THEME_MODE_KEY = 'dsa-theme-mode-v1';
 
 type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
 type AuthMode = 'login' | 'signup' | 'admin';
+type ThemeMode = 'dark' | 'light';
 
 interface LcMetadata {
   questionId: string;
@@ -40,6 +42,7 @@ interface QuestionProgressMetadata {
 }
 
 type CompanyTimeFilter = 'all' | '30d' | '3m' | '6m';
+type CompanyBucketSections = Record<CompanyTimeFilter, Section[]>;
 
 const CATEGORY_OPTIONS = [
   'Dynamic Programming',
@@ -53,6 +56,21 @@ const CATEGORY_OPTIONS = [
   'Two Pointers',
   'Heaps'
 ];
+
+const EMPTY_PATTERN: Pattern = { id: '', name: '', questions: [] };
+const COMPANY_TIME_FILTERS: Array<[CompanyTimeFilter, string]> = [
+  ['all', 'All'],
+  ['30d', '30 Days'],
+  ['3m', '3 Months'],
+  ['6m', '6 Months']
+];
+
+const emptyCompanyBucketSections = (): CompanyBucketSections => ({
+  all: [],
+  '30d': [],
+  '3m': [],
+  '6m': []
+});
 
 // --- UTILS ---
 const formatDate = (dateStr: string) => {
@@ -254,17 +272,18 @@ const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'saved' | 'error' | 'idle'>('idle');
   const [baseSectionsData, setBaseSectionsData] = useState<Section[]>(() => getInitialSections());
   const [sectionsData, setSectionsData] = useState<Section[]>(() => getInitialSections());
-  const [companySectionsData, setCompanySectionsData] = useState<Section[]>([]);
-  const [selectedPattern, setSelectedPattern] = useState<Pattern>(() => getInitialSections()[0]?.patterns[0] || { id: '', name: 'Loading...', questions: [] });
-  const [selectedSectionId, setSelectedSectionId] = useState<string>(() => getInitialSections()[0]?.id || '');
-  const [openSections, setOpenSections] = useState<string[]>(() => getInitialSections()[0]?.id ? [getInitialSections()[0].id] : []);
+  const [companyBucketSections, setCompanyBucketSections] = useState<CompanyBucketSections>(() => emptyCompanyBucketSections());
+  const [selectedPattern, setSelectedPattern] = useState<Pattern>(() => EMPTY_PATTERN);
+  const [selectedSectionId, setSelectedSectionId] = useState<string>('');
+  const [openSections, setOpenSections] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => localStorage.getItem(NAVBAR_COLLAPSED_KEY) === 'true');
   const [randomPick, setRandomPick] = useState<Question | null>(null);
   const [gridView, setGridView] = useState<'list' | 'small' | 'big'>(() => {
     const saved = localStorage.getItem(GRID_VIEW_KEY);
-    return saved === 'list' || saved === 'small' || saved === 'big' ? saved : 'big';
+    return saved === 'list' || saved === 'small' || saved === 'big' ? saved : 'list';
   });
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => localStorage.getItem(THEME_MODE_KEY) === 'light' ? 'light' : 'dark');
   const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
   const [questionIdInput, setQuestionIdInput] = useState('');
   const [aiSuggestion, setAiSuggestion] = useState<LcMetadata | null>(null);
@@ -300,17 +319,9 @@ const App: React.FC = () => {
     const nextSections = getInitialSections();
     setBaseSectionsData(nextSections);
     setSectionsData(nextSections);
-
-    if (nextSections.length > 0 && nextSections[0].patterns.length > 0) {
-      const firstSection = nextSections[0];
-      setSelectedSectionId(firstSection.id);
-      setSelectedPattern(firstSection.patterns[0]);
-      setOpenSections([firstSection.id]);
-    } else {
-      setSelectedSectionId('');
-      setSelectedPattern({ id: '', name: 'No Patterns', questions: [] });
-      setOpenSections([]);
-    }
+    setSelectedSectionId('');
+    setSelectedPattern(EMPTY_PATTERN);
+    setOpenSections([]);
   }, []);
 
   const pullRelationalProgress = useCallback(async (userHandle: string) => {
@@ -555,45 +566,55 @@ const App: React.FC = () => {
     }
   }, [baseSectionsData]);
 
+  const buildCompanySectionsFromRows = (rows: CompanyQuestionRow[]): Section[] => {
+    const companySectionsMap = new Map<string, Pattern>();
+    const companySlug = (company: string) => company.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    rows.forEach((row: CompanyQuestionRow) => {
+      const company = row.companyName;
+      const leetcodeId = normalizeQuestionId(row.leetcodeId);
+      let pattern = companySectionsMap.get(company);
+      if (!pattern) {
+        const slug = companySlug(company);
+        pattern = {
+          id: `company-${slug}`,
+          name: company,
+          questions: []
+        };
+        companySectionsMap.set(company, pattern);
+      }
+      if (!pattern.questions.some((q) => q.id === leetcodeId)) {
+        pattern.questions.push({
+          id: leetcodeId,
+          title: row.title,
+          fullTitle: `${leetcodeId}. ${row.title}`,
+          link: row.link,
+          difficulty: normalizeDifficulty(row.difficulty)
+        });
+      }
+    });
+
+    return Array.from(companySectionsMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([company, pattern]) => ({
+        id: `company-${companySlug(company)}`,
+        title: company,
+        patterns: [pattern]
+      }));
+  };
+
   const pullCompanyBucketMetadata = useCallback(async () => {
     try {
-      const rows = await backendApi.getCompanyQuestions({ bucket: companyTimeFilter });
-      const companySectionsMap = new Map<string, Pattern>();
-      const companySlug = (company: string) => company.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      rows.forEach((row: CompanyQuestionRow) => {
-        const company = row.companyName;
-        const leetcodeId = normalizeQuestionId(row.leetcodeId);
-        let pattern = companySectionsMap.get(company);
-        if (!pattern) {
-          const slug = companySlug(company);
-          pattern = {
-            id: `company-${slug}`,
-            name: '',
-            questions: []
-          };
-          companySectionsMap.set(company, pattern);
-        }
-        if (!pattern.questions.some((q) => q.id === leetcodeId)) {
-          pattern.questions.push({
-            id: leetcodeId,
-            title: row.title,
-            fullTitle: `${leetcodeId}. ${row.title}`,
-            link: row.link,
-            difficulty: normalizeDifficulty(row.difficulty)
-          });
-        }
+      const bucketEntries = await Promise.all(COMPANY_TIME_FILTERS.map(async ([bucket]) => {
+        const rows = await backendApi.getCompanyQuestions({ bucket });
+        return [bucket, buildCompanySectionsFromRows(rows)] as const;
+      }));
+      const nextBuckets = emptyCompanyBucketSections();
+      bucketEntries.forEach(([bucket, sections]) => {
+        nextBuckets[bucket] = sections;
       });
-
-      const nextCompanySections: Section[] = Array.from(companySectionsMap.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([company, pattern]) => ({
-          id: `company-${companySlug(company)}`,
-          title: company,
-          patterns: [pattern]
-        }));
-      setCompanySectionsData(nextCompanySections);
+      setCompanyBucketSections(nextBuckets);
     } catch {
-      setCompanySectionsData([]);
+      setCompanyBucketSections(emptyCompanyBucketSections());
     }
   }, [companyTimeFilter]);
 
@@ -702,6 +723,10 @@ const App: React.FC = () => {
   }, [gridView]);
 
   useEffect(() => {
+    localStorage.setItem(THEME_MODE_KEY, themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
     let hideWakeTimer: number | undefined;
     const unsubscribe = subscribeBackendWakeStatus((status) => {
       if (hideWakeTimer) {
@@ -735,7 +760,7 @@ const App: React.FC = () => {
   // --- HANDLERS ---
 
   const buildProgressMetadata = (question: Question): QuestionProgressMetadata => {
-    const activeSection = displayedSections.find((section) => section.id === selectedSectionId);
+    const activeSection = selectedSection || displayedSections.find((section) => section.id === selectedSectionId);
     if (isProfile) {
       const companyName = activeSection?.title || 'Company';
       return {
@@ -857,6 +882,10 @@ const App: React.FC = () => {
   const pickRandom = (scope: 'section' | 'global') => {
     let pool: Question[] = [];
     if (scope === 'section') {
+      if (!selectedSectionId) {
+        alert("Select a section first.");
+        return;
+      }
       const section = sectionsData.find(s => s.id === selectedSectionId);
       section?.patterns.forEach(p => p.questions.forEach(q => {
         if (!completedMap[q.id]) pool.push(q);
@@ -924,68 +953,121 @@ const App: React.FC = () => {
   const displayedSections = useMemo(() => {
     if (!isProfile) return sectionsData;
     const search = companySearchTerm.trim().toLowerCase();
-    if (!search) return companySectionsData;
-    return companySectionsData.filter((section) => section.title.toLowerCase().includes(search));
-  }, [isProfile, sectionsData, companySectionsData, companySearchTerm]);
-
-  useEffect(() => {
-    if (displayedSections.length === 0) return;
-    const currentSection = displayedSections.find((section) => section.id === selectedSectionId);
-    if (!currentSection) {
-      const firstSection = displayedSections[0];
-      setSelectedSectionId(firstSection.id);
-      setSelectedPattern(firstSection.patterns[0] || { id: '', name: 'No Patterns', questions: [] });
-      setOpenSections([firstSection.id]);
-      return;
-    }
-    const activePattern = currentSection.patterns.find((pattern) => pattern.id === selectedPattern.id);
-    if (!activePattern && currentSection.patterns[0]) {
-      setSelectedPattern(currentSection.patterns[0]);
-      return;
-    }
-    if (activePattern && activePattern !== selectedPattern) {
-      setSelectedPattern(activePattern);
-    }
-  }, [displayedSections, selectedSectionId, selectedPattern]);
+    const bucketSections = companyBucketSections[companyTimeFilter] || [];
+    if (!search) return bucketSections;
+    return bucketSections.filter((section) => section.title.toLowerCase().includes(search));
+  }, [isProfile, sectionsData, companyBucketSections, companySearchTerm, companyTimeFilter]);
 
   const filteredPatternQuestions = useMemo(() => {
     if (displayedSections.length === 0) {
       return [];
     }
-    return selectedPattern.questions;
-  }, [displayedSections.length, selectedPattern.questions]);
+    const activeSection = displayedSections.find((section) => section.id === selectedSectionId);
+    const activePattern = activeSection?.patterns.find((pattern) => pattern.id === selectedPattern.id);
+    return activePattern?.questions || [];
+  }, [displayedSections, selectedPattern.id, selectedSectionId]);
+
+  const selectedSection = useMemo(() => {
+    const current = displayedSections.find((section) => section.id === selectedSectionId);
+    if (current || !isProfile) return current;
+    return companyBucketSections.all.find((section) => section.id === selectedSectionId);
+  }, [companyBucketSections.all, displayedSections, isProfile, selectedSectionId]);
+
+  const hasActiveQuestionSelection = Boolean(selectedSectionId && selectedPattern.id);
+
+  const companySummaries = useMemo(() => {
+    const search = companySearchTerm.trim().toLowerCase();
+    const allSections = companyBucketSections.all || [];
+    return allSections
+      .filter((section) => !search || section.title.toLowerCase().includes(search))
+      .map((section) => {
+        const bucketCounts = COMPANY_TIME_FILTERS.reduce<Record<CompanyTimeFilter, number>>((acc, [bucket]) => {
+          const bucketSection = companyBucketSections[bucket].find((item) => item.id === section.id);
+          acc[bucket] = bucketSection?.patterns[0]?.questions.length || 0;
+          return acc;
+        }, { all: 0, '30d': 0, '3m': 0, '6m': 0 });
+        const solved = section.patterns[0]?.questions.filter((q) => completedMap[q.id]).length || 0;
+        return {
+          section,
+          pattern: section.patterns[0] || EMPTY_PATTERN,
+          bucketCounts,
+          solved
+        };
+      });
+  }, [companyBucketSections, companySearchTerm, completedMap]);
+
+  const selectPattern = (section: Section, pattern: Pattern) => {
+    setSelectedSectionId(section.id);
+    setSelectedPattern(pattern);
+    setOpenSections(prev => prev.includes(section.id) ? prev : [...prev, section.id]);
+    setIsSidebarOpen(false);
+    goSyllabus();
+  };
+
+  const selectCompany = (section: Section) => {
+    const pattern = section.patterns[0] || EMPTY_PATTERN;
+    setSelectedSectionId(section.id);
+    setSelectedPattern(pattern);
+    setOpenSections([section.id]);
+    setIsSidebarOpen(false);
+    goProfile();
+  };
+
+  const backToPatternPicker = () => {
+    setSelectedSectionId('');
+    setSelectedPattern(EMPTY_PATTERN);
+  };
+
+  const backToCompanyPicker = () => {
+    setSelectedSectionId('');
+    setSelectedPattern(EMPTY_PATTERN);
+  };
+
+  const theme = {
+    app: themeMode === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-[#020617] text-slate-200',
+    shell: themeMode === 'light' ? 'bg-white border-slate-200' : 'bg-[#0f172a] border-slate-800/60',
+    header: themeMode === 'light' ? 'bg-slate-100/85 border-slate-200' : 'bg-[#020617]/80 border-slate-800/60',
+    panel: themeMode === 'light' ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-900/40 border-slate-800/80',
+    panelStrong: themeMode === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800/80',
+    text: themeMode === 'light' ? 'text-slate-900' : 'text-white',
+    muted: themeMode === 'light' ? 'text-slate-500' : 'text-slate-500',
+    subtle: themeMode === 'light' ? 'text-slate-600' : 'text-slate-400',
+    input: themeMode === 'light' ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400' : 'bg-slate-950 border-slate-800 text-slate-200 placeholder:text-slate-600'
+  };
 
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
     <>
-      <div className="mb-8 flex flex-wrap items-center gap-3">
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{showCompanyFilters ? 'Companies' : 'View Settings'}</span>
-        <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <button
+          onClick={showCompanyFilters ? backToCompanyPicker : backToPatternPicker}
+          className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
+        >
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+          Back
+        </button>
+        <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme.muted}`}>{showCompanyFilters ? selectedSection?.title || 'Company' : selectedPattern.name || 'Pattern'}</span>
+        <div className={`flex p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
           {([
-            ['list', 'List View'],
-            ['small', 'Small Icons'],
-            ['big', 'Big Icons']
+            ['list', 'Compact'],
+            ['small', 'Tiles'],
+            ['big', 'Focus']
           ] as const).map(([mode, label]) => (
             <button
               key={mode}
               onClick={() => setGridView(mode)}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
             >
               {label}
             </button>
           ))}
         </div>
         {showCompanyFilters && (
-          <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
-            {([
-              ['all', 'All'],
-              ['30d', '30 Days'],
-              ['3m', '3 Months'],
-              ['6m', '6 Months']
-            ] as const).map(([value, label]) => (
+          <div className={`flex p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
+            {COMPANY_TIME_FILTERS.map(([value, label]) => (
               <button
                 key={value}
                 onClick={() => setCompanyTimeFilter(value)}
-                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : `${theme.muted} hover:text-emerald-500`}`}
               >
                 {label}
               </button>
@@ -993,88 +1075,231 @@ const App: React.FC = () => {
           </div>
         )}
       </div>
-      <div className={`pb-32 ${gridView === 'list' ? 'flex flex-col gap-3 sm:gap-4 max-w-4xl' : gridView === 'small' ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6'}`}>
+      {filteredPatternQuestions.length === 0 ? (
+        <div className={`rounded-3xl border p-10 text-center ${theme.panel}`}>
+          <p className={`text-sm font-bold ${theme.subtle}`}>No questions found for this selection and time range.</p>
+        </div>
+      ) : (
+      <div className={`pb-32 ${gridView === 'list' ? 'grid grid-cols-1 gap-2 max-w-5xl' : gridView === 'small' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4'}`}>
         {filteredPatternQuestions.map(q => {
           const timestamp = completedMap[q.id];
           const done = !!timestamp;
           const hasSolution = Boolean(solutionMap[q.id] && solutionMap[q.id].trim().length > 0);
           const neutralCardClass = showCompanyFilters
             ? (done
-              ? 'bg-slate-900/65 border-slate-700/60'
-              : 'bg-slate-900/45 border-slate-700/60 hover:border-slate-600')
+              ? themeMode === 'light' ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-900/65 border-slate-700/60'
+              : themeMode === 'light' ? 'bg-white border-slate-200 hover:border-slate-300' : 'bg-slate-900/45 border-slate-700/60 hover:border-slate-600')
             : (done
-              ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5'
-              : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600');
+              ? themeMode === 'light' ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5'
+              : themeMode === 'light' ? 'bg-white border-slate-200 hover:border-slate-300' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600');
+          const isCompact = gridView === 'list';
           return (
-            <div key={q.id} className={`group relative border transition-all duration-500 ${gridView === 'small' ? 'p-4 sm:p-5 rounded-2xl sm:rounded-3xl' : gridView === 'list' ? 'p-3.5 sm:p-5 rounded-2xl' : 'p-5 sm:p-8 rounded-3xl sm:rounded-[2.5rem] sm:hover:-translate-y-1'} ${neutralCardClass}`}>
-              <div className={`flex flex-col h-full ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
-                <div className={`flex items-start ${gridView === 'small' ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-6'}`}>
+            <div key={q.id} className={`group relative border transition-all duration-300 ${isCompact ? 'min-h-[68px] rounded-2xl p-3' : gridView === 'small' ? 'h-[132px] p-4 rounded-2xl' : 'h-[174px] p-5 rounded-3xl sm:hover:-translate-y-0.5'} ${neutralCardClass}`}>
+              <div className={`flex h-full ${isCompact ? 'items-center gap-3' : 'flex-col gap-3'}`}>
+                <div className={`flex min-w-0 flex-1 items-start ${isCompact ? 'gap-3' : 'gap-4'}`}>
                   <button
                     onClick={() => toggleQuestion(q)}
-                    className={`shrink-0 ${gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-12 h-12 rounded-2xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
+                    className={`shrink-0 ${isCompact || gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-11 h-11 rounded-2xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white' : themeMode === 'light' ? 'bg-slate-50 border-slate-300 text-slate-300 hover:border-slate-500' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
                   >
-                    <svg className={`${gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-7 h-7'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                    <svg className={`${isCompact || gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-6 h-6'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                   </button>
-                  <div className="flex-1 min-w-0 pt-1">
-                    <div className={`flex items-start ${gridView === 'small' || isMobile ? 'gap-2' : 'gap-3'}`}>
-                      <a href={q.link} target="_blank" rel="noreferrer" className={`block min-w-0 flex-1 ${gridView === 'small' || isMobile ? 'text-[13px] sm:text-sm' : 'text-base sm:text-lg'} font-bold leading-tight mb-1.5 sm:mb-2 transition-all ${done ? 'text-slate-600 line-through opacity-60 italic' : 'text-slate-100 group-hover:text-indigo-400'}`}>{q.title}</a>
-                      <div className={`shrink-0 flex items-center ${gridView === 'small' || isMobile ? 'gap-1' : 'gap-1.5'}`}>
-                        <button
-                          onClick={() => openOfficialSolution(q)}
-                          title="View official English and Java solution"
-                          className={`${gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 transition-all hover:border-indigo-400 hover:bg-indigo-500/20`}
-                        >
-                          <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.75v10.5M8.25 9.75h7.5M5.25 4.5h13.5A1.5 1.5 0 0120.25 6v13.5l-3.75-2.25-4.5 2.25-4.5-2.25-3.75 2.25V6a1.5 1.5 0 011.5-1.5z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => openSolutionEditor(q)}
-                          title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
-                          className={`${gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border transition-all ${hasSolution ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'}`}
-                        >
-                          <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <span className="text-[10px] font-bold text-slate-700 font-mono tracking-tighter">LC #{q.id}</span>
+                  <div className="min-w-0 flex-1">
+                    <a
+                      href={q.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={q.title}
+                      className={`block min-w-0 overflow-hidden ${isCompact ? 'max-h-[38px] text-[13px]' : gridView === 'small' ? 'max-h-[56px] text-sm' : 'max-h-[72px] text-base'} font-bold leading-tight transition-all ${done ? 'text-slate-500 line-through opacity-70 italic' : themeMode === 'light' ? 'text-slate-900 group-hover:text-indigo-600' : 'text-slate-100 group-hover:text-indigo-400'}`}
+                    >
+                      {q.title}
+                    </a>
+                    <div className={`mt-2 flex flex-wrap items-center gap-2 ${isCompact ? 'text-[9px]' : 'text-[10px]'}`}>
+                      <span className="font-bold text-slate-500 font-mono tracking-tighter">LC #{q.id}</span>
                       <DifficultyBadge diff={q.difficulty} />
+                      {done && isCompact && <span className="hidden sm:inline font-bold text-emerald-500">{formatDate(timestamp)}</span>}
                     </div>
                   </div>
                 </div>
-                {done && gridView !== 'small' && (
-                  <div className="flex flex-col gap-1 border-t border-emerald-500/10 pt-3 sm:pt-4 animate-in fade-in slide-in-from-top-1 duration-700">
-                    <span className="text-[8px] font-black uppercase text-emerald-500/50 tracking-[0.2em]">Last Updated</span>
-                    <span className="text-[10px] font-bold text-slate-400 font-mono italic">{formatDate(timestamp)}</span>
+                <div className={`shrink-0 flex items-center ${isCompact ? 'gap-1.5' : 'justify-between border-t border-slate-700/20 pt-2 gap-2'}`}>
+                  {!isCompact && done && (
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-[8px] font-black uppercase text-emerald-500/50 tracking-[0.2em]">Updated</span>
+                      <span className="block truncate text-[10px] font-bold text-slate-500 font-mono italic">{formatDate(timestamp)}</span>
+                    </div>
+                  )}
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <button
+                      onClick={() => openOfficialSolution(q)}
+                      title="View official English and Java solution"
+                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 transition-all hover:border-indigo-400 hover:bg-indigo-500/20`}
+                    >
+                      <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.75v10.5M8.25 9.75h7.5M5.25 4.5h13.5A1.5 1.5 0 0120.25 6v13.5l-3.75-2.25-4.5 2.25-4.5-2.25-3.75 2.25V6a1.5 1.5 0 011.5-1.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => openSolutionEditor(q)}
+                      title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
+                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border transition-all ${hasSolution ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : themeMode === 'light' ? 'text-slate-500 border-slate-300 bg-slate-50 hover:text-indigo-500 hover:border-indigo-400' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'}`}
+                    >
+                      <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
+                      </svg>
+                    </button>
                   </div>
-                )}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
+      )}
     </>
   );
 
+  const renderPatternPicker = () => (
+    <div className="pb-32 space-y-8">
+      <div className={`rounded-3xl border p-6 md:p-8 ${theme.panel}`}>
+        <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Choose Pattern</p>
+        <h3 className={`mt-2 text-2xl font-black tracking-tight ${theme.text}`}>Pick a syllabus pattern to start</h3>
+        <p className={`mt-2 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Questions stay hidden until you choose a pattern. Your last progress and notes remain linked by LeetCode ID.</p>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        {sectionsData.map((section) => {
+          const stat = sectionStats.find((item) => item.id === section.id);
+          const pct = stat && stat.total > 0 ? Math.round((stat.solved / stat.total) * 100) : 0;
+          return (
+            <section key={section.id} className={`rounded-3xl border p-5 ${theme.panel}`}>
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <h4 className={`truncate text-lg font-black tracking-tight ${theme.text}`}>{section.title}</h4>
+                  <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{stat?.solved || 0}/{stat?.total || 0} solved</p>
+                </div>
+                <span className="shrink-0 rounded-2xl border border-indigo-500/25 bg-indigo-500/10 px-3 py-1.5 text-[10px] font-black text-indigo-400">{pct}%</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-slate-800/20 overflow-hidden mb-4">
+                <div className="h-full bg-indigo-500 transition-all duration-700" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {section.patterns.map((pattern) => {
+                  const doneCount = pattern.questions.filter((q) => completedMap[q.id]).length;
+                  const total = pattern.questions.length;
+                  const patternPct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+                  return (
+                    <button
+                      key={pattern.id}
+                      onClick={() => selectPattern(section, pattern)}
+                      className={`h-[76px] rounded-2xl border p-3 text-left transition-all hover:-translate-y-0.5 ${themeMode === 'light' ? 'border-slate-200 bg-slate-50 hover:border-indigo-300' : 'border-slate-800 bg-slate-950/45 hover:border-indigo-500/40'}`}
+                    >
+                      <div className="flex h-full flex-col justify-between">
+                        <span title={pattern.name} className={`line-clamp-2 text-sm font-black leading-tight ${theme.text}`}>{pattern.name}</span>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[9px] font-black uppercase tracking-widest ${theme.muted}`}>{total} Qs</span>
+                          <span className="text-[10px] font-black font-mono text-indigo-400">{patternPct}%</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderCompanyPicker = () => (
+    <div className="pb-32 space-y-6">
+      <div className={`rounded-3xl border p-6 md:p-8 ${theme.panel}`}>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Company Bank</p>
+            <h3 className={`mt-2 text-2xl font-black tracking-tight ${theme.text}`}>Select a company first</h3>
+            <p className={`mt-2 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Time filters show availability, but questions open only after you enter a company.</p>
+          </div>
+          <div className="w-full lg:w-80">
+            <input
+              value={companySearchTerm}
+              onChange={(e) => setCompanySearchTerm(e.target.value)}
+              placeholder="Search companies..."
+              className={`w-full rounded-2xl border px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${theme.input}`}
+            />
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-2">
+          {COMPANY_TIME_FILTERS.map(([bucket, label]) => {
+            const count = companyBucketSections[bucket].length;
+            return (
+              <button
+                key={bucket}
+                onClick={() => setCompanyTimeFilter(bucket)}
+                className={`rounded-2xl border px-4 py-3 text-left transition-all ${companyTimeFilter === bucket ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : `${theme.panelStrong} ${theme.subtle}`}`}
+              >
+                <span className="block text-[10px] font-black uppercase tracking-widest">{label}</span>
+                <span className="mt-1 block text-lg font-black">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {companySummaries.map(({ section, bucketCounts, solved }) => {
+          const activeCount = bucketCounts[companyTimeFilter];
+          const allCount = bucketCounts.all;
+          const pct = allCount > 0 ? Math.round((solved / allCount) * 100) : 0;
+          return (
+            <button
+              key={section.id}
+              onClick={() => selectCompany(section)}
+              className={`h-[132px] rounded-3xl border p-4 text-left transition-all hover:-translate-y-0.5 ${themeMode === 'light' ? 'border-slate-200 bg-white hover:border-emerald-300 shadow-sm' : 'border-slate-800 bg-slate-900/45 hover:border-emerald-500/40'}`}
+            >
+              <div className="flex h-full flex-col justify-between">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h4 title={section.title} className={`truncate text-lg font-black tracking-tight ${theme.text}`}>{section.title}</h4>
+                    <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{activeCount} in {COMPANY_TIME_FILTERS.find(([bucket]) => bucket === companyTimeFilter)?.[1]}</p>
+                  </div>
+                  <span className="shrink-0 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">{pct}%</span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {COMPANY_TIME_FILTERS.map(([bucket, label]) => {
+                    const height = allCount > 0 ? Math.max(8, Math.round((bucketCounts[bucket] / allCount) * 34)) : 8;
+                    return (
+                      <div key={bucket} title={`${label}: ${bucketCounts[bucket]}`} className="flex flex-col items-center gap-1">
+                        <div className="flex h-9 w-full items-end rounded-lg bg-slate-500/10 px-1">
+                          <div className={`w-full rounded-md ${bucket === companyTimeFilter ? 'bg-emerald-500' : 'bg-indigo-500/70'}`} style={{ height }} />
+                        </div>
+                        <span className={`text-[8px] font-black uppercase ${theme.muted}`}>{bucket === 'all' ? 'All' : bucket}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-indigo-500/30">
+    <div className={`flex flex-col md:flex-row min-h-screen font-sans selection:bg-indigo-500/30 ${theme.app}`}>
       
       {/* Sidebar Navigation */}
       <aside className={`
-        fixed md:sticky top-0 left-0 h-screen bg-[#0f172a] border-r border-slate-800/60 flex flex-col z-50
+        fixed md:sticky top-0 left-0 h-screen border-r flex flex-col z-50 ${theme.shell}
         transition-all duration-500 md:translate-x-0 ${isSidebarCollapsed ? 'md:w-24' : 'md:w-80'} w-80
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <div className={`${isSidebarCollapsed ? 'p-4' : 'p-8'} border-b border-slate-800/40`}>
+        <div className={`${isSidebarCollapsed ? 'p-4' : 'p-8'} border-b ${themeMode === 'light' ? 'border-slate-200' : 'border-slate-800/40'}`}>
           <div className="flex items-center justify-between gap-2">
-            {!isSidebarCollapsed && <h1 className="text-2xl font-black text-white tracking-tighter mb-2 underline decoration-indigo-500 underline-offset-8">DSA ENGINE</h1>}
-            {isSidebarCollapsed && <h1 className="text-lg font-black text-white tracking-tighter">DSA</h1>}
+            {!isSidebarCollapsed && <h1 className={`text-2xl font-black tracking-tighter mb-2 underline decoration-indigo-500 underline-offset-8 ${theme.text}`}>DSA ENGINE</h1>}
+            {isSidebarCollapsed && <h1 className={`text-lg font-black tracking-tighter ${theme.text}`}>DSA</h1>}
             <button
               onClick={() => setIsSidebarCollapsed(prev => !prev)}
-              className="hidden md:flex p-2 bg-slate-900 rounded-xl border border-slate-800 text-slate-400 hover:text-slate-200"
+              className={`hidden md:flex p-2 rounded-xl border ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
               title={isSidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
             >
               <svg className={`w-4 h-4 transition-transform ${isSidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -1083,7 +1308,7 @@ const App: React.FC = () => {
           <div className="mt-4 flex flex-col gap-2">
             <button onClick={() => setShowWelcome(true)} className="flex items-center gap-2 group w-fit text-left">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              {!isSidebarCollapsed && <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] group-hover:text-white transition-colors">@{handle || 'guest'}</span>}
+              {!isSidebarCollapsed && <span className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${theme.muted} group-hover:text-indigo-400`}>@{handle || 'guest'}</span>}
             </button>
           </div>
         </div>
@@ -1095,7 +1320,7 @@ const App: React.FC = () => {
                 value={companySearchTerm}
                 onChange={(e) => setCompanySearchTerm(e.target.value)}
                 placeholder="Search companies..."
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-bold text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                className={`w-full rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${theme.input}`}
               />
             </div>
           )}
@@ -1113,7 +1338,7 @@ const App: React.FC = () => {
               {openSections.includes(section.id) && !isSidebarCollapsed && (
                 <div className="space-y-1 ml-2">
                   {section.patterns.map(pattern => {
-                    const active = selectedPattern.id === pattern.id;
+                    const active = selectedSectionId === section.id && selectedPattern.id === pattern.id;
                     const doneCount = pattern.questions.filter(q => completedMap[q.id]).length;
                     const total = pattern.questions.length;
                     const pct = Math.round((doneCount/total)*100);
@@ -1121,14 +1346,13 @@ const App: React.FC = () => {
                       <button 
                         key={pattern.id} 
                         onClick={() => {
-                          setSelectedPattern(pattern);
-                          setSelectedSectionId(section.id);
-                          if (!isProfile) {
-                            goSyllabus();
+                          if (isProfile) {
+                            selectCompany(section);
+                          } else {
+                            selectPattern(section, pattern);
                           }
-                          setIsSidebarOpen(false);
                         }}
-                        className={`w-full group px-4 py-3 rounded-2xl text-[12px] text-left transition-all border ${active ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-lg shadow-indigo-500/5' : 'text-slate-500 hover:bg-slate-800/40 border-transparent'}`}
+                        className={`w-full group px-4 py-3 rounded-2xl text-[12px] text-left transition-all border ${active ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-lg shadow-indigo-500/5' : `${theme.muted} ${themeMode === 'light' ? 'hover:bg-slate-100' : 'hover:bg-slate-800/40'} border-transparent`}`}
                       >
                         <div className="flex justify-between items-center mb-2">
                           <span className="truncate font-bold tracking-tight pr-4">{isProfile ? section.title : pattern.name}</span>
@@ -1146,10 +1370,10 @@ const App: React.FC = () => {
           ))}
         </nav>
 
-        <div className={`${isSidebarCollapsed ? 'p-4' : 'p-8'} bg-slate-900/50 border-t border-slate-800/40`}>
+        <div className={`${isSidebarCollapsed ? 'p-4' : 'p-8'} border-t ${themeMode === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/50 border-slate-800/40'}`}>
            <div className="flex justify-between items-end mb-3">
               <span className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Overall Progress</span>
-              <span className="text-xl font-black text-white">{overallPercent}%</span>
+              <span className={`text-xl font-black ${theme.text}`}>{overallPercent}%</span>
            </div>
            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-1000" style={{ width: `${overallPercent}%` }} />
@@ -1159,18 +1383,18 @@ const App: React.FC = () => {
 
       {/* Main Viewport */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="px-8 py-6 md:px-14 md:py-8 border-b border-slate-800/60 bg-[#020617]/80 backdrop-blur-2xl z-20 sticky top-0">
+        <header className={`px-8 py-6 md:px-14 md:py-8 border-b backdrop-blur-2xl z-20 sticky top-0 ${theme.header}`}>
           <div className="flex items-center justify-between gap-8">
             <div className="flex items-center gap-6">
-              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3 bg-slate-900 rounded-2xl border border-slate-800 text-slate-400">
+              <button onClick={() => setIsSidebarOpen(true)} className={`md:hidden p-3 rounded-2xl border ${theme.panelStrong} ${theme.subtle}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
               </button>
-              <button onClick={() => setIsSidebarCollapsed(prev => !prev)} className="hidden md:flex p-3 bg-slate-900 rounded-2xl border border-slate-800 text-slate-400">
+              <button onClick={() => setIsSidebarCollapsed(prev => !prev)} className={`hidden md:flex p-3 rounded-2xl border ${theme.panelStrong} ${theme.subtle}`}>
                 <svg className={`w-5 h-5 transition-transform ${isSidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
               </button>
               <div>
-                <h2 className="text-xl md:text-2xl font-black text-white tracking-tighter">
-                  {isProfile ? 'Companies' : isSyllabus ? (selectedPattern.name || 'Syllabus') : 'Objective Selection'}
+                <h2 className={`text-xl md:text-2xl font-black tracking-tighter ${theme.text}`}>
+                  {isProfile ? (hasActiveQuestionSelection ? selectedSection?.title || 'Companies' : 'Companies') : isSyllabus ? (hasActiveQuestionSelection ? selectedPattern.name : 'Syllabus') : 'Objective Selection'}
                 </h2>
                 <div className="flex items-center gap-3 mt-1.5">
                    <CloudStatus status={syncStatus} />
@@ -1189,33 +1413,44 @@ const App: React.FC = () => {
                     <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
                   ))}
                </div>
+               <button
+                 onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+                 className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition-all ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
+                 title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+               >
+                 {themeMode === 'dark' ? (
+                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36l-1.42-1.42M7.06 7.06 5.64 5.64m12.72 0-1.42 1.42M7.06 16.94l-1.42 1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" /></svg>
+                 ) : (
+                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8Z" /></svg>
+                 )}
+               </button>
 
                {/* Header Mode Switcher */}
-               <div className="flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
+               <div className={`flex p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
                   <button
                     onClick={goMain}
-                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
                   >
                     Main
                   </button>
                   <button
                     onClick={goProfile}
-                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
                   >
                     Companies
                   </button>
                </div>
                {!isProfile && (
-                 <div className="hidden sm:flex p-1 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-inner">
+                 <div className={`hidden sm:flex p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
                     <button 
                       onClick={goSyllabus}
-                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isSyllabus ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isSyllabus ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
                     >
                       Syllabus
                     </button>
                     <button 
                       onClick={goRoulette}
-                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRoulette ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRoulette ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
                     >
                       Roulette
                     </button>
@@ -1227,9 +1462,9 @@ const App: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-8 md:p-14 custom-scrollbar">
            {isProfile ? (
-             renderQuestionGrid(true)
+             hasActiveQuestionSelection ? renderQuestionGrid(true) : renderCompanyPicker()
            ) : isSyllabus ? (
-             renderQuestionGrid(false)
+             hasActiveQuestionSelection ? renderQuestionGrid(false) : renderPatternPicker()
            ) : (
              <div className="h-full flex flex-col items-center pt-10 md:pt-16 px-4">
                 
