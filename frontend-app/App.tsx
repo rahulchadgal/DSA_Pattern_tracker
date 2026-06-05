@@ -44,6 +44,17 @@ interface QuestionProgressMetadata {
 type CompanyTimeFilter = 'all' | '30d' | '3m' | '6m';
 type CompanyBucketSections = Record<CompanyTimeFilter, Section[]>;
 
+interface CompanyMention {
+  company: string;
+  buckets: CompanyTimeFilter[];
+}
+
+interface SearchQuestionResult {
+  question: Question;
+  sourceLabels: string[];
+  companies: CompanyMention[];
+}
+
 const CATEGORY_OPTIONS = [
   'Dynamic Programming',
   'Sliding Window',
@@ -300,6 +311,9 @@ const App: React.FC = () => {
   const pendingProgressRef = useRef<Record<string, { completed: boolean; solutionRichText: string | null }>>({});
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
   const [companySearchTerm, setCompanySearchTerm] = useState('');
+  const [questionSearchQuery, setQuestionSearchQuery] = useState('');
+  const [isQuestionSearchOpen, setIsQuestionSearchOpen] = useState(false);
+  const [selectedSearchQuestion, setSelectedSearchQuestion] = useState<SearchQuestionResult | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [authUsername, setAuthUsername] = useState(handle);
   const [authPassword, setAuthPassword] = useState('');
@@ -996,6 +1010,114 @@ const App: React.FC = () => {
       });
   }, [companyBucketSections, companySearchTerm, completedMap]);
 
+  const companiesByQuestionId = useMemo(() => {
+    const bucketOrder = COMPANY_TIME_FILTERS.map(([bucket]) => bucket);
+    const byQuestion = new Map<string, Map<string, Set<CompanyTimeFilter>>>();
+
+    COMPANY_TIME_FILTERS.forEach(([bucket]) => {
+      companyBucketSections[bucket].forEach((section) => {
+        section.patterns.forEach((pattern) => {
+          pattern.questions.forEach((question) => {
+            const questionId = normalizeQuestionId(question.id);
+            let companyMap = byQuestion.get(questionId);
+            if (!companyMap) {
+              companyMap = new Map<string, Set<CompanyTimeFilter>>();
+              byQuestion.set(questionId, companyMap);
+            }
+
+            const buckets = companyMap.get(section.title) || new Set<CompanyTimeFilter>();
+            buckets.add(bucket);
+            companyMap.set(section.title, buckets);
+          });
+        });
+      });
+    });
+
+    return new Map(Array.from(byQuestion.entries()).map(([questionId, companyMap]) => [
+      questionId,
+      Array.from(companyMap.entries())
+        .map(([company, buckets]) => ({
+          company,
+          buckets: Array.from(buckets).sort((a, b) => bucketOrder.indexOf(a) - bucketOrder.indexOf(b))
+        }))
+        .sort((a, b) => a.company.localeCompare(b.company))
+    ]));
+  }, [companyBucketSections]);
+
+  const allQuestionSearchItems = useMemo(() => {
+    const byId = new Map<string, { question: Question; sourceLabels: Set<string> }>();
+    const addQuestion = (question: Question, sourceLabel: string) => {
+      const questionId = normalizeQuestionId(question.id);
+      const existing = byId.get(questionId);
+      if (existing) {
+        existing.sourceLabels.add(sourceLabel);
+        return;
+      }
+      byId.set(questionId, {
+        question: { ...question, id: questionId },
+        sourceLabels: new Set([sourceLabel])
+      });
+    };
+
+    sectionsData.forEach((section) => {
+      section.patterns.forEach((pattern) => {
+        pattern.questions.forEach((question) => addQuestion(question, `${section.title} / ${pattern.name}`));
+      });
+    });
+
+    companyBucketSections.all.forEach((section) => {
+      section.patterns.forEach((pattern) => {
+        pattern.questions.forEach((question) => addQuestion(question, 'Company bank'));
+      });
+    });
+
+    return Array.from(byId.values()).sort((a, b) => Number(a.question.id) - Number(b.question.id));
+  }, [companyBucketSections.all, sectionsData]);
+
+  const questionSearchResults = useMemo<SearchQuestionResult[]>(() => {
+    const rawQuery = questionSearchQuery.trim();
+    if (!rawQuery) return [];
+
+    const query = rawQuery.toLowerCase();
+    const normalizedQuery = normalizeQuestionId(rawQuery).toLowerCase();
+
+    return allQuestionSearchItems
+      .map((item) => {
+        const id = item.question.id.toLowerCase();
+        const title = item.question.title.toLowerCase();
+        const fullTitle = item.question.fullTitle.toLowerCase();
+        let score: number | null = null;
+
+        if (id === normalizedQuery) score = 0;
+        else if (id.startsWith(normalizedQuery)) score = 1;
+        else if (title.startsWith(query)) score = 2;
+        else if (title.includes(query)) score = 3;
+        else if (fullTitle.includes(query)) score = 4;
+
+        if (score === null) return null;
+
+        return {
+          score,
+          question: item.question,
+          sourceLabels: Array.from(item.sourceLabels),
+          companies: companiesByQuestionId.get(item.question.id) || []
+        };
+      })
+      .filter((item): item is SearchQuestionResult & { score: number } => Boolean(item))
+      .sort((a, b) => a.score - b.score || Number(a.question.id) - Number(b.question.id))
+      .slice(0, 8)
+      .map(({ score: _score, ...item }) => item);
+  }, [allQuestionSearchItems, companiesByQuestionId, questionSearchQuery]);
+
+  const openSearchQuestion = (result: SearchQuestionResult) => {
+    setSelectedSearchQuestion(result);
+    setIsQuestionSearchOpen(false);
+  };
+
+  const closeSearchQuestion = () => {
+    setSelectedSearchQuestion(null);
+  };
+
   const selectPattern = (section: Section, pattern: Pattern) => {
     setSelectedSectionId(section.id);
     setSelectedPattern(pattern);
@@ -1033,6 +1155,83 @@ const App: React.FC = () => {
     muted: themeMode === 'light' ? 'text-slate-500' : 'text-slate-500',
     subtle: themeMode === 'light' ? 'text-slate-600' : 'text-slate-400',
     input: themeMode === 'light' ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400' : 'bg-slate-950 border-slate-800 text-slate-200 placeholder:text-slate-600'
+  };
+
+  const renderGlobalQuestionSearch = () => {
+    const query = questionSearchQuery.trim();
+    const showResults = isQuestionSearchOpen && query.length > 0;
+
+    return (
+      <div className="relative w-full max-w-2xl xl:flex-1">
+        <div className={`flex h-12 items-center gap-3 rounded-2xl border px-4 shadow-inner transition-all focus-within:ring-2 focus-within:ring-indigo-500/30 ${theme.input}`}>
+          <svg className="h-4 w-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 21-4.35-4.35M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z" />
+          </svg>
+          <input
+            value={questionSearchQuery}
+            onChange={(e) => {
+              setQuestionSearchQuery(e.target.value);
+              setIsQuestionSearchOpen(true);
+            }}
+            onFocus={() => setIsQuestionSearchOpen(true)}
+            placeholder="Search LC ID or question name..."
+            className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none placeholder:text-slate-500"
+          />
+          {questionSearchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuestionSearchQuery('');
+                setIsQuestionSearchOpen(false);
+              }}
+              className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-400"
+              title="Clear question search"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {showResults && (
+          <div className={`absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[80] max-h-[420px] overflow-y-auto rounded-2xl border p-2 shadow-2xl ${themeMode === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-950'}`}>
+            {questionSearchResults.length === 0 ? (
+              <div className={`p-4 text-sm font-bold ${theme.subtle}`}>No matching questions found.</div>
+            ) : (
+              questionSearchResults.map((result) => {
+                const companyCount = result.companies.length;
+                const sourcePreview = result.sourceLabels.slice(0, 2).join(' • ');
+                return (
+                  <button
+                    key={result.question.id}
+                    type="button"
+                    onClick={() => openSearchQuestion(result)}
+                    className={`w-full rounded-xl p-3 text-left transition-all ${themeMode === 'light' ? 'hover:bg-slate-100' : 'hover:bg-slate-900'}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className={`truncate text-sm font-black ${theme.text}`}>{result.question.title}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-[10px] font-black text-slate-500">LC #{result.question.id}</span>
+                          <DifficultyBadge diff={result.question.difficulty} />
+                        </div>
+                      </div>
+                      {companyCount > 0 && (
+                        <span className="shrink-0 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">
+                          {companyCount} co
+                        </span>
+                      )}
+                    </div>
+                    <p className={`mt-2 truncate text-[10px] font-bold ${theme.muted}`}>
+                      {companyCount > 0 ? `Asked by ${result.companies.slice(0, 3).map((item) => item.company).join(', ')}` : sourcePreview}
+                    </p>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
@@ -1384,7 +1583,7 @@ const App: React.FC = () => {
       {/* Main Viewport */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className={`px-8 py-6 md:px-14 md:py-8 border-b backdrop-blur-2xl z-20 sticky top-0 ${theme.header}`}>
-          <div className="flex items-center justify-between gap-8">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-center gap-6">
               <button onClick={() => setIsSidebarOpen(true)} className={`md:hidden p-3 rounded-2xl border ${theme.panelStrong} ${theme.subtle}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -1406,8 +1605,10 @@ const App: React.FC = () => {
                 <WakeBanner visible={isBackendWaking} />
               </div>
             </div>
+
+            {renderGlobalQuestionSearch()}
             
-            <div className="flex items-center gap-6">
+            <div className="flex flex-wrap items-center gap-4 xl:justify-end">
                <div className="hidden lg:flex gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800/50">
                   {(Object.entries(globalStats) as [string, { total: number; solved: number }][]).map(([diff, data]) => (
                     <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
@@ -1545,6 +1746,87 @@ const App: React.FC = () => {
            )}
         </div>
       </main>
+
+      {selectedSearchQuestion && (
+        <div className="fixed inset-0 z-[105] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
+          <div className={`mx-auto my-4 w-full max-w-4xl rounded-[2rem] border p-6 shadow-2xl md:my-8 md:p-8 ${themeMode === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-[#0f172a]'}`}>
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Question Lookup</p>
+                <h3 className={`mt-2 text-2xl font-black tracking-tight ${theme.text}`}>{selectedSearchQuestion.question.title}</h3>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs font-black text-slate-500">LC #{selectedSearchQuestion.question.id}</span>
+                  <DifficultyBadge diff={selectedSearchQuestion.question.difficulty} />
+                </div>
+              </div>
+              <button
+                onClick={closeSearchQuestion}
+                className={`shrink-0 rounded-xl border px-3 py-2 text-sm font-black ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
+                title="Close question lookup"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="mb-6 flex flex-wrap gap-2">
+              <a
+                href={selectedSearchQuestion.question.link}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20"
+              >
+                Open LeetCode
+              </a>
+              <button
+                type="button"
+                onClick={() => openOfficialSolution(selectedSearchQuestion.question)}
+                className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20"
+              >
+                Official Solution
+              </button>
+              <button
+                type="button"
+                onClick={() => openSolutionEditor(selectedSearchQuestion.question)}
+                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[10px] font-black uppercase tracking-widest ${solutionMap[selectedSearchQuestion.question.id] ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : themeMode === 'light' ? 'border-slate-300 bg-slate-50 text-slate-500 hover:text-indigo-500' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-indigo-300'}`}
+              >
+                {solutionMap[selectedSearchQuestion.question.id] ? 'Edit Note' : 'Add Note'}
+              </button>
+            </div>
+
+            <div className={`rounded-2xl border p-5 ${theme.panelStrong}`}>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h4 className={`text-sm font-black uppercase tracking-[0.2em] ${theme.text}`}>Asked By Companies</h4>
+                <span className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">
+                  {selectedSearchQuestion.companies.length}
+                </span>
+              </div>
+
+              {selectedSearchQuestion.companies.length === 0 ? (
+                <div className={`rounded-xl border border-dashed p-5 text-sm font-bold ${themeMode === 'light' ? 'border-slate-300 text-slate-500' : 'border-slate-700 text-slate-400'}`}>
+                  No company mentions are available for this question in the current company bank.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {selectedSearchQuestion.companies.map((mention) => (
+                    <div key={mention.company} className={`rounded-xl border p-3 ${themeMode === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-950/70'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className={`min-w-0 truncate text-sm font-black ${theme.text}`} title={mention.company}>{mention.company}</p>
+                        <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                          {mention.buckets.map((bucket) => (
+                            <span key={bucket} className={`rounded-lg px-2 py-0.5 text-[9px] font-black uppercase ${bucket === 'all' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                              {COMPANY_TIME_FILTERS.find(([value]) => value === bucket)?.[1] || bucket}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {officialSolutionQuestion && (
         <div className="fixed inset-0 z-[106] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
