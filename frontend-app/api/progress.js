@@ -4,6 +4,10 @@ import { ensureAuthSchema, requireUser } from '../server/auth.js';
 
 let schemaReadyPromise;
 
+function authStatus(message) {
+  return message === 'Unauthorized' || message === 'Invalid token' ? 401 : 500;
+}
+
 async function ensureSchema() {
   if (!schemaReadyPromise) {
     schemaReadyPromise = ensureAuthSchema().catch((error) => {
@@ -45,7 +49,7 @@ async function getProgress(req, res) {
     return sendJson(res, 200, result.rows);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load progress';
-    return sendError(res, message === 'Unauthorized' ? 401 : 500, message);
+    return sendError(res, authStatus(message), message);
   }
 }
 
@@ -119,6 +123,6 @@ async function upsertProgress(req, res) {
     return sendJson(res, 200, result.rows[0]);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to save progress';
-    return sendError(res, message === 'Unauthorized' ? 401 : 500, message);
+    return sendError(res, authStatus(message), message);
   }
 }

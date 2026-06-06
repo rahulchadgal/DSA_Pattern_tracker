@@ -9,6 +9,10 @@ function validateText(value, fieldName) {
   return value.trim();
 }
 
+function authStatus(message) {
+  return message === 'Unauthorized' || message === 'Invalid token' ? 401 : 500;
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     return listQuestions(req, res);
@@ -53,7 +57,7 @@ async function listQuestions(req, res) {
     return sendJson(res, 200, result.rows);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load questions';
-    return sendError(res, message === 'Unauthorized' ? 401 : 500, message);
+    return sendError(res, authStatus(message), message);
   }
 }
 
@@ -129,7 +133,7 @@ async function upsertQuestion(req, res) {
     return sendJson(res, 200, result.rows[0]);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to upsert question';
-    const status = message === 'Unauthorized' ? 401 : message.endsWith('is required') ? 400 : 500;
+    const status = message.endsWith('is required') ? 400 : authStatus(message);
     return sendError(res, status, message);
   }
 }
