@@ -1,6 +1,6 @@
 import pg from 'pg';
 
-const { Pool } = pg;
+const { Client, Pool } = pg;
 
 let pool;
 
@@ -70,18 +70,29 @@ function parseConnectionConfig(rawValue) {
   };
 }
 
-function buildPool() {
+function buildConnectionOptions() {
   const { connectionString, sslEnabled } = parseConnectionConfig(process.env.DATABASE_URL || process.env.DB_URL);
+
+  return {
+    connectionString,
+    ssl: sslEnabled ? { rejectUnauthorized: false } : undefined,
+    connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS || 5000)
+  };
+}
+
+function buildPool() {
   const max = Number(process.env.PG_POOL_MAX || 1);
 
   return new Pool({
-    connectionString,
-    ssl: sslEnabled ? { rejectUnauthorized: false } : undefined,
+    ...buildConnectionOptions(),
     max: Number.isFinite(max) && max > 0 ? max : 1,
     idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 5000),
-    connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS || 5000),
     allowExitOnIdle: true
   });
+}
+
+function shouldUsePool() {
+  return parseBoolean(process.env.PG_USE_POOL);
 }
 
 export function getPool() {
@@ -92,6 +103,16 @@ export function getPool() {
 }
 
 export async function query(text, params = []) {
-  const db = getPool();
-  return db.query(text, params);
+  if (shouldUsePool()) {
+    const db = getPool();
+    return db.query(text, params);
+  }
+
+  const client = new Client(buildConnectionOptions());
+  await client.connect();
+  try {
+    return await client.query(text, params);
+  } finally {
+    await client.end();
+  }
 }
