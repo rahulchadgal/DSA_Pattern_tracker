@@ -11,6 +11,7 @@ Client (`frontend-app/.env`):
 Serverless (`Vercel Project > Settings > Environment Variables`):
 - `DATABASE_URL` (recommended) as Postgres URL
 - `DB_URL` (optional compatibility) if you want to reuse JDBC-style value
+- `DB_USERNAME` and `DB_PASSWORD` when `DB_URL` does not already include credentials
 - `ADMIN_ACCESS_KEY` for admin access
 - `CRON_SECRET` for the daily database keepalive cron
 - `PG_POOL_MAX=1` (optional) serverless-safe pool size

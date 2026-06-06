@@ -20,34 +20,30 @@ function toPgConnectionString(rawValue) {
     throw new Error('DATABASE_URL (or DB_URL) cannot be blank');
   }
 
-  if (!value.startsWith('jdbc:postgresql://')) {
-    return value;
+  const normalized = value.startsWith('jdbc:postgresql://') ? value.slice('jdbc:'.length) : value;
+  const parsedUrl = new URL(normalized);
+
+  const user = parsedUrl.searchParams.get('user') || process.env.DB_USERNAME || '';
+  const password = parsedUrl.searchParams.get('password') || process.env.DB_PASSWORD || '';
+  const sslMode = parsedUrl.searchParams.get('ssl') || parsedUrl.searchParams.get('sslmode') || '';
+
+  if (user && !parsedUrl.username) {
+    parsedUrl.username = user;
+  }
+  if (password && !parsedUrl.password) {
+    parsedUrl.password = password;
   }
 
-  const withoutJdbcPrefix = value.slice('jdbc:'.length);
-  const jdbcUrl = new URL(withoutJdbcPrefix);
+  parsedUrl.searchParams.delete('user');
+  parsedUrl.searchParams.delete('password');
+  parsedUrl.searchParams.delete('ssl');
+  parsedUrl.searchParams.delete('sslmode');
 
-  const user = jdbcUrl.searchParams.get('user') || '';
-  const password = jdbcUrl.searchParams.get('password') || '';
-  const sslMode = jdbcUrl.searchParams.get('ssl') || jdbcUrl.searchParams.get('sslmode') || '';
-
-  if (user && !jdbcUrl.username) {
-    jdbcUrl.username = user;
-  }
-  if (password && !jdbcUrl.password) {
-    jdbcUrl.password = password;
+  if (!parsedUrl.searchParams.has('sslmode') && parseBoolean(sslMode)) {
+    parsedUrl.searchParams.set('sslmode', 'require');
   }
 
-  jdbcUrl.searchParams.delete('user');
-  jdbcUrl.searchParams.delete('password');
-  jdbcUrl.searchParams.delete('ssl');
-  jdbcUrl.searchParams.delete('sslmode');
-
-  if (!jdbcUrl.searchParams.has('sslmode') && parseBoolean(sslMode)) {
-    jdbcUrl.searchParams.set('sslmode', 'require');
-  }
-
-  return jdbcUrl.toString();
+  return parsedUrl.toString();
 }
 
 function parseConnectionConfig(rawValue) {
