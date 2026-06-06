@@ -74,7 +74,7 @@ export interface AdminUserRow {
 }
 
 const DEFAULT_API_BASE_URL = '';
-const RETRY_DELAYS_MS = [1200, 2500, 4000];
+const API_TIMEOUT_MS = 2500;
 const AUTH_SESSION_KEY = 'dsa-auth-session-v1';
 const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
 
@@ -98,17 +98,9 @@ const apiUrl = (path: string) => {
   return `${base}${path}`;
 };
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const notifyWakeStatus = (status: BackendWakeStatus) => {
   wakeStatusListeners.forEach((listener) => listener(status));
 };
-
-const isRetriableStatus = (status: number) => {
-  return status === 408 || status === 429 || status === 502 || status === 503 || status === 504;
-};
-
-const isNetworkError = (error: unknown): error is TypeError => error instanceof TypeError;
 
 const getStoredToken = (key: string) => {
   if (typeof localStorage === 'undefined') return '';
@@ -139,50 +131,35 @@ export const subscribeBackendWakeStatus = (listener: WakeStatusListener) => {
 };
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  let lastError: unknown = null;
-  const maxAttempts = RETRY_DELAYS_MS.length + 1;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const isRetry = attempt > 0;
-    if (isRetry) {
-      notifyWakeStatus('waking');
+  try {
+    const response = await fetch(apiUrl(path), { ...init, signal: controller.signal });
+    if (!response.ok) {
+      let message = `API request failed: ${response.status}`;
+      try {
+        const payload = await response.json();
+        if (payload && typeof payload.error === 'string') {
+          message = payload.error;
+        }
+      } catch {
+        // keep the status-based fallback
+      }
+      throw new Error(message);
     }
 
-    try {
-      const response = await fetch(apiUrl(path), init);
-      if (!response.ok) {
-        if (attempt < maxAttempts - 1 && isRetriableStatus(response.status)) {
-          notifyWakeStatus('waking');
-          await sleep(RETRY_DELAYS_MS[attempt]);
-          continue;
-        }
-        let message = `API request failed: ${response.status}`;
-        try {
-          const payload = await response.json();
-          if (payload && typeof payload.error === 'string') {
-            message = payload.error;
-          }
-        } catch {
-          // keep the status-based fallback
-        }
-        throw new Error(message);
-      }
-
-      notifyWakeStatus('awake');
-      return response.json() as Promise<T>;
-    } catch (error) {
-      lastError = error;
-      if (attempt < maxAttempts - 1 && isNetworkError(error)) {
-        notifyWakeStatus('waking');
-        await sleep(RETRY_DELAYS_MS[attempt]);
-        continue;
-      }
-      break;
+    notifyWakeStatus('awake');
+    return response.json() as Promise<T>;
+  } catch (error) {
+    notifyWakeStatus('idle');
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Sync service is unavailable. Try again shortly.');
     }
+    throw error instanceof Error ? error : new Error('API request failed');
+  } finally {
+    window.clearTimeout(timeout);
   }
-
-  notifyWakeStatus('idle');
-  throw lastError instanceof Error ? lastError : new Error('API request failed');
 }
 
 export const backendApi = {

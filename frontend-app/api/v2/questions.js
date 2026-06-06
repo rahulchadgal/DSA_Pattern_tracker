@@ -28,6 +28,10 @@ export default async function handler(req, res) {
 async function listQuestions(req, res) {
   const customOnly = String(req.query.customOnly || '').toLowerCase() === 'true';
 
+  if (!customOnly) {
+    return sendJson(res, 200, []);
+  }
+
   try {
     const user = customOnly ? await requireUser(req) : null;
     let sql = `SELECT leetcode_id AS "leetcodeId",

@@ -9,12 +9,14 @@ Client (`frontend-app/.env`):
   - Set `http://localhost:8888` only if you want to call Spring backend directly in local.
 
 Serverless (`Vercel Project > Settings > Environment Variables`):
-- `DATABASE_URL` (recommended) as Postgres URL
+- `DATABASE_URL` (recommended) as the Aiven pooler/PgBouncer Postgres URL
 - `DB_URL` (optional compatibility) if you want to reuse JDBC-style value
 - `DB_USERNAME` and `DB_PASSWORD` when `DB_URL` does not already include credentials
 - `ADMIN_ACCESS_KEY` for admin access
 - `CRON_SECRET` for the daily database keepalive cron
-- `PG_POOL_MAX=1` (optional) serverless-safe pool size
+- `PG_USE_POOL=true` only when `DATABASE_URL` points to the Aiven pooler/PgBouncer URL
+- `PG_POOL_MAX=1` serverless-safe pool size
+- `PG_CONNECTION_TIMEOUT_MS=1500` and `PG_IDLE_TIMEOUT_MS=1000` to fail fast during database maintenance
 
 Example serverless env file is available at `frontend-app/.env.server.example`.
 

@@ -14,6 +14,7 @@ const GRID_VIEW_KEY = 'dsa-grid-view-v1';
 const CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
 const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
 const THEME_MODE_KEY = 'dsa-theme-mode-v1';
+const DB_SYNC_COOLDOWN_MS = 60_000;
 
 type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
 type AuthMode = 'login' | 'signup' | 'admin';
@@ -315,6 +316,7 @@ const App: React.FC = () => {
   const [officialSolutionView, setOfficialSolutionView] = useState<'question' | 'hint' | 'solution'>('question');
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
   const pendingProgressRef = useRef<Record<string, { completed: boolean; solutionRichText: string | null }>>({});
+  const lastDbSyncFailureAtRef = useRef(0);
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
   const [companySearchTerm, setCompanySearchTerm] = useState('');
   const [questionSearchQuery, setQuestionSearchQuery] = useState('');
@@ -356,6 +358,7 @@ const App: React.FC = () => {
 
   const pullRelationalProgress = useCallback(async (userHandle: string) => {
     if (!userHandle || !backendApi.hasAuthSession()) return;
+    if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) return;
     setSyncStatus('syncing');
     try {
       const rows = await backendApi.getProgress(userHandle);
@@ -393,6 +396,7 @@ const App: React.FC = () => {
         clearExpiredUserSession();
         return;
       }
+      lastDbSyncFailureAtRef.current = Date.now();
       setSyncStatus('error');
     }
   }, [clearExpiredUserSession]);
@@ -430,6 +434,7 @@ const App: React.FC = () => {
         clearExpiredUserSession();
         return;
       }
+      lastDbSyncFailureAtRef.current = Date.now();
       setSyncStatus('error');
     }
   };
@@ -572,6 +577,7 @@ const App: React.FC = () => {
     }
 
     if (!userHandle || !backendApi.hasAuthSession()) return;
+    if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) return;
 
     try {
       const rows = await backendApi.getCustomQuestions(userHandle);
@@ -609,6 +615,7 @@ const App: React.FC = () => {
       if (isAuthFailure(error)) {
         clearExpiredUserSession();
       }
+      lastDbSyncFailureAtRef.current = Date.now();
     }
   }, [baseSectionsData, clearExpiredUserSession]);
 

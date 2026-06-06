@@ -76,7 +76,7 @@ function buildConnectionOptions() {
   return {
     connectionString,
     ssl: sslEnabled ? { rejectUnauthorized: false } : undefined,
-    connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS || 5000)
+    connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS || 1500)
   };
 }
 
@@ -86,7 +86,7 @@ function buildPool() {
   return new Pool({
     ...buildConnectionOptions(),
     max: Number.isFinite(max) && max > 0 ? max : 1,
-    idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 5000),
+    idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 1000),
     allowExitOnIdle: true
   });
 }
