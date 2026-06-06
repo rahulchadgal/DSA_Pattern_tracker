@@ -75,6 +75,7 @@ export interface AdminUserRow {
 
 const DEFAULT_API_BASE_URL = '';
 const API_TIMEOUT_MS = 2500;
+const AUTH_API_TIMEOUT_MS = 9000;
 const AUTH_SESSION_KEY = 'dsa-auth-session-v1';
 const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
 
@@ -130,9 +131,9 @@ export const subscribeBackendWakeStatus = (listener: WakeStatusListener) => {
   return () => wakeStatusListeners.delete(listener);
 };
 
-async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+async function apiRequest<T>(path: string, init?: RequestInit, timeoutMs = API_TIMEOUT_MS): Promise<T> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(apiUrl(path), { ...init, signal: controller.signal });
@@ -154,7 +155,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (error) {
     notifyWakeStatus('idle');
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error('Sync service is unavailable. Try again shortly.');
+      throw new Error(timeoutMs > API_TIMEOUT_MS ? 'Database is unavailable. Try again shortly.' : 'Sync service is unavailable. Try again shortly.');
     }
     throw error instanceof Error ? error : new Error('API request failed');
   } finally {
@@ -167,14 +168,14 @@ export const backendApi = {
   adminSessionKey: ADMIN_SESSION_KEY,
   hasAuthSession: () => hasStoredToken(AUTH_SESSION_KEY),
   hasAdminSession: () => hasStoredToken(ADMIN_SESSION_KEY),
-  register: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth', withJson({ ...payload, action: 'register' })),
-  login: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth', withJson({ ...payload, action: 'login' })),
-  me: () => apiRequest<{ handle: string }>('/api/auth?action=me', { headers: authHeaders() }),
-  adminLogin: (adminKey: string) => apiRequest<AdminLoginResponse>('/api/admin', withJson({ adminKey, action: 'login' })),
-  getAdminUsers: () => apiRequest<AdminUserRow[]>('/api/admin?action=users', { headers: authHeaders(true) }),
-  resetAdminUserPassword: (handle: string, password: string) => apiRequest<{ handle: string }>('/api/admin', withJson({ handle, password, action: 'reset-password' }, true)),
-  disableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string }>('/api/admin', withJson({ handle, action: 'disable' }, true)),
-  enableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string | null }>('/api/admin', withJson({ handle, action: 'enable' }, true)),
+  register: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth', withJson({ ...payload, action: 'register' }), AUTH_API_TIMEOUT_MS),
+  login: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth', withJson({ ...payload, action: 'login' }), AUTH_API_TIMEOUT_MS),
+  me: () => apiRequest<{ handle: string }>('/api/auth?action=me', { headers: authHeaders() }, AUTH_API_TIMEOUT_MS),
+  adminLogin: (adminKey: string) => apiRequest<AdminLoginResponse>('/api/admin', withJson({ adminKey, action: 'login' }), AUTH_API_TIMEOUT_MS),
+  getAdminUsers: () => apiRequest<AdminUserRow[]>('/api/admin?action=users', { headers: authHeaders(true) }, AUTH_API_TIMEOUT_MS),
+  resetAdminUserPassword: (handle: string, password: string) => apiRequest<{ handle: string }>('/api/admin', withJson({ handle, password, action: 'reset-password' }, true), AUTH_API_TIMEOUT_MS),
+  disableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string }>('/api/admin', withJson({ handle, action: 'disable' }, true), AUTH_API_TIMEOUT_MS),
+  enableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string | null }>('/api/admin', withJson({ handle, action: 'enable' }, true), AUTH_API_TIMEOUT_MS),
   getProgress: (_handle?: string) => apiRequest<ProgressRow[]>('/api/progress', { headers: authHeaders() }),
   upsertProgress: (payload: ProgressUpsertPayload) => apiRequest<ProgressRow>('/api/progress', {
     method: 'POST',

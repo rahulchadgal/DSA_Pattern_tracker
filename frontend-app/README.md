@@ -16,7 +16,7 @@ Serverless (`Vercel Project > Settings > Environment Variables`):
 - `CRON_SECRET` for the daily database keepalive cron
 - `PG_USE_POOL=true` only when `DATABASE_URL` points to the Aiven pooler/PgBouncer URL
 - `PG_POOL_MAX=1` serverless-safe pool size
-- `PG_CONNECTION_TIMEOUT_MS=1500` and `PG_IDLE_TIMEOUT_MS=1000` to fail fast during database maintenance
+- `PG_CONNECTION_TIMEOUT_MS=5000` and `PG_IDLE_TIMEOUT_MS=1000` to give auth enough time while still releasing idle DB connections quickly
 
 Example serverless env file is available at `frontend-app/.env.server.example`.
 

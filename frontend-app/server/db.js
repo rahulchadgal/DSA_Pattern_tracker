@@ -76,7 +76,7 @@ function buildConnectionOptions() {
   return {
     connectionString,
     ssl: sslEnabled ? { rejectUnauthorized: false } : undefined,
-    connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS || 1500)
+    connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS || 5000)
   };
 }
 
