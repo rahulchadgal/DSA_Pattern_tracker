@@ -96,7 +96,6 @@ export function readBearerToken(req) {
 }
 
 export async function requireUser(req) {
-  await ensureAuthSchema();
   const payload = readPayload(readBearerToken(req));
   if (payload.kind !== 'user') {
     throw new Error('Unauthorized');
@@ -114,7 +113,6 @@ export async function requireUser(req) {
 }
 
 export async function requireAdmin(req) {
-  await ensureAuthSchema();
   const payload = readPayload(readBearerToken(req));
   if (payload.kind !== 'admin') {
     throw new Error('Unauthorized');

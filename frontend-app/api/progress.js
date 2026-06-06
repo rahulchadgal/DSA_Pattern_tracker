@@ -1,21 +1,9 @@
 import { query } from '../server/db.js';
 import { allowMethods, parseBody, sendError, sendJson } from '../server/http.js';
-import { ensureAuthSchema, requireUser } from '../server/auth.js';
-
-let schemaReadyPromise;
+import { requireUser } from '../server/auth.js';
 
 function authStatus(message) {
   return message === 'Unauthorized' || message === 'Invalid token' || message === 'Expired token' ? 401 : 500;
-}
-
-async function ensureSchema() {
-  if (!schemaReadyPromise) {
-    schemaReadyPromise = ensureAuthSchema().catch((error) => {
-      schemaReadyPromise = undefined;
-      throw error;
-    });
-  }
-  await schemaReadyPromise;
 }
 
 export default async function handler(req, res) {
@@ -32,7 +20,6 @@ export default async function handler(req, res) {
 
 async function getProgress(req, res) {
   try {
-    await ensureSchema();
     const user = await requireUser(req);
     const result = await query(
       `SELECT q.leetcode_id AS "leetcodeId",
@@ -73,7 +60,6 @@ async function upsertProgress(req, res) {
   }
 
   try {
-    await ensureSchema();
     const user = await requireUser(req);
     let questionResult = await query('SELECT id, leetcode_id FROM question_catalog WHERE leetcode_id = $1', [leetcodeId]);
     if (!questionResult.rows[0]) {
