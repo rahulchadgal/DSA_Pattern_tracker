@@ -10,7 +10,7 @@ function validateText(value, fieldName) {
 }
 
 function authStatus(message) {
-  return message === 'Unauthorized' || message === 'Invalid token' ? 401 : 500;
+  return message === 'Unauthorized' || message === 'Invalid token' || message === 'Expired token' ? 401 : 500;
 }
 
 export default async function handler(req, res) {

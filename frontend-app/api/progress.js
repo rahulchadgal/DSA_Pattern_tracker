@@ -5,7 +5,7 @@ import { ensureAuthSchema, requireUser } from '../server/auth.js';
 let schemaReadyPromise;
 
 function authStatus(message) {
-  return message === 'Unauthorized' || message === 'Invalid token' ? 401 : 500;
+  return message === 'Unauthorized' || message === 'Invalid token' || message === 'Expired token' ? 401 : 500;
 }
 
 async function ensureSchema() {

@@ -267,6 +267,12 @@ const WakeBanner: React.FC<{ visible: boolean }> = ({ visible }) => {
   );
 };
 
+const isAuthFailure = (error: unknown) => {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return message === 'unauthorized' || message.includes('invalid token') || message.includes('expired token');
+};
+
 const App: React.FC = () => {
   const { handle, setHandle, showWelcome, setShowWelcome, persistHandle, clearHandle } = useProfileHandle();
   const { isProfile, isRoulette, isSyllabus, goMain, goProfile, goSyllabus, goRoulette } = useAppRoute();
@@ -329,6 +335,16 @@ const App: React.FC = () => {
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
+  const clearExpiredUserSession = useCallback((message = 'Your session expired. Please sign in again.') => {
+    clearHandle();
+    setAuthMode('login');
+    setAuthUsername('');
+    setAuthPassword('');
+    setAuthError(message);
+    setSyncStatus('idle');
+    pendingProgressRef.current = {};
+  }, [clearHandle]);
+
   const pullBaseQuestions = useCallback(async () => {
     const nextSections = getInitialSections();
     setBaseSectionsData(nextSections);
@@ -372,10 +388,14 @@ const App: React.FC = () => {
       localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(completionMap));
       localStorage.setItem(SOLUTION_CACHE_KEY, JSON.stringify(solutionNotesMap));
       setSyncStatus('saved');
-    } catch (e) {
+    } catch (error) {
+      if (isAuthFailure(error)) {
+        clearExpiredUserSession();
+        return;
+      }
       setSyncStatus('error');
     }
-  }, []);
+  }, [clearExpiredUserSession]);
 
   const atomicUpdate = async (
     qId: string,
@@ -406,6 +426,10 @@ const App: React.FC = () => {
       delete pendingProgressRef.current[leetcodeId];
       setSyncStatus('saved');
     } catch (e) {
+      if (isAuthFailure(e)) {
+        clearExpiredUserSession();
+        return;
+      }
       setSyncStatus('error');
     }
   };
@@ -442,8 +466,10 @@ const App: React.FC = () => {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Admin session expired or invalid.';
       setAdminMessage(message);
-      if (message === 'Unauthorized' || message.toLowerCase().includes('token')) {
+      if (isAuthFailure(error)) {
         localStorage.removeItem(ADMIN_SESSION_KEY);
+        setAdminUsers([]);
+        setAdminMessage('Admin session expired. Enter the admin key again.');
       }
     } finally {
       setIsAdminBusy(false);
@@ -498,7 +524,9 @@ const App: React.FC = () => {
       setAdminMessage(`Password reset for @${adminResetHandle.trim().toLowerCase()}.`);
       await loadAdminUsers();
     } catch {
-      setAdminMessage('Unable to reset password.');
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+      setAdminUsers([]);
+      setAdminMessage('Admin session expired. Enter the admin key again.');
     } finally {
       setIsAdminBusy(false);
     }
@@ -517,7 +545,9 @@ const App: React.FC = () => {
       }
       await loadAdminUsers();
     } catch {
-      setAdminMessage('Unable to update user.');
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+      setAdminUsers([]);
+      setAdminMessage('Admin session expired. Enter the admin key again.');
     } finally {
       setIsAdminBusy(false);
     }
@@ -576,9 +606,11 @@ const App: React.FC = () => {
         setSectionsData(merged);
       }
     } catch (error) {
-      // keep cached/local data only
+      if (isAuthFailure(error)) {
+        clearExpiredUserSession();
+      }
     }
-  }, [baseSectionsData]);
+  }, [baseSectionsData, clearExpiredUserSession]);
 
   const buildCompanySectionsFromRows = (rows: CompanyQuestionRow[]): Section[] => {
     const companySectionsMap = new Map<string, Pattern>();
@@ -693,6 +725,11 @@ const App: React.FC = () => {
       setShowAddQuestionModal(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to sync question to database.';
+      if (isAuthFailure(error)) {
+        clearExpiredUserSession();
+        alert('Question was added locally, but your session expired. Please sign in again to sync it.');
+        return;
+      }
       setAuthError(message);
       alert(`Question was added locally, but DB sync failed: ${message}`);
     } finally {
