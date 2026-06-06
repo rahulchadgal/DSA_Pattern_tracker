@@ -355,7 +355,7 @@ const App: React.FC = () => {
   }, []);
 
   const pullRelationalProgress = useCallback(async (userHandle: string) => {
-    if (!userHandle) return;
+    if (!userHandle || !backendApi.hasAuthSession()) return;
     setSyncStatus('syncing');
     try {
       const rows = await backendApi.getProgress(userHandle);
@@ -571,7 +571,7 @@ const App: React.FC = () => {
       setSectionsData(merged);
     }
 
-    if (!userHandle) return;
+    if (!userHandle || !backendApi.hasAuthSession()) return;
 
     try {
       const rows = await backendApi.getCustomQuestions(userHandle);

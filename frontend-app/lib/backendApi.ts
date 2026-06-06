@@ -120,6 +120,8 @@ const getStoredToken = (key: string) => {
   }
 };
 
+const hasStoredToken = (key: string) => getStoredToken(key).length > 0;
+
 const authHeaders = (admin = false): HeadersInit => {
   const token = getStoredToken(admin ? ADMIN_SESSION_KEY : AUTH_SESSION_KEY);
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -186,6 +188,8 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 export const backendApi = {
   authSessionKey: AUTH_SESSION_KEY,
   adminSessionKey: ADMIN_SESSION_KEY,
+  hasAuthSession: () => hasStoredToken(AUTH_SESSION_KEY),
+  hasAdminSession: () => hasStoredToken(ADMIN_SESSION_KEY),
   register: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth', withJson({ ...payload, action: 'register' })),
   login: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth', withJson({ ...payload, action: 'login' })),
   me: () => apiRequest<{ handle: string }>('/api/auth?action=me', { headers: authHeaders() }),
