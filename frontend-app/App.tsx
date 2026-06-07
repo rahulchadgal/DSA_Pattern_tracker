@@ -7,11 +7,15 @@ import { useAppRoute } from './hooks/useAppRoute';
 import { getOfficialSolution, OfficialSolutionEntry } from './lib/officialSolutions';
 import { Pattern, Question, Section } from './types';
 
-const LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
-const SOLUTION_CACHE_KEY = 'dsa-solution-notes-v1';
+const LEGACY_LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
+const LEGACY_SOLUTION_CACHE_KEY = 'dsa-solution-notes-v1';
+const PROGRESS_CACHE_PREFIX = 'dsa-progress-cache-v1';
+const SOLUTION_CACHE_PREFIX = 'dsa-solution-notes-v1';
+const PENDING_PROGRESS_PREFIX = 'dsa-pending-progress-v1';
 const NAVBAR_COLLAPSED_KEY = 'dsa-navbar-collapsed-v1';
 const GRID_VIEW_KEY = 'dsa-grid-view-v1';
-const CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
+const LEGACY_CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
+const CUSTOM_QUESTIONS_CACHE_PREFIX = 'dsa-custom-questions-v1';
 const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
 const THEME_MODE_KEY = 'dsa-theme-mode-v1';
 const DB_SYNC_COOLDOWN_MS = 60_000;
@@ -41,6 +45,13 @@ interface QuestionProgressMetadata {
   mainPattern: string;
   subPattern: string;
   metadataJson?: string | null;
+}
+
+interface PendingProgressRow {
+  completed: boolean;
+  solutionRichText: string | null;
+  updatedAt: string;
+  metadata?: QuestionProgressMetadata;
 }
 
 type CompanyTimeFilter = 'all' | '30d' | '3m' | '6m';
@@ -102,14 +113,100 @@ const formatDate = (dateStr: string) => {
 };
 
 const normalizeQuestionId = (id: string | number): string => String(id).trim().replace(/^0+(?=\d)/, '');
+const normalizeHandle = (value: string): string => value.trim().toLowerCase();
+
+const userCacheKey = (prefix: string, userHandle: string): string => `${prefix}:${normalizeHandle(userHandle)}`;
 
 const normalizeStoredMap = (raw: string | null): Record<string, string> => {
   if (!raw) return {};
-  const parsed = JSON.parse(raw) as Record<string, string>;
-  return Object.entries(parsed).reduce<Record<string, string>>((acc, [id, value]) => {
-    acc[normalizeQuestionId(id)] = value;
-    return acc;
-  }, {});
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return Object.entries(parsed).reduce<Record<string, string>>((acc, [id, value]) => {
+      acc[normalizeQuestionId(id)] = value;
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+};
+
+const readJsonArray = <T,>(raw: string | null): T[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as T[] : [];
+  } catch {
+    return [];
+  }
+};
+
+const readPendingProgressMap = (raw: string | null): Record<string, PendingProgressRow> => {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, PendingProgressRow>;
+    return Object.entries(parsed).reduce<Record<string, PendingProgressRow>>((acc, [id, row]) => {
+      if (!row || typeof row.completed !== 'boolean') return acc;
+      acc[normalizeQuestionId(id)] = {
+        completed: row.completed,
+        solutionRichText: typeof row.solutionRichText === 'string' ? row.solutionRichText : null,
+        updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : new Date().toISOString(),
+        metadata: row.metadata
+      };
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+};
+
+const readUserMapCache = (prefix: string, userHandle: string, legacyKey?: string): Record<string, string> => {
+  const normalizedHandle = normalizeHandle(userHandle);
+  if (!normalizedHandle) return {};
+  const scopedKey = userCacheKey(prefix, normalizedHandle);
+  const scopedRaw = localStorage.getItem(scopedKey);
+  if (scopedRaw) return normalizeStoredMap(scopedRaw);
+  const legacyMap = normalizeStoredMap(legacyKey ? localStorage.getItem(legacyKey) : null);
+  if (Object.keys(legacyMap).length > 0) {
+    localStorage.setItem(scopedKey, JSON.stringify(legacyMap));
+  }
+  return legacyMap;
+};
+
+const writeUserMapCache = (prefix: string, userHandle: string, value: Record<string, string>) => {
+  const normalizedHandle = normalizeHandle(userHandle);
+  if (!normalizedHandle) return;
+  localStorage.setItem(userCacheKey(prefix, normalizedHandle), JSON.stringify(value));
+};
+
+const readUserCustomQuestionCache = (userHandle: string): CustomQuestionRow[] => {
+  const normalizedHandle = normalizeHandle(userHandle);
+  if (!normalizedHandle) return [];
+  const scopedKey = userCacheKey(CUSTOM_QUESTIONS_CACHE_PREFIX, normalizedHandle);
+  const scopedRaw = localStorage.getItem(scopedKey);
+  if (scopedRaw) return readJsonArray<CustomQuestionRow>(scopedRaw);
+  const legacyRows = readJsonArray<CustomQuestionRow>(localStorage.getItem(LEGACY_CUSTOM_QUESTIONS_CACHE_KEY));
+  if (legacyRows.length > 0) {
+    localStorage.setItem(scopedKey, JSON.stringify(legacyRows));
+  }
+  return legacyRows;
+};
+
+const writeUserCustomQuestionCache = (userHandle: string, rows: CustomQuestionRow[]) => {
+  const normalizedHandle = normalizeHandle(userHandle);
+  if (!normalizedHandle) return;
+  localStorage.setItem(userCacheKey(CUSTOM_QUESTIONS_CACHE_PREFIX, normalizedHandle), JSON.stringify(rows));
+};
+
+const readUserPendingProgressCache = (userHandle: string): Record<string, PendingProgressRow> => {
+  const normalizedHandle = normalizeHandle(userHandle);
+  if (!normalizedHandle) return {};
+  return readPendingProgressMap(localStorage.getItem(userCacheKey(PENDING_PROGRESS_PREFIX, normalizedHandle)));
+};
+
+const writeUserPendingProgressCache = (userHandle: string, rows: Record<string, PendingProgressRow>) => {
+  const normalizedHandle = normalizeHandle(userHandle);
+  if (!normalizedHandle) return;
+  localStorage.setItem(userCacheKey(PENDING_PROGRESS_PREFIX, normalizedHandle), JSON.stringify(rows));
 };
 
 const cloneSections = (sections: Section[]): Section[] => JSON.parse(JSON.stringify(sections));
@@ -283,12 +380,8 @@ const App: React.FC = () => {
   const isMobile = useIsMobile();
 
   // --- PROGRESS STATE (Map of ID -> Timestamp) ---
-  const [completedMap, setCompletedMap] = useState<Record<string, string>>(() => {
-    return normalizeStoredMap(localStorage.getItem(LOCAL_CACHE_KEY));
-  });
-  const [solutionMap, setSolutionMap] = useState<Record<string, string>>(() => {
-    return normalizeStoredMap(localStorage.getItem(SOLUTION_CACHE_KEY));
-  });
+  const [completedMap, setCompletedMap] = useState<Record<string, string>>({});
+  const [solutionMap, setSolutionMap] = useState<Record<string, string>>({});
   
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => handle && backendApi.hasAuthSession() ? 'idle' : 'signed-out');
   const [baseSectionsData, setBaseSectionsData] = useState<Section[]>(() => getInitialSections());
@@ -318,10 +411,14 @@ const App: React.FC = () => {
   const [officialSolutionStatus, setOfficialSolutionStatus] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle');
   const [officialSolutionView, setOfficialSolutionView] = useState<'question' | 'hint' | 'solution'>('question');
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
-  const pendingProgressRef = useRef<Record<string, { completed: boolean; solutionRichText: string | null }>>({});
+  const pendingProgressRef = useRef<Record<string, PendingProgressRow>>({});
   const progressSyncPromiseRef = useRef<Promise<void> | null>(null);
   const customSyncPromiseRef = useRef<Promise<void> | null>(null);
+  const progressSyncHandleRef = useRef('');
+  const customSyncHandleRef = useRef('');
   const warmupPromiseRef = useRef<Promise<void> | null>(null);
+  const loadedLocalHandleRef = useRef('');
+  const activeHandleRef = useRef(normalizeHandle(handle));
   const routeModeRef = useRef(isProfile ? 'companies' : isRoulette ? 'roulette' : 'main');
   const lastDbSyncFailureAtRef = useRef(0);
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
@@ -354,7 +451,16 @@ const App: React.FC = () => {
     setAuthError(message);
     setSyncStatus('signed-out');
     pendingProgressRef.current = {};
+    loadedLocalHandleRef.current = '';
+    progressSyncHandleRef.current = '';
+    customSyncHandleRef.current = '';
+    setCompletedMap({});
+    setSolutionMap({});
   }, [clearHandle]);
+
+  useEffect(() => {
+    activeHandleRef.current = normalizeHandle(handle);
+  }, [handle]);
 
   const markDbSyncUnavailable = useCallback(() => {
     lastDbSyncFailureAtRef.current = Date.now();
@@ -384,8 +490,41 @@ const App: React.FC = () => {
     setOpenSections([]);
   }, []);
 
+  const applyCustomRowsToSections = useCallback((rows: CustomQuestionRow[]) => {
+    if (baseSectionsData.length === 0) return;
+    const merged = rows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
+    setSectionsData(merged);
+  }, [baseSectionsData]);
+
+  const loadUserLocalState = useCallback((userHandle: string) => {
+    const normalizedHandle = normalizeHandle(userHandle);
+    if (!normalizedHandle) return;
+    pendingProgressRef.current = readUserPendingProgressCache(normalizedHandle);
+    const cachedCompleted = readUserMapCache(PROGRESS_CACHE_PREFIX, normalizedHandle, LEGACY_LOCAL_CACHE_KEY);
+    const cachedSolutions = readUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, LEGACY_SOLUTION_CACHE_KEY);
+    Object.entries(pendingProgressRef.current).forEach(([leetcodeId, pending]) => {
+      if (pending.completed) {
+        cachedCompleted[leetcodeId] = cachedCompleted[leetcodeId] || pending.updatedAt;
+      } else {
+        delete cachedCompleted[leetcodeId];
+      }
+      if (pending.solutionRichText && pending.solutionRichText.trim().length > 0) {
+        cachedSolutions[leetcodeId] = pending.solutionRichText;
+      } else if (pending.solutionRichText === null) {
+        delete cachedSolutions[leetcodeId];
+      }
+    });
+    setCompletedMap(cachedCompleted);
+    setSolutionMap(cachedSolutions);
+    applyCustomRowsToSections(readUserCustomQuestionCache(normalizedHandle));
+    loadedLocalHandleRef.current = normalizedHandle;
+  }, [applyCustomRowsToSections]);
+
   const pullRelationalProgress = useCallback((userHandle: string) => {
-    if (progressSyncPromiseRef.current) return progressSyncPromiseRef.current;
+    const normalizedHandle = normalizeHandle(userHandle);
+    if (progressSyncPromiseRef.current && progressSyncHandleRef.current === normalizedHandle) {
+      return progressSyncPromiseRef.current;
+    }
     if (!userHandle || !backendApi.hasAuthSession()) {
       setSyncStatus('signed-out');
       return Promise.resolve();
@@ -399,6 +538,10 @@ const App: React.FC = () => {
     syncPromise = (async () => {
       setSyncStatus('syncing');
       try {
+        pendingProgressRef.current = {
+          ...readUserPendingProgressCache(normalizedHandle),
+          ...pendingProgressRef.current
+        };
         const rows = await backendApi.getProgress(userHandle);
         const completionMap: Record<string, string> = {};
         const solutionNotesMap: Record<string, string> = {};
@@ -424,11 +567,31 @@ const App: React.FC = () => {
           }
         });
 
+        if (activeHandleRef.current !== normalizedHandle) return;
         setCompletedMap(completionMap);
         setSolutionMap(solutionNotesMap);
-        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(completionMap));
-        localStorage.setItem(SOLUTION_CACHE_KEY, JSON.stringify(solutionNotesMap));
-        setSyncStatus('synced');
+        writeUserMapCache(PROGRESS_CACHE_PREFIX, normalizedHandle, completionMap);
+        writeUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, solutionNotesMap);
+
+        const pendingEntries = Object.entries(pendingProgressRef.current);
+        for (const [leetcodeId, pending] of pendingEntries) {
+          await backendApi.upsertProgress({
+            handle: normalizedHandle,
+            leetcodeId,
+            completed: pending.completed,
+            solutionRichText: pending.solutionRichText,
+            title: pending.metadata?.title,
+            difficulty: pending.metadata?.difficulty,
+            link: pending.metadata?.link,
+            mainPattern: pending.metadata?.mainPattern,
+            subPattern: pending.metadata?.subPattern,
+            metadataJson: pending.metadata?.metadataJson ?? null
+          });
+          delete pendingProgressRef.current[leetcodeId];
+          writeUserPendingProgressCache(normalizedHandle, pendingProgressRef.current);
+        }
+
+        setSyncStatus(Object.keys(pendingProgressRef.current).length === 0 ? 'synced' : 'paused');
       } catch (error) {
         if (isAuthFailure(error)) {
           clearExpiredUserSession();
@@ -443,6 +606,7 @@ const App: React.FC = () => {
     })();
 
     progressSyncPromiseRef.current = syncPromise;
+    progressSyncHandleRef.current = normalizedHandle;
     return syncPromise;
   }, [clearExpiredUserSession, markDbSyncUnavailable]);
 
@@ -457,14 +621,18 @@ const App: React.FC = () => {
       return;
     }
     const leetcodeId = normalizeQuestionId(qId);
+    const normalizedHandle = normalizeHandle(handle);
     pendingProgressRef.current[leetcodeId] = {
       completed: isChecked,
-      solutionRichText: solutionRichText ?? null
+      solutionRichText: solutionRichText ?? null,
+      updatedAt: new Date().toISOString(),
+      metadata
     };
+    writeUserPendingProgressCache(normalizedHandle, pendingProgressRef.current);
     setSyncStatus('syncing');
     try {
       await backendApi.upsertProgress({
-        handle: handle.toLowerCase(),
+        handle: normalizedHandle,
         leetcodeId,
         completed: isChecked,
         solutionRichText: solutionRichText ?? null,
@@ -476,6 +644,7 @@ const App: React.FC = () => {
         metadataJson: metadata?.metadataJson ?? null
       });
       delete pendingProgressRef.current[leetcodeId];
+      writeUserPendingProgressCache(normalizedHandle, pendingProgressRef.current);
       setSyncStatus('synced');
     } catch (e) {
       if (isAuthFailure(e)) {
@@ -637,19 +806,20 @@ const App: React.FC = () => {
     setSyncStatus('signed-out');
     setCompletedMap({});
     setSolutionMap({});
-    localStorage.removeItem(LOCAL_CACHE_KEY);
-    localStorage.removeItem(SOLUTION_CACHE_KEY);
+    pendingProgressRef.current = {};
+    loadedLocalHandleRef.current = '';
+    progressSyncHandleRef.current = '';
+    customSyncHandleRef.current = '';
+    setSectionsData(cloneSections(baseSectionsData));
   };
 
   const pullCustomQuestions = useCallback((userHandle: string) => {
-    const fromCache = localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY);
-    if (fromCache && baseSectionsData.length > 0) {
-      const cachedRows: CustomQuestionRow[] = JSON.parse(fromCache);
-      const merged = cachedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
-      setSectionsData(merged);
-    }
+    const normalizedHandle = normalizeHandle(userHandle);
+    applyCustomRowsToSections(readUserCustomQuestionCache(normalizedHandle));
 
-    if (customSyncPromiseRef.current) return customSyncPromiseRef.current;
+    if (customSyncPromiseRef.current && customSyncHandleRef.current === normalizedHandle) {
+      return customSyncPromiseRef.current;
+    }
     if (!userHandle || !backendApi.hasAuthSession()) {
       setSyncStatus('signed-out');
       return Promise.resolve();
@@ -689,12 +859,11 @@ const App: React.FC = () => {
           };
         });
 
-        localStorage.setItem(CUSTOM_QUESTIONS_CACHE_KEY, JSON.stringify(normalizedRows));
-        if (baseSectionsData.length > 0) {
-          const merged = normalizedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
-          setSectionsData(merged);
+        writeUserCustomQuestionCache(normalizedHandle, normalizedRows);
+        if (activeHandleRef.current === normalizedHandle) {
+          applyCustomRowsToSections(normalizedRows);
+          setSyncStatus('synced');
         }
-        setSyncStatus('synced');
       } catch (error) {
         if (isAuthFailure(error)) {
           clearExpiredUserSession();
@@ -709,8 +878,9 @@ const App: React.FC = () => {
     })();
 
     customSyncPromiseRef.current = syncPromise;
+    customSyncHandleRef.current = normalizedHandle;
     return syncPromise;
-  }, [baseSectionsData, clearExpiredUserSession, markDbSyncUnavailable]);
+  }, [applyCustomRowsToSections, baseSectionsData, clearExpiredUserSession, markDbSyncUnavailable]);
 
   const buildCompanySectionsFromRows = (rows: CompanyQuestionRow[]): Section[] => {
     const companySectionsMap = new Map<string, Pattern>();
@@ -791,9 +961,9 @@ const App: React.FC = () => {
     };
 
     setSectionsData(prev => addCustomQuestionToSections(prev, newRow));
-    const cachedRows: CustomQuestionRow[] = JSON.parse(localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY) || '[]');
+    const cachedRows = readUserCustomQuestionCache(handle);
     const deduped = [...cachedRows.filter(row => row.questionId !== newRow.questionId), newRow];
-    localStorage.setItem(CUSTOM_QUESTIONS_CACHE_KEY, JSON.stringify(deduped));
+    writeUserCustomQuestionCache(handle, deduped);
 
     try {
       await saveCustomQuestion(newRow);
@@ -869,21 +1039,29 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (handle) {
+      if (loadedLocalHandleRef.current !== normalizeHandle(handle)) {
+        loadUserLocalState(handle);
+      }
       pullRelationalProgress(handle).then(() => pullCustomQuestions(handle));
       const onFocus = () => pullRelationalProgress(handle);
       window.addEventListener('focus', onFocus);
       return () => window.removeEventListener('focus', onFocus);
     }
+    loadedLocalHandleRef.current = '';
+    pendingProgressRef.current = {};
+    progressSyncHandleRef.current = '';
+    customSyncHandleRef.current = '';
+    setCompletedMap({});
+    setSolutionMap({});
+    setSectionsData(cloneSections(baseSectionsData));
     setSyncStatus('signed-out');
-  }, [handle, pullRelationalProgress, pullCustomQuestions]);
+  }, [handle, loadUserLocalState, pullRelationalProgress, pullCustomQuestions, baseSectionsData]);
 
   useEffect(() => {
-    const cachedRows: CustomQuestionRow[] = JSON.parse(localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY) || '[]');
-    if (cachedRows.length && baseSectionsData.length > 0) {
-      const merged = cachedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
-      setSectionsData(merged);
+    if (handle && loadedLocalHandleRef.current === normalizeHandle(handle)) {
+      applyCustomRowsToSections(readUserCustomQuestionCache(handle));
     }
-  }, [baseSectionsData]);
+  }, [baseSectionsData, handle, applyCustomRowsToSections]);
 
   useEffect(() => {
     localStorage.setItem(NAVBAR_COLLAPSED_KEY, String(isSidebarCollapsed));
@@ -965,8 +1143,12 @@ const App: React.FC = () => {
     }
     
     setCompletedMap(nextMap);
-    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(nextMap));
-    atomicUpdate(questionId, isNowChecked, solutionMap[questionId] ?? null, buildProgressMetadata(question));
+    if (handle && backendApi.hasAuthSession()) {
+      writeUserMapCache(PROGRESS_CACHE_PREFIX, handle, nextMap);
+      atomicUpdate(questionId, isNowChecked, solutionMap[questionId] ?? null, buildProgressMetadata(question));
+    } else {
+      setSyncStatus('signed-out');
+    }
   };
 
   const openSolutionEditor = (question: Question) => {
@@ -1034,9 +1216,9 @@ const App: React.FC = () => {
       delete nextMap[questionId];
     }
     setSolutionMap(nextMap);
-    localStorage.setItem(SOLUTION_CACHE_KEY, JSON.stringify(nextMap));
 
     if (handle) {
+      writeUserMapCache(SOLUTION_CACHE_PREFIX, handle, nextMap);
       await atomicUpdate(questionId, Boolean(completedMap[questionId]), nextHtml || null, buildProgressMetadata(editingSolutionQuestion));
     }
 
