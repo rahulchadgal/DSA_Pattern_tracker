@@ -46,7 +46,7 @@ Set env first (choose Spring active profile `local` or `prod` in IDE/Run config)
 - `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`
 - `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`, `GOOGLE_APPLICATION_CREDENTIALS` (for future large object storage)
 
-Initialize Aiven/Postgres schema before first backend run:
+Initialize Postgres schema before first backend run:
 
 ```bash
 # one-time: copy/edit credentials file
@@ -60,6 +60,16 @@ Seed question catalog from `frontend-app/constants.tsx`:
 ```bash
 ./dev/seed-aiven-questions.sh
 ```
+
+Migrate production data from Aiven to Neon:
+
+```bash
+cp dev/.env.neon-migration.example dev/.env.neon-migration
+# Fill Aiven source URL plus Neon direct and pooled URLs.
+./dev/migrate-aiven-to-neon.sh all
+```
+
+Use the Neon direct URL for `pg_restore`, and use the Neon pooled URL as Vercel `DATABASE_URL` with `PG_USE_POOL=true`.
 
 Sync company question bank using protected API (no request params):
 

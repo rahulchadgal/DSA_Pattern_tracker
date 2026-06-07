@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 target/
 dev/.env.aiven
+dev/.env.neon-migration
+dev/*.dump
+.vercel
