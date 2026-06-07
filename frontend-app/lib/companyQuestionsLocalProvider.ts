@@ -18,6 +18,9 @@ export interface CompanyQuestionRow {
   bucketMask: number;
 }
 
+export type CompanyQuestionBucket = 'all' | '30d' | '3m' | '6m';
+export type CompanyQuestionBucketRows = Record<CompanyQuestionBucket, CompanyQuestionRow[]>;
+
 interface GeneratedCompanyQuestion {
   id: string;
   title: string;
@@ -37,7 +40,9 @@ interface GeneratedCompanyPayload {
 
 let companyPayloadPromise: Promise<GeneratedCompanyPayload> | null = null;
 
-const bucketToMask = (bucket: 'all' | '30d' | '3m' | '6m'): number => {
+const COMPANY_BUCKETS: CompanyQuestionBucket[] = ['all', '30d', '3m', '6m'];
+
+const bucketToMask = (bucket: CompanyQuestionBucket): number => {
   if (bucket === '30d') return 2;
   if (bucket === '3m') return 4;
   if (bucket === '6m') return 8;
@@ -65,7 +70,7 @@ const loadCompanyPayload = async (): Promise<GeneratedCompanyPayload> => {
  */
 export const getCompanyQuestionsLocal = async (params?: {
   company?: string;
-  bucket?: 'all' | '30d' | '3m' | '6m';
+  bucket?: CompanyQuestionBucket;
   search?: string;
 }): Promise<CompanyQuestionRow[]> => {
   const { company = '', bucket = 'all', search = '' } = params || {};
@@ -97,6 +102,42 @@ export const getCompanyQuestionsLocal = async (params?: {
   rows.sort((a, b) => a.companyName.localeCompare(b.companyName));
 
   return rows;
+};
+
+export const getCompanyQuestionBucketsLocal = async (): Promise<CompanyQuestionBucketRows> => {
+  const payload = await loadCompanyPayload();
+  const rowsByBucket = COMPANY_BUCKETS.reduce<CompanyQuestionBucketRows>((acc, bucket) => {
+    acc[bucket] = [];
+    return acc;
+  }, {} as CompanyQuestionBucketRows);
+
+  payload.companies.forEach((entry) => {
+    entry.questions.forEach((question) => {
+      const buckets = question.buckets || ['all'];
+      const row = {
+        questionId: Number(question.id),
+        leetcodeId: question.id,
+        title: question.title,
+        difficulty: question.difficulty,
+        link: question.link,
+        companyName: entry.company,
+        bucketMask: buckets.reduce((mask, value) => mask | bucketToMask(value), 0),
+      };
+
+      rowsByBucket.all.push(row);
+      buckets.forEach((bucket) => {
+        if (bucket !== 'all') {
+          rowsByBucket[bucket].push(row);
+        }
+      });
+    });
+  });
+
+  COMPANY_BUCKETS.forEach((bucket) => {
+    rowsByBucket[bucket].sort((a, b) => a.companyName.localeCompare(b.companyName));
+  });
+
+  return rowsByBucket;
 };
 
 /**

@@ -1,4 +1,4 @@
-import { getCompanyQuestionsLocal } from './companyQuestionsLocalProvider';
+import { getCompanyQuestionBucketsLocal, getCompanyQuestionsLocal, CompanyQuestionBucketRows } from './companyQuestionsLocalProvider';
 
 export interface ProgressRow {
   leetcodeId: string;
@@ -183,6 +183,7 @@ export const backendApi = {
   register: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth', withJson({ ...payload, action: 'register' }), AUTH_API_TIMEOUT_MS),
   login: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth', withJson({ ...payload, action: 'login' }), AUTH_API_TIMEOUT_MS),
   me: () => apiRequest<{ handle: string }>('/api/auth?action=me', { headers: authHeaders() }, AUTH_API_TIMEOUT_MS),
+  warmDatabase: () => apiRequest<{ status: string }>('/api/health/db', undefined, API_TIMEOUT_MS),
   adminLogin: (adminKey: string) => apiRequest<AdminLoginResponse>('/api/admin', withJson({ adminKey, action: 'login' }), AUTH_API_TIMEOUT_MS),
   getAdminUsers: () => apiRequest<AdminUserRow[]>('/api/admin?action=users', { headers: authHeaders(true) }, AUTH_API_TIMEOUT_MS),
   resetAdminUserPassword: (handle: string, password: string) => apiRequest<{ handle: string }>('/api/admin', withJson({ handle, password, action: 'reset-password' }, true), AUTH_API_TIMEOUT_MS),
@@ -197,6 +198,8 @@ export const backendApi = {
   }),
   getCompanyQuestions: (params?: { company?: string; bucket?: 'all' | '30d' | '3m' | '6m'; search?: string }) =>
     getCompanyQuestionsLocal(params),
+  getCompanyQuestionBuckets: (): Promise<CompanyQuestionBucketRows> =>
+    getCompanyQuestionBucketsLocal(),
   getCustomQuestions: (_handle?: string) => apiRequest<QuestionV2Row[]>('/api/v2/questions?customOnly=true', { headers: authHeaders() }),
   upsertQuestion: (payload: QuestionUpsertPayload) => apiRequest<QuestionV2Row>('/api/v2/questions', {
     method: 'POST',
