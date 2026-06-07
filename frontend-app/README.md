@@ -18,6 +18,8 @@ Serverless (`Vercel Project > Settings > Environment Variables`):
 - `PG_POOL_MAX=1` serverless-safe pool size
 - `PG_CONNECTION_TIMEOUT_MS=5000` and `PG_IDLE_TIMEOUT_MS=1000` to give auth enough time while still releasing idle DB connections quickly
 
+If the URL is the direct Aiven Postgres endpoint, leave `PG_USE_POOL` unset or set it to `false`. Turn it on only after replacing `DATABASE_URL` with the Aiven connection pool/PgBouncer endpoint.
+
 Example serverless env file is available at `frontend-app/.env.server.example`.
 
 To get your app live on your **GoDaddy Domain** for free:
@@ -59,6 +61,7 @@ This app now includes Vercel serverless functions:
 - `GET /api/cron/keep-db-awake` (scheduled by Vercel Cron)
 - `GET/POST /api/auth`
 - `GET/POST /api/admin`
+- `POST /api/admin` with action `ensure-indexes` to run the admin-protected performance indexes once after database maintenance
 
 `backend-api/` is kept in the repo as-is, but frontend production can run independently via these serverless routes.
 

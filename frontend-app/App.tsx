@@ -19,6 +19,7 @@ const DB_SYNC_COOLDOWN_MS = 60_000;
 type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
 type AuthMode = 'login' | 'signup' | 'admin';
 type ThemeMode = 'dark' | 'light';
+type SyncStatus = 'signed-out' | 'idle' | 'syncing' | 'synced' | 'paused' | 'error';
 
 interface LcMetadata {
   questionId: string;
@@ -191,13 +192,15 @@ const mockClassifyQuestion = async (questionId: string): Promise<LcMetadata> => 
 
 // --- UI COMPONENTS ---
 
-const CloudStatus: React.FC<{ status: 'syncing' | 'saved' | 'error' | 'idle' }> = ({ status }) => {
+const CloudStatus: React.FC<{ status: SyncStatus }> = ({ status }) => {
   const configs = {
+    'signed-out': { color: "bg-slate-600", label: "Sign in to sync" },
+    idle: { color: "bg-slate-500", label: "Ready to sync" },
     syncing: { color: "bg-amber-400", label: "Sync in progress" },
-    saved: { color: "bg-emerald-500", label: "Synced" },
+    synced: { color: "bg-emerald-500", label: "Synced" },
+    paused: { color: "bg-orange-500", label: "Sync unavailable" },
     error: { color: "bg-rose-500", label: "Sync failed" },
-    idle: { color: "bg-slate-600", label: "Idle" }
-  };
+  } satisfies Record<SyncStatus, { color: string; label: string }>;
   const cfg = configs[status];
   
   return (
@@ -287,7 +290,7 @@ const App: React.FC = () => {
     return normalizeStoredMap(localStorage.getItem(SOLUTION_CACHE_KEY));
   });
   
-  const [syncStatus, setSyncStatus] = useState<'syncing' | 'saved' | 'error' | 'idle'>('idle');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => handle && backendApi.hasAuthSession() ? 'idle' : 'signed-out');
   const [baseSectionsData, setBaseSectionsData] = useState<Section[]>(() => getInitialSections());
   const [sectionsData, setSectionsData] = useState<Section[]>(() => getInitialSections());
   const [companyBucketSections, setCompanyBucketSections] = useState<CompanyBucketSections>(() => emptyCompanyBucketSections());
@@ -334,18 +337,25 @@ const App: React.FC = () => {
   const [adminResetPassword, setAdminResetPassword] = useState('');
   const [adminMessage, setAdminMessage] = useState('');
   const [isAdminBusy, setIsAdminBusy] = useState(false);
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(() => backendApi.hasAdminSession());
 
   // --- ATOMIC DATABASE OPERATIONS ---
 
   const clearExpiredUserSession = useCallback((message = 'Your session expired. Please sign in again.') => {
+    backendApi.clearAuthSession();
     clearHandle();
     setAuthMode('login');
     setAuthUsername('');
     setAuthPassword('');
     setAuthError(message);
-    setSyncStatus('idle');
+    setSyncStatus('signed-out');
     pendingProgressRef.current = {};
   }, [clearHandle]);
+
+  const markDbSyncUnavailable = useCallback(() => {
+    lastDbSyncFailureAtRef.current = Date.now();
+    setSyncStatus('paused');
+  }, []);
 
   const pullBaseQuestions = useCallback(async () => {
     const nextSections = getInitialSections();
@@ -357,8 +367,14 @@ const App: React.FC = () => {
   }, []);
 
   const pullRelationalProgress = useCallback(async (userHandle: string) => {
-    if (!userHandle || !backendApi.hasAuthSession()) return;
-    if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) return;
+    if (!userHandle || !backendApi.hasAuthSession()) {
+      setSyncStatus('signed-out');
+      return;
+    }
+    if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) {
+      setSyncStatus('paused');
+      return;
+    }
     setSyncStatus('syncing');
     try {
       const rows = await backendApi.getProgress(userHandle);
@@ -390,16 +406,15 @@ const App: React.FC = () => {
       setSolutionMap(solutionNotesMap);
       localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(completionMap));
       localStorage.setItem(SOLUTION_CACHE_KEY, JSON.stringify(solutionNotesMap));
-      setSyncStatus('saved');
+      setSyncStatus('synced');
     } catch (error) {
       if (isAuthFailure(error)) {
         clearExpiredUserSession();
         return;
       }
-      lastDbSyncFailureAtRef.current = Date.now();
-      setSyncStatus('error');
+      markDbSyncUnavailable();
     }
-  }, [clearExpiredUserSession]);
+  }, [clearExpiredUserSession, markDbSyncUnavailable]);
 
   const atomicUpdate = async (
     qId: string,
@@ -407,7 +422,10 @@ const App: React.FC = () => {
     solutionRichText?: string | null,
     metadata?: QuestionProgressMetadata
   ) => {
-    if (!handle) return;
+    if (!handle || !backendApi.hasAuthSession()) {
+      setSyncStatus('signed-out');
+      return;
+    }
     const leetcodeId = normalizeQuestionId(qId);
     pendingProgressRef.current[leetcodeId] = {
       completed: isChecked,
@@ -428,7 +446,7 @@ const App: React.FC = () => {
         metadataJson: metadata?.metadataJson ?? null
       });
       delete pendingProgressRef.current[leetcodeId];
-      setSyncStatus('saved');
+      setSyncStatus('synced');
     } catch (e) {
       if (isAuthFailure(e)) {
         clearExpiredUserSession();
@@ -472,7 +490,8 @@ const App: React.FC = () => {
       const message = error instanceof Error ? error.message : 'Admin session expired or invalid.';
       setAdminMessage(message);
       if (isAuthFailure(error)) {
-        localStorage.removeItem(ADMIN_SESSION_KEY);
+        backendApi.clearAdminSession();
+        setIsAdminUnlocked(false);
         setAdminUsers([]);
         setAdminMessage('Admin session expired. Enter the admin key again.');
       }
@@ -509,6 +528,7 @@ const App: React.FC = () => {
     try {
       const response = await backendApi.adminLogin(adminKey);
       localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token: response.token }));
+      setIsAdminUnlocked(true);
       setAdminKey('');
       setAdminMessage('Admin access unlocked.');
       await loadAdminUsers();
@@ -529,9 +549,31 @@ const App: React.FC = () => {
       setAdminMessage(`Password reset for @${adminResetHandle.trim().toLowerCase()}.`);
       await loadAdminUsers();
     } catch {
-      localStorage.removeItem(ADMIN_SESSION_KEY);
+      backendApi.clearAdminSession();
+      setIsAdminUnlocked(false);
       setAdminUsers([]);
       setAdminMessage('Admin session expired. Enter the admin key again.');
+    } finally {
+      setIsAdminBusy(false);
+    }
+  };
+
+  const handleEnsurePerformanceIndexes = async () => {
+    setAdminMessage('');
+    setIsAdminBusy(true);
+    try {
+      const response = await backendApi.ensurePerformanceIndexes();
+      setAdminMessage(`Performance indexes ready: ${response.indexes.join(', ')}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to prepare performance indexes.';
+      if (isAuthFailure(error)) {
+        backendApi.clearAdminSession();
+        setIsAdminUnlocked(false);
+        setAdminUsers([]);
+        setAdminMessage('Admin session expired. Enter the admin key again.');
+      } else {
+        setAdminMessage(message);
+      }
     } finally {
       setIsAdminBusy(false);
     }
@@ -550,7 +592,8 @@ const App: React.FC = () => {
       }
       await loadAdminUsers();
     } catch {
-      localStorage.removeItem(ADMIN_SESSION_KEY);
+      backendApi.clearAdminSession();
+      setIsAdminUnlocked(false);
       setAdminUsers([]);
       setAdminMessage('Admin session expired. Enter the admin key again.');
     } finally {
@@ -559,9 +602,11 @@ const App: React.FC = () => {
   };
 
   const logout = () => {
+    backendApi.clearAuthSession();
     clearHandle();
     setAuthUsername('');
     setAuthPassword('');
+    setSyncStatus('signed-out');
     setCompletedMap({});
     setSolutionMap({});
     localStorage.removeItem(LOCAL_CACHE_KEY);
@@ -576,9 +621,16 @@ const App: React.FC = () => {
       setSectionsData(merged);
     }
 
-    if (!userHandle || !backendApi.hasAuthSession()) return;
-    if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) return;
+    if (!userHandle || !backendApi.hasAuthSession()) {
+      setSyncStatus('signed-out');
+      return;
+    }
+    if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) {
+      setSyncStatus('paused');
+      return;
+    }
 
+    setSyncStatus('syncing');
     try {
       const rows = await backendApi.getCustomQuestions(userHandle);
       const normalizedRows: CustomQuestionRow[] = rows.map((row: QuestionV2Row) => {
@@ -611,13 +663,15 @@ const App: React.FC = () => {
         const merged = normalizedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
         setSectionsData(merged);
       }
+      setSyncStatus('synced');
     } catch (error) {
       if (isAuthFailure(error)) {
         clearExpiredUserSession();
+        return;
       }
-      lastDbSyncFailureAtRef.current = Date.now();
+      markDbSyncUnavailable();
     }
-  }, [baseSectionsData, clearExpiredUserSession]);
+  }, [baseSectionsData, clearExpiredUserSession, markDbSyncUnavailable]);
 
   const buildCompanySectionsFromRows = (rows: CompanyQuestionRow[]): Section[] => {
     const companySectionsMap = new Map<string, Pattern>();
@@ -762,6 +816,7 @@ const App: React.FC = () => {
       window.addEventListener('focus', onFocus);
       return () => window.removeEventListener('focus', onFocus);
     }
+    setSyncStatus('signed-out');
   }, [handle, pullRelationalProgress, pullCustomQuestions]);
 
   useEffect(() => {
@@ -2140,6 +2195,16 @@ const App: React.FC = () => {
                     {isAuthBusy ? 'Checking...' : 'Unlock Admin'}
                   </button>
                   {adminMessage && <p className="text-center text-xs font-bold text-amber-300">{adminMessage}</p>}
+                  {isAdminUnlocked && (
+                    <button
+                      type="button"
+                      onClick={handleEnsurePerformanceIndexes}
+                      disabled={isAdminBusy}
+                      className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300 disabled:opacity-60"
+                    >
+                      {isAdminBusy ? 'Preparing...' : 'Prepare DB Indexes'}
+                    </button>
+                  )}
                   {adminUsers.length > 0 && (
                     <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70">
                       <div className="sticky top-0 border-b border-slate-800 bg-slate-950 p-3">

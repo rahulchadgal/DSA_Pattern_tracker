@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { query } from '../server/db.js';
 import { allowMethods, normalizeHandle, parseBody, sendError, sendJson } from '../server/http.js';
 import { createAdminToken, hashPassword, requireAdmin } from '../server/auth.js';
+import { ensurePerformanceIndexes } from '../server/performanceIndexes.js';
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
@@ -56,6 +57,9 @@ async function handlePost(req, res) {
   }
   if (action === 'enable') {
     return setUserDisabled(req, body, res, false);
+  }
+  if (action === 'ensure-indexes') {
+    return runPerformanceIndexes(req, res);
   }
 
   return sendError(res, 404, 'Unknown admin action');
@@ -126,5 +130,17 @@ async function setUserDisabled(req, body, res, disabled) {
     return sendJson(res, 200, result.rows[0]);
   } catch (error) {
     return sendError(res, 401, error instanceof Error ? error.message : 'Unauthorized');
+  }
+}
+
+async function runPerformanceIndexes(req, res) {
+  try {
+    await requireAdmin(req);
+    const indexes = await ensurePerformanceIndexes();
+    return sendJson(res, 200, { ok: true, indexes });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to prepare performance indexes';
+    const status = message === 'Unauthorized' || message === 'Invalid token' || message === 'Expired token' ? 401 : 500;
+    return sendError(res, status, message);
   }
 }

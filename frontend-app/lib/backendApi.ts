@@ -73,6 +73,11 @@ export interface AdminUserRow {
   completedCount: number;
 }
 
+export interface PerformanceIndexResponse {
+  ok: boolean;
+  indexes: string[];
+}
+
 const DEFAULT_API_BASE_URL = '';
 const API_TIMEOUT_MS = 2500;
 const AUTH_API_TIMEOUT_MS = 9000;
@@ -114,6 +119,11 @@ const getStoredToken = (key: string) => {
 };
 
 const hasStoredToken = (key: string) => getStoredToken(key).length > 0;
+
+const clearStoredToken = (key: string) => {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.removeItem(key);
+};
 
 const authHeaders = (admin = false): HeadersInit => {
   const token = getStoredToken(admin ? ADMIN_SESSION_KEY : AUTH_SESSION_KEY);
@@ -168,6 +178,8 @@ export const backendApi = {
   adminSessionKey: ADMIN_SESSION_KEY,
   hasAuthSession: () => hasStoredToken(AUTH_SESSION_KEY),
   hasAdminSession: () => hasStoredToken(ADMIN_SESSION_KEY),
+  clearAuthSession: () => clearStoredToken(AUTH_SESSION_KEY),
+  clearAdminSession: () => clearStoredToken(ADMIN_SESSION_KEY),
   register: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth', withJson({ ...payload, action: 'register' }), AUTH_API_TIMEOUT_MS),
   login: (payload: { username: string; password: string }) => apiRequest<AuthResponse>('/api/auth', withJson({ ...payload, action: 'login' }), AUTH_API_TIMEOUT_MS),
   me: () => apiRequest<{ handle: string }>('/api/auth?action=me', { headers: authHeaders() }, AUTH_API_TIMEOUT_MS),
@@ -176,6 +188,7 @@ export const backendApi = {
   resetAdminUserPassword: (handle: string, password: string) => apiRequest<{ handle: string }>('/api/admin', withJson({ handle, password, action: 'reset-password' }, true), AUTH_API_TIMEOUT_MS),
   disableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string }>('/api/admin', withJson({ handle, action: 'disable' }, true), AUTH_API_TIMEOUT_MS),
   enableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string | null }>('/api/admin', withJson({ handle, action: 'enable' }, true), AUTH_API_TIMEOUT_MS),
+  ensurePerformanceIndexes: () => apiRequest<PerformanceIndexResponse>('/api/admin', withJson({ action: 'ensure-indexes' }, true), AUTH_API_TIMEOUT_MS),
   getProgress: (_handle?: string) => apiRequest<ProgressRow[]>('/api/progress', { headers: authHeaders() }),
   upsertProgress: (payload: ProgressUpsertPayload) => apiRequest<ProgressRow>('/api/progress', {
     method: 'POST',
