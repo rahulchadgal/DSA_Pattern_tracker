@@ -6,6 +6,12 @@ export interface ProgressRow {
   updatedAt: string;
   completedAt?: string | null;
   solutionRichText?: string | null;
+  hasSolutionNote?: boolean;
+}
+
+export interface SolutionNoteResponse {
+  leetcodeId: string;
+  solutionRichText: string | null;
 }
 
 export interface QuestionV2Row {
@@ -191,6 +197,7 @@ export const backendApi = {
   enableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string | null }>('/api/admin', withJson({ handle, action: 'enable' }, true), AUTH_API_TIMEOUT_MS),
   ensurePerformanceIndexes: () => apiRequest<PerformanceIndexResponse>('/api/admin', withJson({ action: 'ensure-indexes' }, true), AUTH_API_TIMEOUT_MS),
   getProgress: (_handle?: string) => apiRequest<ProgressRow[]>('/api/progress', { headers: authHeaders() }),
+  getSolutionNote: (leetcodeId: string) => apiRequest<SolutionNoteResponse>(`/api/progress?leetcodeId=${encodeURIComponent(leetcodeId)}&includeSolution=true`, { headers: authHeaders() }),
   upsertProgress: (payload: ProgressUpsertPayload) => apiRequest<ProgressRow>('/api/progress', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
