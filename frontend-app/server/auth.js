@@ -95,7 +95,7 @@ export function readBearerToken(req) {
   return match ? match[1] : '';
 }
 
-export async function requireUser(req) {
+export function requireUserHandle(req) {
   const payload = readPayload(readBearerToken(req));
   if (payload.kind !== 'user') {
     throw new Error('Unauthorized');
@@ -104,6 +104,11 @@ export async function requireUser(req) {
   if (!handle) {
     throw new Error('Unauthorized');
   }
+  return handle;
+}
+
+export async function requireUser(req) {
+  const handle = requireUserHandle(req);
   const result = await query('SELECT id, handle, disabled_at FROM user_handles WHERE handle = $1', [handle]);
   const user = result.rows[0];
   if (!user || user.disabled_at) {

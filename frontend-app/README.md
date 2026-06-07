@@ -9,16 +9,16 @@ Client (`frontend-app/.env`):
   - Set `http://localhost:8888` only if you want to call Spring backend directly in local.
 
 Serverless (`Vercel Project > Settings > Environment Variables`):
-- `DATABASE_URL` (recommended) as the Aiven pooler/PgBouncer Postgres URL
+- `DATABASE_URL` as the Neon pooled Postgres URL
 - `DB_URL` (optional compatibility) if you want to reuse JDBC-style value
 - `DB_USERNAME` and `DB_PASSWORD` when `DB_URL` does not already include credentials
 - `ADMIN_ACCESS_KEY` for admin access
 - `CRON_SECRET` for the daily database keepalive cron
-- `PG_USE_POOL=true` only when `DATABASE_URL` points to the Aiven pooler/PgBouncer URL
+- `PG_USE_POOL=true` only when `DATABASE_URL` points to a pooled/PgBouncer URL
 - `PG_POOL_MAX=1` serverless-safe pool size
 - `PG_CONNECTION_TIMEOUT_MS=5000` and `PG_IDLE_TIMEOUT_MS=1000` to give auth enough time while still releasing idle DB connections quickly
 
-If the URL is the direct Aiven Postgres endpoint, leave `PG_USE_POOL` unset or set it to `false`. Turn it on only after replacing `DATABASE_URL` with the Aiven connection pool/PgBouncer endpoint.
+For Neon production on Vercel, use the Neon pooled connection string for `DATABASE_URL`. Use the Neon direct connection string only for one-time migration commands such as `pg_restore`.
 
 Example serverless env file is available at `frontend-app/.env.server.example`.
 
@@ -69,6 +69,17 @@ This app now includes Vercel serverless functions:
 `frontend-app/vercel.json` registers one daily cron job at `0 3 * * *` UTC. It calls `/api/cron/keep-db-awake`, which runs `SELECT 1` against Postgres so the database receives a request every day.
 
 When `CRON_SECRET` is set in Vercel, Vercel automatically sends it as `Authorization: Bearer <CRON_SECRET>` for cron invocations.
+
+## Aiven To Neon Migration
+Use the helper script to move the full current Aiven `public` schema and data into Neon:
+
+```bash
+cp dev/.env.neon-migration.example dev/.env.neon-migration
+# Fill AIVEN_DATABASE_URL, NEON_DIRECT_DATABASE_URL, and NEON_POOLED_DATABASE_URL.
+./dev/migrate-aiven-to-neon.sh all
+```
+
+The restore uses `NEON_DIRECT_DATABASE_URL`; Vercel production should use `NEON_POOLED_DATABASE_URL` with `PG_USE_POOL=true`.
 
 ## Company Bank Filter
 Company-bank questions are rendered in the `Companies` route with:

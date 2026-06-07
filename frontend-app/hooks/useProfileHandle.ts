@@ -8,9 +8,15 @@ const resolveInitialHandle = () => {
   if (savedSession) {
     try {
       const parsed = JSON.parse(savedSession);
-      if (typeof parsed.handle === 'string' && parsed.handle.trim()) {
+      if (
+        typeof parsed.handle === 'string' &&
+        parsed.handle.trim() &&
+        typeof parsed.token === 'string' &&
+        parsed.token.trim()
+      ) {
         return parsed.handle.trim().toLowerCase();
       }
+      localStorage.removeItem(AUTH_SESSION_KEY);
     } catch {
       localStorage.removeItem(AUTH_SESSION_KEY);
     }
@@ -18,17 +24,16 @@ const resolveInitialHandle = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const urlHandle = urlParams.get('user');
   if (urlHandle) {
-    const normalized = urlHandle.trim().toLowerCase();
-    localStorage.setItem(PROFILE_KEY, normalized);
     window.history.replaceState({}, '', window.location.pathname);
-    return normalized;
   }
-  return localStorage.getItem(PROFILE_KEY) || '';
+  localStorage.removeItem(PROFILE_KEY);
+  return '';
 };
 
 export const useProfileHandle = () => {
-  const [handle, setHandle] = useState<string>(resolveInitialHandle);
-  const [showWelcome, setShowWelcome] = useState<boolean>(() => !resolveInitialHandle());
+  const [initialHandle] = useState(resolveInitialHandle);
+  const [handle, setHandle] = useState<string>(initialHandle);
+  const [showWelcome, setShowWelcome] = useState<boolean>(() => !initialHandle);
 
   const persistHandle = (value: string, token?: string) => {
     const normalized = value.trim().toLowerCase();

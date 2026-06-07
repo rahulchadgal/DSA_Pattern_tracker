@@ -45,8 +45,8 @@ Notes:
 - Keep database name same between local/prod if needed (for example `defaultdb`), and only vary host/port/credentials.
 - No script is required for profile handling.
 
-## Aiven + Render setup
-1. Create PostgreSQL in Aiven and copy host/port/db/user/password.
+## Managed Postgres + Render setup
+1. Create PostgreSQL in Aiven, Neon, or another managed provider and copy host/port/db/user/password.
 2. Construct JDBC URL:
    `jdbc:postgresql://<host>:<port>/<database>`
 3. Initialize schema from repo:
@@ -61,6 +61,16 @@ Notes:
 5. Deploy backend on Render using `backend-api/render.yaml`.
 6. Fill secret env vars in Render dashboard.
 7. In Vercel frontend, set `VITE_API_BASE_URL` to the Render backend base URL (for example `https://your-backend.onrender.com`).
+
+## Aiven to Neon migration
+The frontend production API can run on Neon using the same Postgres schema. Use:
+
+```bash
+cp dev/.env.neon-migration.example dev/.env.neon-migration
+./dev/migrate-aiven-to-neon.sh all
+```
+
+Use the Neon direct connection string for the restore and the Neon pooled connection string for Vercel production.
 
 ## Deploy backend to Render via GitHub
 1. Push this repo to GitHub (if not already pushed).

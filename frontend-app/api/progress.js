@@ -1,6 +1,6 @@
 import { query } from '../server/db.js';
 import { allowMethods, parseBody, sendError, sendJson } from '../server/http.js';
-import { requireUser } from '../server/auth.js';
+import { requireUser, requireUserHandle } from '../server/auth.js';
 
 function authStatus(message) {
   return message === 'Unauthorized' || message === 'Invalid token' || message === 'Expired token' ? 401 : 500;
@@ -20,20 +20,38 @@ export default async function handler(req, res) {
 
 async function getProgress(req, res) {
   try {
-    const user = await requireUser(req);
+    const handle = requireUserHandle(req);
     const result = await query(
-      `SELECT q.leetcode_id AS "leetcodeId",
-              p.completed,
-              p.updated_at AS "updatedAt",
-              p.completed_at AS "completedAt",
-              p.solution_rich_text AS "solutionRichText"
-       FROM progress_records p
-       JOIN question_catalog q ON q.id = p.question_id
-       WHERE p.user_id = $1
-       ORDER BY p.updated_at DESC`,
-      [user.id]
+      `WITH request_user AS (
+         SELECT id
+         FROM user_handles
+         WHERE handle = $1
+           AND disabled_at IS NULL
+       ),
+       progress_rows AS (
+         SELECT COALESCE(
+           json_agg(json_build_object(
+             'leetcodeId', q.leetcode_id,
+             'completed', p.completed,
+             'updatedAt', p.updated_at,
+             'completedAt', p.completed_at,
+             'solutionRichText', p.solution_rich_text
+           ) ORDER BY p.updated_at DESC),
+           '[]'::json
+         ) AS rows
+         FROM request_user u
+         JOIN progress_records p ON p.user_id = u.id
+         JOIN question_catalog q ON q.id = p.question_id
+       )
+       SELECT EXISTS(SELECT 1 FROM request_user) AS "userValid",
+              (SELECT rows FROM progress_rows) AS rows`,
+      [handle]
     );
-    return sendJson(res, 200, result.rows);
+    if (!result.rows[0]?.userValid) {
+      return sendError(res, 401, 'Unauthorized');
+    }
+    const rows = result.rows[0].rows;
+    return sendJson(res, 200, Array.isArray(rows) ? rows : JSON.parse(rows || '[]'));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load progress';
     return sendError(res, authStatus(message), message);

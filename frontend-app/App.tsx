@@ -319,6 +319,10 @@ const App: React.FC = () => {
   const [officialSolutionView, setOfficialSolutionView] = useState<'question' | 'hint' | 'solution'>('question');
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
   const pendingProgressRef = useRef<Record<string, { completed: boolean; solutionRichText: string | null }>>({});
+  const progressSyncPromiseRef = useRef<Promise<void> | null>(null);
+  const customSyncPromiseRef = useRef<Promise<void> | null>(null);
+  const warmupPromiseRef = useRef<Promise<void> | null>(null);
+  const routeModeRef = useRef(isProfile ? 'companies' : isRoulette ? 'roulette' : 'main');
   const lastDbSyncFailureAtRef = useRef(0);
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
   const [companySearchTerm, setCompanySearchTerm] = useState('');
@@ -357,6 +361,20 @@ const App: React.FC = () => {
     setSyncStatus('paused');
   }, []);
 
+  const warmDatabaseOnce = useCallback(() => {
+    if (warmupPromiseRef.current) return warmupPromiseRef.current;
+    const warmupPromise = backendApi.warmDatabase()
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        if (warmupPromiseRef.current === warmupPromise) {
+          warmupPromiseRef.current = null;
+        }
+      });
+    warmupPromiseRef.current = warmupPromise;
+    return warmupPromise;
+  }, []);
+
   const pullBaseQuestions = useCallback(async () => {
     const nextSections = getInitialSections();
     setBaseSectionsData(nextSections);
@@ -366,54 +384,66 @@ const App: React.FC = () => {
     setOpenSections([]);
   }, []);
 
-  const pullRelationalProgress = useCallback(async (userHandle: string) => {
+  const pullRelationalProgress = useCallback((userHandle: string) => {
+    if (progressSyncPromiseRef.current) return progressSyncPromiseRef.current;
     if (!userHandle || !backendApi.hasAuthSession()) {
       setSyncStatus('signed-out');
-      return;
+      return Promise.resolve();
     }
     if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) {
       setSyncStatus('paused');
-      return;
+      return Promise.resolve();
     }
-    setSyncStatus('syncing');
-    try {
-      const rows = await backendApi.getProgress(userHandle);
-      const completionMap: Record<string, string> = {};
-      const solutionNotesMap: Record<string, string> = {};
-      rows.forEach((r) => {
-        const leetcodeId = normalizeQuestionId(r.leetcodeId);
-        if (r.completed) {
-          completionMap[leetcodeId] = r.updatedAt;
+
+    let syncPromise: Promise<void> | null = null;
+    syncPromise = (async () => {
+      setSyncStatus('syncing');
+      try {
+        const rows = await backendApi.getProgress(userHandle);
+        const completionMap: Record<string, string> = {};
+        const solutionNotesMap: Record<string, string> = {};
+        rows.forEach((r) => {
+          const leetcodeId = normalizeQuestionId(r.leetcodeId);
+          if (r.completed) {
+            completionMap[leetcodeId] = r.updatedAt;
+          }
+          if (r.solutionRichText && r.solutionRichText.trim().length > 0) {
+            solutionNotesMap[leetcodeId] = r.solutionRichText;
+          }
+        });
+        Object.entries(pendingProgressRef.current).forEach(([leetcodeId, pending]) => {
+          if (pending.completed) {
+            completionMap[leetcodeId] = completionMap[leetcodeId] || new Date().toISOString();
+          } else {
+            delete completionMap[leetcodeId];
+          }
+          if (pending.solutionRichText && pending.solutionRichText.trim().length > 0) {
+            solutionNotesMap[leetcodeId] = pending.solutionRichText;
+          } else if (pending.solutionRichText === null) {
+            delete solutionNotesMap[leetcodeId];
+          }
+        });
+
+        setCompletedMap(completionMap);
+        setSolutionMap(solutionNotesMap);
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(completionMap));
+        localStorage.setItem(SOLUTION_CACHE_KEY, JSON.stringify(solutionNotesMap));
+        setSyncStatus('synced');
+      } catch (error) {
+        if (isAuthFailure(error)) {
+          clearExpiredUserSession();
+          return;
         }
-        if (r.solutionRichText && r.solutionRichText.trim().length > 0) {
-          solutionNotesMap[leetcodeId] = r.solutionRichText;
+        markDbSyncUnavailable();
+      } finally {
+        if (syncPromise && progressSyncPromiseRef.current === syncPromise) {
+          progressSyncPromiseRef.current = null;
         }
-      });
-      Object.entries(pendingProgressRef.current).forEach(([leetcodeId, pending]) => {
-        if (pending.completed) {
-          completionMap[leetcodeId] = completionMap[leetcodeId] || new Date().toISOString();
-        } else {
-          delete completionMap[leetcodeId];
-        }
-        if (pending.solutionRichText && pending.solutionRichText.trim().length > 0) {
-          solutionNotesMap[leetcodeId] = pending.solutionRichText;
-        } else if (pending.solutionRichText === null) {
-          delete solutionNotesMap[leetcodeId];
-        }
-      });
-      
-      setCompletedMap(completionMap);
-      setSolutionMap(solutionNotesMap);
-      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(completionMap));
-      localStorage.setItem(SOLUTION_CACHE_KEY, JSON.stringify(solutionNotesMap));
-      setSyncStatus('synced');
-    } catch (error) {
-      if (isAuthFailure(error)) {
-        clearExpiredUserSession();
-        return;
       }
-      markDbSyncUnavailable();
-    }
+    })();
+
+    progressSyncPromiseRef.current = syncPromise;
+    return syncPromise;
   }, [clearExpiredUserSession, markDbSyncUnavailable]);
 
   const atomicUpdate = async (
@@ -509,10 +539,8 @@ const App: React.FC = () => {
       const response = authMode === 'signup'
         ? await backendApi.register({ username, password: authPassword })
         : await backendApi.login({ username, password: authPassword });
-      const cleanHandle = persistHandle(response.handle, response.token);
+      persistHandle(response.handle, response.token);
       setAuthPassword('');
-      pullRelationalProgress(cleanHandle);
-      pullCustomQuestions(cleanHandle);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       setAuthError(message || (authMode === 'signup' ? 'Unable to create account.' : 'Invalid username or password.'));
@@ -613,7 +641,7 @@ const App: React.FC = () => {
     localStorage.removeItem(SOLUTION_CACHE_KEY);
   };
 
-  const pullCustomQuestions = useCallback(async (userHandle: string) => {
+  const pullCustomQuestions = useCallback((userHandle: string) => {
     const fromCache = localStorage.getItem(CUSTOM_QUESTIONS_CACHE_KEY);
     if (fromCache && baseSectionsData.length > 0) {
       const cachedRows: CustomQuestionRow[] = JSON.parse(fromCache);
@@ -621,56 +649,67 @@ const App: React.FC = () => {
       setSectionsData(merged);
     }
 
+    if (customSyncPromiseRef.current) return customSyncPromiseRef.current;
     if (!userHandle || !backendApi.hasAuthSession()) {
       setSyncStatus('signed-out');
-      return;
+      return Promise.resolve();
     }
     if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) {
       setSyncStatus('paused');
-      return;
+      return Promise.resolve();
     }
 
-    setSyncStatus('syncing');
-    try {
-      const rows = await backendApi.getCustomQuestions(userHandle);
-      const normalizedRows: CustomQuestionRow[] = rows.map((row: QuestionV2Row) => {
-        let sectionId = '';
-        let patternId = '';
-        if (row.metadataJson) {
-          try {
-            const metadata = JSON.parse(row.metadataJson);
-            sectionId = metadata.sectionId || '';
-            patternId = metadata.patternId || '';
-          } catch {
-            // ignore invalid metadata and fall back to pattern mapping
+    let syncPromise: Promise<void> | null = null;
+    syncPromise = (async () => {
+      setSyncStatus('syncing');
+      try {
+        const rows = await backendApi.getCustomQuestions(userHandle);
+        const normalizedRows: CustomQuestionRow[] = rows.map((row: QuestionV2Row) => {
+          let sectionId = '';
+          let patternId = '';
+          if (row.metadataJson) {
+            try {
+              const metadata = JSON.parse(row.metadataJson);
+              sectionId = metadata.sectionId || '';
+              patternId = metadata.patternId || '';
+            } catch {
+              // ignore invalid metadata and fall back to pattern mapping
+            }
           }
-        }
-        const inferredSectionId = sectionId || findSectionIdByCategory(baseSectionsData, row.mainPattern);
-        const questionId = normalizeQuestionId(row.leetcodeId);
-        return {
-          questionId,
-        title: row.title,
-        difficulty: normalizeDifficulty(row.difficulty),
-        category: row.mainPattern,
-        sectionId: inferredSectionId,
-        patternId: patternId || `custom-${inferredSectionId}`,
-        link: row.link
-        };
-      });
+          const inferredSectionId = sectionId || findSectionIdByCategory(baseSectionsData, row.mainPattern);
+          const questionId = normalizeQuestionId(row.leetcodeId);
+          return {
+            questionId,
+            title: row.title,
+            difficulty: normalizeDifficulty(row.difficulty),
+            category: row.mainPattern,
+            sectionId: inferredSectionId,
+            patternId: patternId || `custom-${inferredSectionId}`,
+            link: row.link
+          };
+        });
 
-      localStorage.setItem(CUSTOM_QUESTIONS_CACHE_KEY, JSON.stringify(normalizedRows));
-      if (baseSectionsData.length > 0) {
-        const merged = normalizedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
-        setSectionsData(merged);
+        localStorage.setItem(CUSTOM_QUESTIONS_CACHE_KEY, JSON.stringify(normalizedRows));
+        if (baseSectionsData.length > 0) {
+          const merged = normalizedRows.reduce((acc, row) => addCustomQuestionToSections(acc, row), cloneSections(baseSectionsData));
+          setSectionsData(merged);
+        }
+        setSyncStatus('synced');
+      } catch (error) {
+        if (isAuthFailure(error)) {
+          clearExpiredUserSession();
+          return;
+        }
+        markDbSyncUnavailable();
+      } finally {
+        if (syncPromise && customSyncPromiseRef.current === syncPromise) {
+          customSyncPromiseRef.current = null;
+        }
       }
-      setSyncStatus('synced');
-    } catch (error) {
-      if (isAuthFailure(error)) {
-        clearExpiredUserSession();
-        return;
-      }
-      markDbSyncUnavailable();
-    }
+    })();
+
+    customSyncPromiseRef.current = syncPromise;
+    return syncPromise;
   }, [baseSectionsData, clearExpiredUserSession, markDbSyncUnavailable]);
 
   const buildCompanySectionsFromRows = (rows: CompanyQuestionRow[]): Section[] => {
@@ -711,19 +750,16 @@ const App: React.FC = () => {
 
   const pullCompanyBucketMetadata = useCallback(async () => {
     try {
-      const bucketEntries = await Promise.all(COMPANY_TIME_FILTERS.map(async ([bucket]) => {
-        const rows = await backendApi.getCompanyQuestions({ bucket });
-        return [bucket, buildCompanySectionsFromRows(rows)] as const;
-      }));
+      const rowsByBucket = await backendApi.getCompanyQuestionBuckets();
       const nextBuckets = emptyCompanyBucketSections();
-      bucketEntries.forEach(([bucket, sections]) => {
-        nextBuckets[bucket] = sections;
+      COMPANY_TIME_FILTERS.forEach(([bucket]) => {
+        nextBuckets[bucket] = buildCompanySectionsFromRows(rowsByBucket[bucket]);
       });
       setCompanyBucketSections(nextBuckets);
     } catch {
       setCompanyBucketSections(emptyCompanyBucketSections());
     }
-  }, [companyTimeFilter]);
+  }, []);
 
   const handleClassifyQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -809,9 +845,31 @@ const App: React.FC = () => {
   }, [pullCompanyBucketMetadata]);
 
   useEffect(() => {
+    if (showWelcome) {
+      warmDatabaseOnce();
+    }
+  }, [showWelcome, warmDatabaseOnce]);
+
+  useEffect(() => {
+    const nextRouteMode = isProfile ? 'companies' : isRoulette ? 'roulette' : 'main';
+    if (routeModeRef.current === nextRouteMode) return;
+    const previousRouteMode = routeModeRef.current;
+    routeModeRef.current = nextRouteMode;
+
+    if (nextRouteMode === 'companies') {
+      resetQuestionSelection();
+      return;
+    }
+
+    if (previousRouteMode === 'companies') {
+      resetQuestionSelection();
+      setCompanySearchTerm('');
+    }
+  }, [isProfile, isRoulette]);
+
+  useEffect(() => {
     if (handle) {
-      pullRelationalProgress(handle);
-      pullCustomQuestions(handle);
+      pullRelationalProgress(handle).then(() => pullCustomQuestions(handle));
       const onFocus = () => pullRelationalProgress(handle);
       window.addEventListener('focus', onFocus);
       return () => window.removeEventListener('focus', onFocus);
@@ -1215,6 +1273,35 @@ const App: React.FC = () => {
 
   const closeSearchQuestion = () => {
     setSelectedSearchQuestion(null);
+  };
+
+  const resetQuestionSelection = () => {
+    setSelectedSectionId('');
+    setSelectedPattern(EMPTY_PATTERN);
+    setOpenSections([]);
+  };
+
+  const goToMainView = () => {
+    resetQuestionSelection();
+    setCompanySearchTerm('');
+    goMain();
+  };
+
+  const goToCompaniesView = () => {
+    resetQuestionSelection();
+    goProfile();
+  };
+
+  const goToSyllabusView = () => {
+    resetQuestionSelection();
+    setCompanySearchTerm('');
+    goSyllabus();
+  };
+
+  const goToRouletteView = () => {
+    resetQuestionSelection();
+    setCompanySearchTerm('');
+    goRoulette();
   };
 
   const selectPattern = (section: Section, pattern: Pattern) => {
@@ -1727,14 +1814,14 @@ const App: React.FC = () => {
 
                {/* Header Mode Switcher */}
                <div className={`flex p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
-                  <button
-                    onClick={goMain}
+	                  <button
+	                    onClick={goToMainView}
                     className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
                   >
                     Main
                   </button>
-                  <button
-                    onClick={goProfile}
+	                  <button
+	                    onClick={goToCompaniesView}
                     className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
                   >
                     Companies
@@ -1743,13 +1830,13 @@ const App: React.FC = () => {
                {!isProfile && (
                  <div className={`hidden sm:flex p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
                     <button 
-                      onClick={goSyllabus}
+	                      onClick={goToSyllabusView}
                       className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isSyllabus ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
                     >
                       Syllabus
                     </button>
                     <button 
-                      onClick={goRoulette}
+	                      onClick={goToRouletteView}
                       className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRoulette ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
                     >
                       Roulette
@@ -2184,9 +2271,10 @@ const App: React.FC = () => {
                     <input
                       autoFocus
                       type="password"
-                      placeholder="6-12 character access key"
-                      value={adminKey}
-                      onChange={(e) => setAdminKey(e.target.value)}
+	                      placeholder="6-12 character access key"
+	                      value={adminKey}
+	                      onFocus={warmDatabaseOnce}
+	                      onChange={(e) => setAdminKey(e.target.value)}
                       className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800"
                     />
                   </div>
@@ -2265,12 +2353,12 @@ const App: React.FC = () => {
                     <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Username</label>
                     <div className="flex items-center gap-3 text-xl font-mono">
                       <span className="text-emerald-500/40">@</span>
-                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
+	                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onFocus={warmDatabaseOnce} onChange={(e) => setAuthUsername(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
                     </div>
                   </div>
                   <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
                     <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Password</label>
-                    <input type="password" placeholder="4-10 characters" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
+	                    <input type="password" placeholder="4-10 characters" value={authPassword} onFocus={warmDatabaseOnce} onChange={(e) => setAuthPassword(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
                   </div>
                   {authError && <p className="text-center text-xs font-bold text-rose-400">{authError}</p>}
                   <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-indigo-600/20 transition-all active:scale-95">
