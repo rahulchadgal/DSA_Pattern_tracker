@@ -50,7 +50,8 @@ async function getProgress(req, res) {
     if (!result.rows[0]?.userValid) {
       return sendError(res, 401, 'Unauthorized');
     }
-    return sendJson(res, 200, result.rows[0].rows || []);
+    const rows = result.rows[0].rows;
+    return sendJson(res, 200, Array.isArray(rows) ? rows : JSON.parse(rows || '[]'));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load progress';
     return sendError(res, authStatus(message), message);
