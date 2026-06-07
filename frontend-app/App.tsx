@@ -49,7 +49,7 @@ interface QuestionProgressMetadata {
 
 interface PendingProgressRow {
   completed: boolean;
-  solutionRichText: string | null;
+  solutionRichText?: string | null;
   updatedAt: string;
   metadata?: QuestionProgressMetadata;
 }
@@ -148,7 +148,9 @@ const readPendingProgressMap = (raw: string | null): Record<string, PendingProgr
       if (!row || typeof row.completed !== 'boolean') return acc;
       acc[normalizeQuestionId(id)] = {
         completed: row.completed,
-        solutionRichText: typeof row.solutionRichText === 'string' ? row.solutionRichText : null,
+        ...(Object.prototype.hasOwnProperty.call(row, 'solutionRichText')
+          ? { solutionRichText: typeof row.solutionRichText === 'string' ? row.solutionRichText : null }
+          : {}),
         updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : new Date().toISOString(),
         metadata: row.metadata
       };
@@ -382,6 +384,7 @@ const App: React.FC = () => {
   // --- PROGRESS STATE (Map of ID -> Timestamp) ---
   const [completedMap, setCompletedMap] = useState<Record<string, string>>({});
   const [solutionMap, setSolutionMap] = useState<Record<string, string>>({});
+  const [solutionNotePresenceMap, setSolutionNotePresenceMap] = useState<Record<string, boolean>>({});
   
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => handle && backendApi.hasAuthSession() ? 'idle' : 'signed-out');
   const [baseSectionsData, setBaseSectionsData] = useState<Section[]>(() => getInitialSections());
@@ -410,6 +413,7 @@ const App: React.FC = () => {
   const [officialSolution, setOfficialSolution] = useState<OfficialSolutionEntry | null>(null);
   const [officialSolutionStatus, setOfficialSolutionStatus] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle');
   const [officialSolutionView, setOfficialSolutionView] = useState<'question' | 'hint' | 'solution'>('question');
+  const [isLoadingSolutionNote, setIsLoadingSolutionNote] = useState(false);
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
   const pendingProgressRef = useRef<Record<string, PendingProgressRow>>({});
   const progressSyncPromiseRef = useRef<Promise<void> | null>(null);
@@ -456,6 +460,7 @@ const App: React.FC = () => {
     customSyncHandleRef.current = '';
     setCompletedMap({});
     setSolutionMap({});
+    setSolutionNotePresenceMap({});
   }, [clearHandle]);
 
   useEffect(() => {
@@ -516,6 +521,7 @@ const App: React.FC = () => {
     });
     setCompletedMap(cachedCompleted);
     setSolutionMap(cachedSolutions);
+    setSolutionNotePresenceMap(Object.fromEntries(Object.keys(cachedSolutions).map((id) => [id, true])));
     applyCustomRowsToSections(readUserCustomQuestionCache(normalizedHandle));
     loadedLocalHandleRef.current = normalizedHandle;
   }, [applyCustomRowsToSections]);
@@ -545,13 +551,18 @@ const App: React.FC = () => {
         const rows = await backendApi.getProgress(userHandle);
         const completionMap: Record<string, string> = {};
         const solutionNotesMap: Record<string, string> = {};
+        const notePresenceMap: Record<string, boolean> = {};
         rows.forEach((r) => {
           const leetcodeId = normalizeQuestionId(r.leetcodeId);
           if (r.completed) {
             completionMap[leetcodeId] = r.updatedAt;
           }
+          if (r.hasSolutionNote) {
+            notePresenceMap[leetcodeId] = true;
+          }
           if (r.solutionRichText && r.solutionRichText.trim().length > 0) {
             solutionNotesMap[leetcodeId] = r.solutionRichText;
+            notePresenceMap[leetcodeId] = true;
           }
         });
         Object.entries(pendingProgressRef.current).forEach(([leetcodeId, pending]) => {
@@ -560,18 +571,27 @@ const App: React.FC = () => {
           } else {
             delete completionMap[leetcodeId];
           }
-          if (pending.solutionRichText && pending.solutionRichText.trim().length > 0) {
+          if (Object.prototype.hasOwnProperty.call(pending, 'solutionRichText') && pending.solutionRichText && pending.solutionRichText.trim().length > 0) {
             solutionNotesMap[leetcodeId] = pending.solutionRichText;
-          } else if (pending.solutionRichText === null) {
+            notePresenceMap[leetcodeId] = true;
+          } else if (Object.prototype.hasOwnProperty.call(pending, 'solutionRichText') && pending.solutionRichText === null) {
             delete solutionNotesMap[leetcodeId];
+            delete notePresenceMap[leetcodeId];
           }
         });
 
         if (activeHandleRef.current !== normalizedHandle) return;
+        const cachedSolutionNotes = readUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, LEGACY_SOLUTION_CACHE_KEY);
+        const nextSolutionMap = { ...cachedSolutionNotes, ...solutionNotesMap };
+        const nextNotePresenceMap = {
+          ...Object.fromEntries(Object.keys(cachedSolutionNotes).map((id) => [id, true])),
+          ...notePresenceMap
+        };
         setCompletedMap(completionMap);
-        setSolutionMap(solutionNotesMap);
+        setSolutionMap(nextSolutionMap);
+        setSolutionNotePresenceMap(nextNotePresenceMap);
         writeUserMapCache(PROGRESS_CACHE_PREFIX, normalizedHandle, completionMap);
-        writeUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, solutionNotesMap);
+        writeUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, nextSolutionMap);
 
         const pendingEntries = Object.entries(pendingProgressRef.current);
         for (const [leetcodeId, pending] of pendingEntries) {
@@ -579,7 +599,7 @@ const App: React.FC = () => {
             handle: normalizedHandle,
             leetcodeId,
             completed: pending.completed,
-            solutionRichText: pending.solutionRichText,
+            ...(Object.prototype.hasOwnProperty.call(pending, 'solutionRichText') ? { solutionRichText: pending.solutionRichText ?? null } : {}),
             title: pending.metadata?.title,
             difficulty: pending.metadata?.difficulty,
             link: pending.metadata?.link,
@@ -624,7 +644,7 @@ const App: React.FC = () => {
     const normalizedHandle = normalizeHandle(handle);
     pendingProgressRef.current[leetcodeId] = {
       completed: isChecked,
-      solutionRichText: solutionRichText ?? null,
+      ...(solutionRichText !== undefined ? { solutionRichText: solutionRichText ?? null } : {}),
       updatedAt: new Date().toISOString(),
       metadata
     };
@@ -635,7 +655,7 @@ const App: React.FC = () => {
         handle: normalizedHandle,
         leetcodeId,
         completed: isChecked,
-        solutionRichText: solutionRichText ?? null,
+        ...(solutionRichText !== undefined ? { solutionRichText: solutionRichText ?? null } : {}),
         title: metadata?.title,
         difficulty: metadata?.difficulty,
         link: metadata?.link,
@@ -806,6 +826,7 @@ const App: React.FC = () => {
     setSyncStatus('signed-out');
     setCompletedMap({});
     setSolutionMap({});
+    setSolutionNotePresenceMap({});
     pendingProgressRef.current = {};
     loadedLocalHandleRef.current = '';
     progressSyncHandleRef.current = '';
@@ -1053,6 +1074,7 @@ const App: React.FC = () => {
     customSyncHandleRef.current = '';
     setCompletedMap({});
     setSolutionMap({});
+    setSolutionNotePresenceMap({});
     setSectionsData(cloneSections(baseSectionsData));
     setSyncStatus('signed-out');
   }, [handle, loadUserLocalState, pullRelationalProgress, pullCustomQuestions, baseSectionsData]);
@@ -1101,10 +1123,55 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!editingSolutionQuestion || !solutionEditorRef.current) return;
-    solutionEditorRef.current.innerHTML = solutionMap[editingSolutionQuestion.id] || '';
+    const questionId = normalizeQuestionId(editingSolutionQuestion.id);
+    solutionEditorRef.current.innerHTML = solutionMap[questionId] || '';
     solutionEditorRef.current.style.height = 'auto';
     solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
   }, [editingSolutionQuestion, solutionMap]);
+
+  useEffect(() => {
+    if (!editingSolutionQuestion || !handle || !backendApi.hasAuthSession()) return;
+    const questionId = normalizeQuestionId(editingSolutionQuestion.id);
+    if (solutionMap[questionId] || !solutionNotePresenceMap[questionId]) return;
+
+    let cancelled = false;
+    setIsLoadingSolutionNote(true);
+    backendApi.getSolutionNote(questionId)
+      .then((response) => {
+        if (cancelled) return;
+        const note = response.solutionRichText || '';
+        if (note.trim().length === 0) {
+          setSolutionNotePresenceMap(prev => {
+            const next = { ...prev };
+            delete next[questionId];
+            return next;
+          });
+          return;
+        }
+        setSolutionMap(prev => {
+          const next = { ...prev, [questionId]: note };
+          writeUserMapCache(SOLUTION_CACHE_PREFIX, handle, next);
+          return next;
+        });
+        setSolutionNotePresenceMap(prev => ({ ...prev, [questionId]: true }));
+      })
+      .catch((error) => {
+        if (isAuthFailure(error)) {
+          clearExpiredUserSession();
+        } else {
+          markDbSyncUnavailable();
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingSolutionNote(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editingSolutionQuestion, handle, solutionMap, solutionNotePresenceMap, clearExpiredUserSession, markDbSyncUnavailable]);
 
   // --- HANDLERS ---
 
@@ -1145,7 +1212,7 @@ const App: React.FC = () => {
     setCompletedMap(nextMap);
     if (handle && backendApi.hasAuthSession()) {
       writeUserMapCache(PROGRESS_CACHE_PREFIX, handle, nextMap);
-      atomicUpdate(questionId, isNowChecked, solutionMap[questionId] ?? null, buildProgressMetadata(question));
+      atomicUpdate(questionId, isNowChecked, undefined, buildProgressMetadata(question));
     } else {
       setSyncStatus('signed-out');
     }
@@ -1212,8 +1279,14 @@ const App: React.FC = () => {
     const nextMap = { ...solutionMap };
     if (nextHtml) {
       nextMap[questionId] = nextHtml;
+      setSolutionNotePresenceMap(prev => ({ ...prev, [questionId]: true }));
     } else {
       delete nextMap[questionId];
+      setSolutionNotePresenceMap(prev => {
+        const next = { ...prev };
+        delete next[questionId];
+        return next;
+      });
     }
     setSolutionMap(nextMap);
 
@@ -1651,7 +1724,7 @@ const App: React.FC = () => {
         {filteredPatternQuestions.map(q => {
           const timestamp = completedMap[q.id];
           const done = !!timestamp;
-          const hasSolution = Boolean(solutionMap[q.id] && solutionMap[q.id].trim().length > 0);
+          const hasSolution = Boolean(solutionNotePresenceMap[q.id] || (solutionMap[q.id] && solutionMap[q.id].trim().length > 0));
           const neutralCardClass = showCompanyFilters
             ? (done
               ? themeMode === 'light' ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-900/65 border-slate-700/60'
@@ -2155,9 +2228,9 @@ const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => openSolutionEditor(selectedSearchQuestion.question)}
-                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[10px] font-black uppercase tracking-widest ${solutionMap[selectedSearchQuestion.question.id] ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : themeMode === 'light' ? 'border-slate-300 bg-slate-50 text-slate-500 hover:text-indigo-500' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-indigo-300'}`}
+                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[10px] font-black uppercase tracking-widest ${solutionNotePresenceMap[selectedSearchQuestion.question.id] || solutionMap[selectedSearchQuestion.question.id] ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : themeMode === 'light' ? 'border-slate-300 bg-slate-50 text-slate-500 hover:text-indigo-500' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-indigo-300'}`}
               >
-                {solutionMap[selectedSearchQuestion.question.id] ? 'Edit Note' : 'Add Note'}
+                {solutionNotePresenceMap[selectedSearchQuestion.question.id] || solutionMap[selectedSearchQuestion.question.id] ? 'Edit Note' : 'Add Note'}
               </button>
             </div>
 
@@ -2354,7 +2427,9 @@ const App: React.FC = () => {
             />
 
             <div className="mt-5 flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">Your note is stored per handle and question.</span>
+              <span className="text-[11px] text-slate-500">
+                {isLoadingSolutionNote ? 'Loading saved note...' : 'Your note is stored per handle and question.'}
+              </span>
               <div className="flex items-center gap-3">
                 <button
                   onClick={closeSolutionEditor}

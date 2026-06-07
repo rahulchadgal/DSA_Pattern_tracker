@@ -21,6 +21,25 @@ export default async function handler(req, res) {
 async function getProgress(req, res) {
   try {
     const handle = requireUserHandle(req);
+    const queryParams = req.query || {};
+    const leetcodeId = typeof queryParams.leetcodeId === 'string' ? queryParams.leetcodeId.trim() : '';
+    const includeSolution = queryParams.includeSolution === 'true';
+    if (leetcodeId && includeSolution) {
+      const user = await requireUser(req);
+      const noteResult = await query(
+        `SELECT p.solution_rich_text AS "solutionRichText"
+         FROM progress_records p
+         JOIN question_catalog q ON q.id = p.question_id
+         WHERE p.user_id = $1
+           AND q.leetcode_id = $2`,
+        [user.id, leetcodeId]
+      );
+      return sendJson(res, 200, {
+        leetcodeId,
+        solutionRichText: noteResult.rows[0]?.solutionRichText || null
+      });
+    }
+
     const result = await query(
       `WITH request_user AS (
          SELECT id
@@ -35,7 +54,7 @@ async function getProgress(req, res) {
              'completed', p.completed,
              'updatedAt', p.updated_at,
              'completedAt', p.completed_at,
-             'solutionRichText', p.solution_rich_text
+             'hasSolutionNote', p.solution_rich_text IS NOT NULL AND length(trim(p.solution_rich_text)) > 0
            ) ORDER BY p.updated_at DESC),
            '[]'::json
          ) AS rows
@@ -66,6 +85,7 @@ async function upsertProgress(req, res) {
     typeof body.solutionRichText === 'string' && body.solutionRichText.trim().length > 0
       ? body.solutionRichText
       : null;
+  const hasSolutionRichText = Object.prototype.hasOwnProperty.call(body, 'solutionRichText');
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   const difficulty = typeof body.difficulty === 'string' ? body.difficulty.trim() : '';
   const link = typeof body.link === 'string' ? body.link.trim() : '';
@@ -114,14 +134,15 @@ async function upsertProgress(req, res) {
          completed = EXCLUDED.completed,
          updated_at = NOW(),
          completed_at = CASE WHEN EXCLUDED.completed THEN NOW() ELSE NULL END,
-         solution_rich_text = EXCLUDED.solution_rich_text
+         solution_rich_text = CASE WHEN $5 THEN EXCLUDED.solution_rich_text ELSE progress_records.solution_rich_text END
        RETURNING
          (SELECT leetcode_id FROM question_catalog WHERE id = progress_records.question_id) AS "leetcodeId",
          completed,
          updated_at AS "updatedAt",
          completed_at AS "completedAt",
-         solution_rich_text AS "solutionRichText"`,
-      [user.id, questionId, completed, solutionRichText]
+         solution_rich_text IS NOT NULL AND length(trim(solution_rich_text)) > 0 AS "hasSolutionNote",
+         CASE WHEN $5 THEN solution_rich_text ELSE NULL END AS "solutionRichText"`,
+      [user.id, questionId, completed, solutionRichText, hasSolutionRichText]
     );
 
     return sendJson(res, 200, result.rows[0]);
