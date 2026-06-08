@@ -7,50 +7,63 @@ import { EditorView } from '@codemirror/view';
 interface JavaSolutionEditorProps {
   themeMode: 'dark' | 'light';
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
+  readOnly?: boolean;
+  height?: string;
 }
 
-const JavaSolutionEditor: React.FC<JavaSolutionEditorProps> = ({ themeMode, value, onChange }) => {
+const JavaSolutionEditor: React.FC<JavaSolutionEditorProps> = ({
+  themeMode,
+  value,
+  onChange,
+  readOnly = false,
+  height = '55vh'
+}) => {
   const extensions = useMemo(() => [
     java(),
     EditorView.lineWrapping,
+    ...(readOnly ? [EditorView.editable.of(false)] : []),
     EditorView.theme({
       '&': {
-        minHeight: '55vh',
-        height: '55vh',
+        minHeight: height,
+        height,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
         fontSize: '13px',
         backgroundColor: themeMode === 'light' ? '#ffffff' : '#020617'
       },
       '.cm-scroller': {
-        minHeight: '55vh',
+        minHeight: height,
         fontFamily: 'inherit'
       },
       '.cm-content': {
         padding: '16px'
+      },
+      '.cm-line': {
+        caretColor: readOnly ? 'transparent' : 'auto'
       },
       '.cm-gutters': {
         backgroundColor: themeMode === 'light' ? '#f8fafc' : '#0f172a',
         borderRightColor: themeMode === 'light' ? '#e2e8f0' : '#334155'
       }
     })
-  ], [themeMode]);
+  ], [height, readOnly, themeMode]);
 
   return (
     <CodeMirror
       value={value}
-      height="55vh"
+      height={height}
       basicSetup={{
-        autocompletion: true,
+        autocompletion: !readOnly,
         bracketMatching: true,
         foldGutter: true,
-        highlightActiveLine: true,
+        highlightActiveLine: !readOnly,
         highlightSelectionMatches: true,
         lineNumbers: true
       }}
       extensions={extensions}
+      editable={!readOnly}
       theme={themeMode === 'dark' ? oneDark : 'light'}
-      onChange={onChange}
+      onChange={readOnly ? undefined : onChange}
     />
   );
 };
