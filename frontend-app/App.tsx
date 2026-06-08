@@ -1,11 +1,13 @@
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AdminUserRow, backendApi, CompanyQuestionRow, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
 import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
 import { getOfficialSolution, OfficialSolutionEntry } from './lib/officialSolutions';
 import { Pattern, Question, Section } from './types';
+
+const JavaSolutionEditor = lazy(() => import('./components/JavaSolutionEditor'));
 
 const LEGACY_LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
 const LEGACY_SOLUTION_CACHE_KEY = 'dsa-solution-notes-v1';
@@ -18,6 +20,7 @@ const CUSTOM_QUESTIONS_CACHE_PREFIX = 'dsa-custom-questions-v1';
 const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
 const THEME_MODE_KEY = 'dsa-theme-mode-v1';
 const DB_SYNC_COOLDOWN_MS = 60_000;
+const REMOTE_PROGRESS_POLL_MS = 90_000;
 
 type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
 type AuthMode = 'login' | 'signup' | 'admin';
@@ -48,6 +51,7 @@ interface QuestionProgressMetadata {
 
 interface PendingProgressRow {
   completed: boolean;
+  solutionText?: string | null;
   solutionRichText?: string | null;
   updatedAt: string;
   metadata?: QuestionProgressMetadata;
@@ -125,6 +129,22 @@ const normalizeHandle = (value: string): string => value.trim().toLowerCase();
 
 const userCacheKey = (prefix: string, userHandle: string): string => `${prefix}:${normalizeHandle(userHandle)}`;
 
+const htmlToPlainText = (value: string): string => {
+  if (!value) return '';
+  const withBreaks = value
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(div|p|li|pre)>/gi, '\n');
+  if (typeof DOMParser !== 'undefined') {
+    const parsed = new DOMParser().parseFromString(withBreaks, 'text/html');
+    return (parsed.body.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  return withBreaks.replace(/<[^>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim();
+};
+
+const normalizeSolutionText = (value: string): string => {
+  return /<\/?[a-z][\s\S]*>/i.test(value) ? htmlToPlainText(value) : value;
+};
+
 const normalizeStoredMap = (raw: string | null): Record<string, string> => {
   if (!raw) return {};
   try {
@@ -156,8 +176,11 @@ const readPendingProgressMap = (raw: string | null): Record<string, PendingProgr
       if (!row || typeof row.completed !== 'boolean') return acc;
       acc[normalizeQuestionId(id)] = {
         completed: row.completed,
+        ...(Object.prototype.hasOwnProperty.call(row, 'solutionText')
+          ? { solutionText: typeof row.solutionText === 'string' ? row.solutionText : null }
+          : {}),
         ...(Object.prototype.hasOwnProperty.call(row, 'solutionRichText')
-          ? { solutionRichText: typeof row.solutionRichText === 'string' ? row.solutionRichText : null }
+          ? { solutionText: typeof row.solutionRichText === 'string' ? normalizeSolutionText(row.solutionRichText) : null }
           : {}),
         updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : new Date().toISOString(),
         metadata: row.metadata
@@ -186,6 +209,14 @@ const writeUserMapCache = (prefix: string, userHandle: string, value: Record<str
   const normalizedHandle = normalizeHandle(userHandle);
   if (!normalizedHandle) return;
   localStorage.setItem(userCacheKey(prefix, normalizedHandle), JSON.stringify(value));
+};
+
+const readUserSolutionCache = (userHandle: string): Record<string, string> => {
+  const cached = readUserMapCache(SOLUTION_CACHE_PREFIX, userHandle, LEGACY_SOLUTION_CACHE_KEY);
+  return Object.entries(cached).reduce<Record<string, string>>((acc, [id, value]) => {
+    acc[id] = normalizeSolutionText(value);
+    return acc;
+  }, {});
 };
 
 const readUserCustomQuestionCache = (userHandle: string): CustomQuestionRow[] => {
@@ -397,7 +428,7 @@ const App: React.FC = () => {
   const [officialSolutionStatus, setOfficialSolutionStatus] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle');
   const [officialSolutionView, setOfficialSolutionView] = useState<'question' | 'hint' | 'solution'>('question');
   const [isLoadingSolutionNote, setIsLoadingSolutionNote] = useState(false);
-  const solutionEditorRef = useRef<HTMLDivElement | null>(null);
+  const [solutionEditorValue, setSolutionEditorValue] = useState('');
   const solutionEditorDirtyRef = useRef(false);
   const loadedEditorQuestionRef = useRef('');
   const pendingProgressRef = useRef<Record<string, PendingProgressRow>>({});
@@ -408,6 +439,7 @@ const App: React.FC = () => {
   const warmupPromiseRef = useRef<Promise<void> | null>(null);
   const loadedLocalHandleRef = useRef('');
   const activeHandleRef = useRef(normalizeHandle(handle));
+  const lastServerProgressMetaRef = useRef<{ latestUpdatedAt: string | null; rowCount: number; completedCount: number } | null>(null);
   const routeModeRef = useRef(isProfile ? 'companies' : isRoulette ? 'roulette' : 'main');
   const lastDbSyncFailureAtRef = useRef(0);
   const [companyTimeFilter, setCompanyTimeFilter] = useState<CompanyTimeFilter>('all');
@@ -443,6 +475,7 @@ const App: React.FC = () => {
     loadedLocalHandleRef.current = '';
     progressSyncHandleRef.current = '';
     customSyncHandleRef.current = '';
+    lastServerProgressMetaRef.current = null;
     setCompletedMap({});
     setSolutionMap({});
     setSolutionNotePresenceMap({});
@@ -490,16 +523,16 @@ const App: React.FC = () => {
     if (!normalizedHandle) return;
     pendingProgressRef.current = readUserPendingProgressCache(normalizedHandle);
     const cachedCompleted = readUserMapCache(PROGRESS_CACHE_PREFIX, normalizedHandle, LEGACY_LOCAL_CACHE_KEY);
-    const cachedSolutions = readUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, LEGACY_SOLUTION_CACHE_KEY);
+    const cachedSolutions = readUserSolutionCache(normalizedHandle);
     Object.entries(pendingProgressRef.current).forEach(([leetcodeId, pending]) => {
       if (pending.completed) {
         cachedCompleted[leetcodeId] = cachedCompleted[leetcodeId] || pending.updatedAt;
       } else {
         delete cachedCompleted[leetcodeId];
       }
-      if (pending.solutionRichText && pending.solutionRichText.trim().length > 0) {
-        cachedSolutions[leetcodeId] = pending.solutionRichText;
-      } else if (pending.solutionRichText === null) {
+      if (pending.solutionText && pending.solutionText.trim().length > 0) {
+        cachedSolutions[leetcodeId] = pending.solutionText;
+      } else if (pending.solutionText === null) {
         delete cachedSolutions[leetcodeId];
       }
     });
@@ -544,8 +577,9 @@ const App: React.FC = () => {
           if (r.hasSolutionNote) {
             notePresenceMap[leetcodeId] = true;
           }
-          if (r.solutionRichText && r.solutionRichText.trim().length > 0) {
-            solutionNotesMap[leetcodeId] = r.solutionRichText;
+          const rowSolutionText = r.solutionText || (r.solutionRichText ? normalizeSolutionText(r.solutionRichText) : '');
+          if (rowSolutionText && rowSolutionText.trim().length > 0) {
+            solutionNotesMap[leetcodeId] = rowSolutionText;
             notePresenceMap[leetcodeId] = true;
           }
         });
@@ -555,17 +589,17 @@ const App: React.FC = () => {
           } else {
             delete completionMap[leetcodeId];
           }
-          if (Object.prototype.hasOwnProperty.call(pending, 'solutionRichText') && pending.solutionRichText && pending.solutionRichText.trim().length > 0) {
-            solutionNotesMap[leetcodeId] = pending.solutionRichText;
+          if (Object.prototype.hasOwnProperty.call(pending, 'solutionText') && pending.solutionText && pending.solutionText.trim().length > 0) {
+            solutionNotesMap[leetcodeId] = pending.solutionText;
             notePresenceMap[leetcodeId] = true;
-          } else if (Object.prototype.hasOwnProperty.call(pending, 'solutionRichText') && pending.solutionRichText === null) {
+          } else if (Object.prototype.hasOwnProperty.call(pending, 'solutionText') && pending.solutionText === null) {
             delete solutionNotesMap[leetcodeId];
             delete notePresenceMap[leetcodeId];
           }
         });
 
         if (activeHandleRef.current !== normalizedHandle) return;
-        const cachedSolutionNotes = readUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, LEGACY_SOLUTION_CACHE_KEY);
+        const cachedSolutionNotes = readUserSolutionCache(normalizedHandle);
         const nextSolutionMap = { ...cachedSolutionNotes, ...solutionNotesMap };
         const nextNotePresenceMap = {
           ...Object.fromEntries(Object.keys(cachedSolutionNotes).map((id) => [id, true])),
@@ -576,6 +610,14 @@ const App: React.FC = () => {
         setSolutionNotePresenceMap(nextNotePresenceMap);
         writeUserMapCache(PROGRESS_CACHE_PREFIX, normalizedHandle, completionMap);
         writeUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, nextSolutionMap);
+        lastServerProgressMetaRef.current = {
+          latestUpdatedAt: rows.reduce<string | null>((latest, row) => {
+            if (!row.updatedAt) return latest;
+            return !latest || row.updatedAt > latest ? row.updatedAt : latest;
+          }, null),
+          rowCount: rows.length,
+          completedCount: rows.filter(row => row.completed).length
+        };
 
         const pendingEntries = Object.entries(pendingProgressRef.current);
         for (const [leetcodeId, pending] of pendingEntries) {
@@ -583,7 +625,7 @@ const App: React.FC = () => {
             handle: normalizedHandle,
             leetcodeId,
             completed: pending.completed,
-            ...(Object.prototype.hasOwnProperty.call(pending, 'solutionRichText') ? { solutionRichText: pending.solutionRichText ?? null } : {}),
+            ...(Object.prototype.hasOwnProperty.call(pending, 'solutionText') ? { solutionText: pending.solutionText ?? null } : {}),
             title: pending.metadata?.title,
             difficulty: pending.metadata?.difficulty,
             link: pending.metadata?.link,
@@ -617,7 +659,7 @@ const App: React.FC = () => {
   const atomicUpdate = async (
     qId: string,
     isChecked: boolean,
-    solutionRichText?: string | null,
+    solutionText?: string | null,
     metadata?: QuestionProgressMetadata
   ) => {
     if (!handle || !backendApi.hasAuthSession()) {
@@ -628,18 +670,18 @@ const App: React.FC = () => {
     const normalizedHandle = normalizeHandle(handle);
     pendingProgressRef.current[leetcodeId] = {
       completed: isChecked,
-      ...(solutionRichText !== undefined ? { solutionRichText: solutionRichText ?? null } : {}),
+      ...(solutionText !== undefined ? { solutionText: solutionText ?? null } : {}),
       updatedAt: new Date().toISOString(),
       metadata
     };
     writeUserPendingProgressCache(normalizedHandle, pendingProgressRef.current);
     setSyncStatus('syncing');
     try {
-      await backendApi.upsertProgress({
+      const saved = await backendApi.upsertProgress({
         handle: normalizedHandle,
         leetcodeId,
         completed: isChecked,
-        ...(solutionRichText !== undefined ? { solutionRichText: solutionRichText ?? null } : {}),
+        ...(solutionText !== undefined ? { solutionText: solutionText ?? null } : {}),
         title: metadata?.title,
         difficulty: metadata?.difficulty,
         link: metadata?.link,
@@ -647,6 +689,14 @@ const App: React.FC = () => {
         subPattern: metadata?.subPattern,
         metadataJson: metadata?.metadataJson ?? null
       });
+      if (saved.updatedAt) {
+        const previous = lastServerProgressMetaRef.current;
+        lastServerProgressMetaRef.current = {
+          latestUpdatedAt: !previous?.latestUpdatedAt || saved.updatedAt > previous.latestUpdatedAt ? saved.updatedAt : previous.latestUpdatedAt,
+          rowCount: previous?.rowCount || 0,
+          completedCount: previous?.completedCount || 0
+        };
+      }
       delete pendingProgressRef.current[leetcodeId];
       writeUserPendingProgressCache(normalizedHandle, pendingProgressRef.current);
       setSyncStatus('synced');
@@ -815,6 +865,7 @@ const App: React.FC = () => {
     loadedLocalHandleRef.current = '';
     progressSyncHandleRef.current = '';
     customSyncHandleRef.current = '';
+    lastServerProgressMetaRef.current = null;
     setSectionsData(cloneSections(baseSectionsData));
   };
 
@@ -1048,20 +1099,54 @@ const App: React.FC = () => {
         loadUserLocalState(handle);
       }
       pullRelationalProgress(handle).then(() => pullCustomQuestions(handle));
-      const onFocus = () => pullRelationalProgress(handle);
-      window.addEventListener('focus', onFocus);
-      return () => window.removeEventListener('focus', onFocus);
+      return;
     }
     loadedLocalHandleRef.current = '';
     pendingProgressRef.current = {};
     progressSyncHandleRef.current = '';
     customSyncHandleRef.current = '';
+    lastServerProgressMetaRef.current = null;
     setCompletedMap({});
     setSolutionMap({});
     setSolutionNotePresenceMap({});
     setSectionsData(cloneSections(baseSectionsData));
     setSyncStatus('signed-out');
   }, [handle, loadUserLocalState, pullRelationalProgress, pullCustomQuestions, baseSectionsData]);
+
+  useEffect(() => {
+    if (!handle || !backendApi.hasAuthSession()) return;
+    const normalizedHandle = normalizeHandle(handle);
+
+    const checkRemoteProgress = async () => {
+      if (document.visibilityState !== 'visible') return;
+      if (progressSyncPromiseRef.current || Object.keys(pendingProgressRef.current).length > 0) return;
+      if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) return;
+
+      try {
+        const meta = await backendApi.getProgressMeta();
+        if (activeHandleRef.current !== normalizedHandle) return;
+        const previous = lastServerProgressMetaRef.current;
+        const changed = Boolean(previous && (
+          previous.latestUpdatedAt !== meta.latestUpdatedAt ||
+          previous.rowCount !== meta.rowCount ||
+          previous.completedCount !== meta.completedCount
+        ));
+        lastServerProgressMetaRef.current = meta;
+        if (changed) {
+          await pullRelationalProgress(normalizedHandle);
+        }
+      } catch (error) {
+        if (isAuthFailure(error)) {
+          clearExpiredUserSession();
+          return;
+        }
+        markDbSyncUnavailable();
+      }
+    };
+
+    const intervalId = window.setInterval(checkRemoteProgress, REMOTE_PROGRESS_POLL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [handle, pullRelationalProgress, clearExpiredUserSession, markDbSyncUnavailable]);
 
   useEffect(() => {
     if (handle && loadedLocalHandleRef.current === normalizeHandle(handle)) {
@@ -1102,14 +1187,12 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!editingSolutionQuestion || !solutionEditorRef.current) return;
+    if (!editingSolutionQuestion) return;
     const questionId = normalizeQuestionId(editingSolutionQuestion.id);
     if (loadedEditorQuestionRef.current === questionId) return;
     solutionEditorDirtyRef.current = false;
     loadedEditorQuestionRef.current = questionId;
-    solutionEditorRef.current.innerHTML = solutionMap[questionId] || '';
-    solutionEditorRef.current.style.height = 'auto';
-    solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
+    setSolutionEditorValue(solutionMap[questionId] || '');
   }, [editingSolutionQuestion]);
 
   useEffect(() => {
@@ -1122,7 +1205,7 @@ const App: React.FC = () => {
     backendApi.getSolutionNote(questionId)
       .then((response) => {
         if (cancelled) return;
-        const note = response.solutionRichText || '';
+        const note = response.solutionText || (response.solutionRichText ? normalizeSolutionText(response.solutionRichText) : '');
         if (note.trim().length === 0) {
           setSolutionNotePresenceMap(prev => {
             const next = { ...prev };
@@ -1136,10 +1219,8 @@ const App: React.FC = () => {
           writeUserMapCache(SOLUTION_CACHE_PREFIX, handle, next);
           return next;
         });
-        if (!solutionEditorDirtyRef.current && solutionEditorRef.current && loadedEditorQuestionRef.current === questionId) {
-          solutionEditorRef.current.innerHTML = note;
-          solutionEditorRef.current.style.height = 'auto';
-          solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
+        if (!solutionEditorDirtyRef.current && loadedEditorQuestionRef.current === questionId) {
+          setSolutionEditorValue(note);
         }
         setSolutionNotePresenceMap(prev => ({ ...prev, [questionId]: true }));
       })
@@ -1214,6 +1295,7 @@ const App: React.FC = () => {
     setEditingSolutionQuestion(null);
     solutionEditorDirtyRef.current = false;
     loadedEditorQuestionRef.current = '';
+    setSolutionEditorValue('');
   };
 
   const openOfficialSolution = async (question: Question) => {
@@ -1247,51 +1329,19 @@ const App: React.FC = () => {
     return normalized.length > 24;
   };
 
-  const applyEditorCommand = (command: string) => {
-    document.execCommand(command, false);
-    if (!solutionEditorRef.current) return;
+  const handleSolutionEditorChange = (value: string) => {
     solutionEditorDirtyRef.current = true;
-    solutionEditorRef.current.focus();
-    solutionEditorRef.current.style.height = 'auto';
-    solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
-  };
-
-  const escapeHtml = (value: string) => value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-  const applyCodeFormat = (mode: 'inline' | 'block') => {
-    if (!solutionEditorRef.current) return;
-    solutionEditorRef.current.focus();
-    const selection = window.getSelection();
-    const selectedText = selection && selection.rangeCount > 0 ? selection.toString() : '';
-    const html = mode === 'inline'
-      ? `<code>${escapeHtml(selectedText || 'code')}</code>`
-      : `<pre><code>${escapeHtml(selectedText || 'write code here')}</code></pre><div><br></div>`;
-    document.execCommand('insertHTML', false, html);
-    solutionEditorDirtyRef.current = true;
-    solutionEditorRef.current.style.height = 'auto';
-    solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
-  };
-
-  const handleSolutionEditorInput = () => {
-    if (!solutionEditorRef.current) return;
-    solutionEditorDirtyRef.current = true;
-    solutionEditorRef.current.style.height = 'auto';
-    solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
+    setSolutionEditorValue(value);
   };
 
   const saveSolutionNote = async () => {
     if (!editingSolutionQuestion) return;
 
     const questionId = normalizeQuestionId(editingSolutionQuestion.id);
-    const nextHtml = solutionEditorRef.current?.innerHTML.trim() || '';
+    const nextText = solutionEditorValue.trim();
     const nextMap = { ...solutionMap };
-    if (nextHtml) {
-      nextMap[questionId] = nextHtml;
+    if (nextText) {
+      nextMap[questionId] = solutionEditorValue;
       setSolutionNotePresenceMap(prev => ({ ...prev, [questionId]: true }));
     } else {
       delete nextMap[questionId];
@@ -1305,7 +1355,7 @@ const App: React.FC = () => {
 
     if (handle) {
       writeUserMapCache(SOLUTION_CACHE_PREFIX, handle, nextMap);
-      await atomicUpdate(questionId, Boolean(completedMap[questionId]), nextHtml || null, buildProgressMetadata(editingSolutionQuestion));
+      await atomicUpdate(questionId, Boolean(completedMap[questionId]), nextText ? solutionEditorValue : null, buildProgressMetadata(editingSolutionQuestion));
     }
 
     closeSolutionEditor();
@@ -2314,66 +2364,19 @@ const App: React.FC = () => {
               <button onClick={closeSolutionEditor} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
-	                <div className="mb-3 flex flex-wrap gap-2">
-	                  <button
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      applyEditorCommand('bold');
-                    }}
-	                    type="button"
-	                    className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
-	                  >
-	                    Bold
-	                  </button>
-	                  <button
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      applyEditorCommand('italic');
-                    }}
-	                    type="button"
-	                    className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
-	                  >
-	                    Italic
-	                  </button>
-	                  <button
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      applyEditorCommand('insertUnorderedList');
-                    }}
-	                    type="button"
-	                    className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
-	                  >
-	                    Bullet
-	                  </button>
-                  <button
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      applyCodeFormat('inline');
-                    }}
-                    type="button"
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
-                  >
-                    Inline Code
-                  </button>
-                  <button
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      applyCodeFormat('block');
-                    }}
-                    type="button"
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
-                  >
-                    Code Block
-                  </button>
-	                </div>
-
-            <div
-              ref={solutionEditorRef}
-	              contentEditable
-	              onInput={handleSolutionEditorInput}
-	              suppressContentEditableWarning
-	              className="min-h-[55vh] w-full flex-1 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 font-mono text-sm leading-7 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 [&_code]:rounded-md [&_code]:border [&_code]:border-slate-700 [&_code]:bg-slate-900 [&_code]:px-1.5 [&_code]:py-0.5 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-2xl [&_pre]:border [&_pre]:border-slate-700 [&_pre]:bg-[#020617] [&_pre]:p-4 [&_pre_code]:border-0 [&_pre_code]:bg-transparent [&_pre_code]:p-0"
-	            />
+            <div className={`overflow-hidden rounded-2xl border ${themeMode === 'light' ? 'border-slate-300 bg-white' : 'border-slate-700 bg-slate-950'}`}>
+              <div className={`flex items-center justify-between border-b px-4 py-2 ${themeMode === 'light' ? 'border-slate-200 bg-slate-50 text-slate-500' : 'border-slate-800 bg-slate-900/80 text-slate-500'}`}>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Java Editor</span>
+                <span className="font-mono text-[10px] font-bold">{solutionEditorValue.length} chars</span>
+              </div>
+              <Suspense fallback={<div className="flex h-[55vh] items-center justify-center font-mono text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Loading Java editor...</div>}>
+                <JavaSolutionEditor
+                  themeMode={themeMode}
+                  value={solutionEditorValue}
+                  onChange={handleSolutionEditorChange}
+                />
+              </Suspense>
+            </div>
 
             <div className="mt-5 flex items-center justify-between">
               <span className="text-[11px] text-slate-500">

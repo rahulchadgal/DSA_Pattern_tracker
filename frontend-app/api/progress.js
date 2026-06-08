@@ -27,6 +27,43 @@ const sanitizeSolutionHtml = (value) => {
   return sanitized.length > 0 ? sanitized : null;
 };
 
+const escapeHtml = (value) => String(value || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const textToSolutionHtml = (value) => {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+  return `<pre><code>${escapeHtml(value)}</code></pre>`;
+};
+
+const decodeHtmlEntities = (value) => String(value || '')
+  .replace(/&lt;/g, '<')
+  .replace(/&gt;/g, '>')
+  .replace(/&quot;/g, '"')
+  .replace(/&#39;/g, "'")
+  .replace(/&amp;/g, '&');
+
+const solutionHtmlToText = (value) => {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return '';
+  }
+  const codeMatch = value.match(/<pre><code>([\s\S]*?)<\/code><\/pre>/i);
+  if (codeMatch) {
+    return decodeHtmlEntities(codeMatch[1]);
+  }
+  return sanitizeHtml(value
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(div|p|li|pre)>/gi, '\n'), {
+    allowedTags: [],
+    allowedAttributes: {}
+  }).replace(/\n{3,}/g, '\n\n').trim();
+};
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     return getProgress(req, res);
@@ -45,6 +82,25 @@ async function getProgress(req, res) {
     const queryParams = req.query || {};
     const leetcodeId = typeof queryParams.leetcodeId === 'string' ? queryParams.leetcodeId.trim() : '';
     const includeSolution = queryParams.includeSolution === 'true';
+    const metaOnly = queryParams.meta === 'true';
+    if (metaOnly) {
+      const user = await requireUser(req);
+      const metaResult = await query(
+        `SELECT
+           MAX(updated_at) AS "latestUpdatedAt",
+           COUNT(*)::int AS "rowCount",
+           COUNT(*) FILTER (WHERE completed)::int AS "completedCount"
+         FROM progress_records
+         WHERE user_id = $1`,
+        [user.id]
+      );
+      return sendJson(res, 200, {
+        latestUpdatedAt: metaResult.rows[0]?.latestUpdatedAt || null,
+        rowCount: metaResult.rows[0]?.rowCount || 0,
+        completedCount: metaResult.rows[0]?.completedCount || 0
+      });
+    }
+
     if (leetcodeId && includeSolution) {
       const user = await requireUser(req);
       const noteResult = await query(
@@ -58,7 +114,8 @@ async function getProgress(req, res) {
       const solutionRichText = sanitizeSolutionHtml(noteResult.rows[0]?.solutionRichText || null);
       return sendJson(res, 200, {
         leetcodeId,
-        solutionRichText
+        solutionRichText,
+        solutionText: solutionHtmlToText(solutionRichText || '')
       });
     }
 
@@ -103,11 +160,14 @@ async function upsertProgress(req, res) {
   const body = parseBody(req);
   const leetcodeId = typeof body.leetcodeId === 'string' ? body.leetcodeId.trim() : '';
   const completed = Boolean(body.completed);
+  const hasSolutionText = Object.prototype.hasOwnProperty.call(body, 'solutionText');
   const solutionRichText =
-    typeof body.solutionRichText === 'string' && body.solutionRichText.trim().length > 0
+    hasSolutionText
+      ? textToSolutionHtml(body.solutionText)
+      : typeof body.solutionRichText === 'string' && body.solutionRichText.trim().length > 0
       ? sanitizeSolutionHtml(body.solutionRichText)
       : null;
-  const hasSolutionRichText = Object.prototype.hasOwnProperty.call(body, 'solutionRichText');
+  const hasSolutionRichText = hasSolutionText || Object.prototype.hasOwnProperty.call(body, 'solutionRichText');
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   const difficulty = typeof body.difficulty === 'string' ? body.difficulty.trim() : '';
   const link = typeof body.link === 'string' ? body.link.trim() : '';
@@ -163,9 +223,13 @@ async function upsertProgress(req, res) {
          updated_at AS "updatedAt",
          completed_at AS "completedAt",
          solution_rich_text IS NOT NULL AND length(trim(solution_rich_text)) > 0 AS "hasSolutionNote",
-         CASE WHEN $5 THEN solution_rich_text ELSE NULL END AS "solutionRichText"`,
+         CASE WHEN $5 THEN solution_rich_text ELSE NULL END AS "solutionRichText",
+         CASE WHEN $5 THEN solution_rich_text ELSE NULL END AS "solutionText"`,
       [user.id, questionId, completed, solutionRichText, hasSolutionRichText]
     );
+    if (result.rows[0]?.solutionText) {
+      result.rows[0].solutionText = solutionHtmlToText(result.rows[0].solutionText);
+    }
 
     return sendJson(res, 200, result.rows[0]);
   } catch (error) {
