@@ -2,6 +2,11 @@ import React from 'react';
 import type { AppThemeClasses, CompanyTimeFilter, SearchQuestionResult, ThemeMode } from './appTypes';
 import { DifficultyBadge } from './appUi';
 import type { Question } from '../types';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { ScrollArea } from './ui/scroll-area';
 
 interface QuestionSearchModalProps {
   selectedSearchQuestion: SearchQuestionResult | null;
@@ -31,58 +36,64 @@ export const QuestionSearchModal: React.FC<QuestionSearchModalProps> = ({
   const hasSolution = solutionNotePresenceMap[selectedSearchQuestion.question.id] || solutionMap[selectedSearchQuestion.question.id];
 
   return (
-    <div className="fixed inset-0 z-[105] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
-      <div className={`mx-auto my-4 w-full max-w-4xl rounded-[2rem] border p-6 shadow-2xl md:my-8 md:p-8 ${themeMode === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-[#0f172a]'}`}>
-        <div className="mb-6 flex items-start justify-between gap-4">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className={`max-h-[92vh] max-w-4xl overflow-hidden rounded-[2rem] p-0 ${themeMode === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-[#0f172a]'}`}>
+        <ScrollArea className="max-h-[92vh]">
+          <div className="p-6 md:p-8">
+        <DialogHeader className="mb-6 flex-row items-start justify-between gap-4 space-y-0 text-left">
           <div className="min-w-0">
             <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Question Lookup</p>
-            <h3 className={`mt-2 text-2xl font-black tracking-tight ${theme.text}`}>{selectedSearchQuestion.question.title}</h3>
+            <DialogTitle className={`mt-2 text-2xl font-black tracking-tight ${theme.text}`}>{selectedSearchQuestion.question.title}</DialogTitle>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="font-mono text-xs font-black text-slate-500">LC #{selectedSearchQuestion.question.id}</span>
               <DifficultyBadge diff={selectedSearchQuestion.question.difficulty} />
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className={`shrink-0 rounded-xl border px-3 py-2 text-sm font-black ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
-            title="Close question lookup"
-          >
-            X
-          </button>
-        </div>
+        </DialogHeader>
 
         <div className="mb-6 flex flex-wrap gap-2">
-          <a
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="rounded-xl border-indigo-500/30 bg-indigo-500/10 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20"
+          >
+            <a
             href={selectedSearchQuestion.question.link}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20"
-          >
-            Open LeetCode
-          </a>
-          <button
+            >
+              Open LeetCode
+            </a>
+          </Button>
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={() => onOpenOfficialSolution(selectedSearchQuestion.question)}
-            className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20"
+            className="rounded-xl border-indigo-500/30 bg-indigo-500/10 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20"
           >
             Official Solution
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={() => onOpenSolutionEditor(selectedSearchQuestion.question)}
-            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[10px] font-black uppercase tracking-widest ${hasSolution ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : themeMode === 'light' ? 'border-slate-300 bg-slate-50 text-slate-500 hover:text-indigo-500' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-indigo-300'}`}
+            className={`rounded-xl text-[10px] font-black uppercase tracking-widest ${hasSolution ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : themeMode === 'light' ? 'border-slate-300 bg-slate-50 text-slate-500 hover:text-indigo-500' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-indigo-300'}`}
           >
             {hasSolution ? 'Edit Note' : 'Add Note'}
-          </button>
+          </Button>
         </div>
 
-        <div className={`rounded-2xl border p-5 ${theme.panelStrong}`}>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h4 className={`text-sm font-black uppercase tracking-[0.2em] ${theme.text}`}>Asked By Companies</h4>
-            <span className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">
+        <Card className={`rounded-2xl ${theme.panelStrong}`}>
+          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 p-5 pb-4">
+            <CardTitle className={`text-sm font-black uppercase tracking-[0.2em] ${theme.text}`}>Asked By Companies</CardTitle>
+            <Badge variant="outline" className="rounded-xl border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">
               {selectedSearchQuestion.companies.length}
-            </span>
-          </div>
+            </Badge>
+          </CardHeader>
+          <CardContent className="p-5 pt-0">
 
           {selectedSearchQuestion.companies.length === 0 ? (
             <div className={`rounded-xl border border-dashed p-5 text-sm font-bold ${themeMode === 'light' ? 'border-slate-300 text-slate-500' : 'border-slate-700 text-slate-400'}`}>
@@ -96,9 +107,9 @@ export const QuestionSearchModal: React.FC<QuestionSearchModalProps> = ({
                     <p className={`min-w-0 truncate text-sm font-black ${theme.text}`} title={mention.company}>{mention.company}</p>
                     <div className="flex shrink-0 flex-wrap justify-end gap-1">
                       {mention.buckets.map((bucket) => (
-                        <span key={bucket} className={`rounded-lg px-2 py-0.5 text-[9px] font-black uppercase ${bucket === 'all' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                        <Badge key={bucket} variant="outline" className={`rounded-lg border-transparent px-2 py-0.5 text-[9px] font-black uppercase ${bucket === 'all' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-500'}`}>
                           {companyTimeFilters.find(([value]) => value === bucket)?.[1] || bucket}
-                        </span>
+                        </Badge>
                       ))}
                     </div>
                   </div>
@@ -106,8 +117,11 @@ export const QuestionSearchModal: React.FC<QuestionSearchModalProps> = ({
               ))}
             </div>
           )}
-        </div>
-      </div>
-    </div>
+          </CardContent>
+        </Card>
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
   );
 };

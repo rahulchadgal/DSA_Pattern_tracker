@@ -1,10 +1,13 @@
 
+export type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
+export type AuthMode = 'login' | 'signup' | 'admin';
+
 export interface Question {
   id: string; // The problem number as a string (e.g. "11")
   title: string; // The problem name (e.g. "Container With Most Water")
   fullTitle: string; // "11. Container With Most Water"
   link: string; // LeetCode URL
-  difficulty: 'Easy' | 'Medium' | 'Hard';
+  difficulty: DifficultyLevel;
 }
 
 export interface Pattern {

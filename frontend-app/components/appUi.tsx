@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '../lib/utils';
+import { Badge } from './ui/badge';
 
 export const GlobalStatBadge: React.FC<{ diff: string; solved: number; total: number }> = ({ diff, solved, total }) => {
   const styles = {
@@ -10,13 +11,13 @@ export const GlobalStatBadge: React.FC<{ diff: string; solved: number; total: nu
   const colorClass = styles[diff as keyof typeof styles] || 'text-slate-400 border-slate-800 bg-slate-900';
 
   return (
-    <div className={cn('flex items-center gap-2 rounded-xl border px-3 py-1.5 transition-all duration-300', colorClass)}>
+    <Badge variant="outline" className={cn('flex items-center gap-2 rounded-xl px-3 py-1.5 transition-all duration-300', colorClass)}>
       <span className="text-[10px] font-black">{diff[0]}</span>
       <div className="flex items-baseline gap-0.5">
         <span className="font-mono text-xs font-black">{solved}</span>
         <span className="text-[9px] font-bold opacity-40">/{total}</span>
       </div>
-    </div>
+    </Badge>
   );
 };
 
@@ -28,9 +29,9 @@ export const DifficultyBadge: React.FC<{ diff: string }> = ({ diff }) => {
   };
 
   return (
-    <span className={cn('rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest', styles[diff as keyof typeof styles])}>
+    <Badge variant="outline" className={cn('rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest', styles[diff as keyof typeof styles])}>
       {diff}
-    </span>
+    </Badge>
   );
 };
 

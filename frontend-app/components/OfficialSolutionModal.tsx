@@ -3,6 +3,11 @@ import type { OfficialSolutionEntry } from '../lib/officialSolutions';
 import type { Question } from '../types';
 import type { ThemeMode } from './appTypes';
 import { DifficultyBadge } from './appUi';
+import { Badge } from './ui/badge';
+import { Card, CardContent } from './ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { ScrollArea } from './ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 const JavaSolutionEditor = lazy(() => import('./JavaSolutionEditor'));
 
@@ -30,34 +35,33 @@ export const OfficialSolutionModal: React.FC<OfficialSolutionModalProps> = ({
   if (!question) return null;
 
   return (
-    <div className="fixed inset-0 z-[106] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
-      <div className="mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-6 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-8">
-        <div className="mb-6 flex items-start justify-between gap-4">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="flex max-h-[92vh] min-h-[calc(100vh-3rem)] w-[min(96vw,1400px)] max-w-none flex-col rounded-[2.5rem] border-slate-800 bg-[#0f172a] p-6 md:p-8">
+        <DialogHeader className="mb-6 flex-row items-start justify-between gap-4 space-y-0 text-left">
           <div>
-            <h3 className="text-xl font-black tracking-tight text-white">Official Solution</h3>
+            <DialogTitle className="text-xl font-black tracking-tight text-white">Official Solution</DialogTitle>
             <p className="mt-1 text-xs text-slate-400">
               LC #{question.id} • {question.title}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">X</button>
-        </div>
+        </DialogHeader>
 
         {status === 'loading' && (
-          <div className="flex flex-1 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 p-8 text-sm font-bold text-slate-400">
+          <Card className="flex flex-1 items-center justify-center rounded-2xl border-slate-800 bg-slate-950 p-8 text-sm font-bold text-slate-400">
             Loading official solution...
-          </div>
+          </Card>
         )}
 
         {status === 'missing' && (
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6 text-sm text-amber-100">
+          <Card className="rounded-2xl border-amber-500/20 bg-amber-500/5 p-6 text-sm text-amber-100">
             Official solution data is not available for this question yet.
-          </div>
+          </Card>
         )}
 
         {status === 'error' && (
-          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-6 text-sm text-rose-100">
+          <Card className="rounded-2xl border-rose-500/20 bg-rose-500/5 p-6 text-sm text-rose-100">
             Unable to load official solution data.
-          </div>
+          </Card>
         )}
 
         {status === 'ready' && solution && (
@@ -65,40 +69,29 @@ export const OfficialSolutionModal: React.FC<OfficialSolutionModalProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <DifficultyBadge diff={solution.difficulty} />
               {solution.tags.map((tag) => (
-                <span key={tag} className="rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <Badge key={tag} variant="outline" className="rounded-full border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
                   {tag}
-                </span>
+                </Badge>
               ))}
             </div>
 
-            <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-2">
-              <button
-                type="button"
-                onClick={() => onViewChange('question')}
-                className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${view === 'question' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                Question
-              </button>
-              {hasMeaningfulHint(solution) && (
-                <button
-                  type="button"
-                  onClick={() => onViewChange('hint')}
-                  className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${view === 'hint' ? 'bg-amber-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                >
-                  Show Hint
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => onViewChange('solution')}
-                className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${view === 'solution' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                Show Solution
-              </button>
-            </div>
+            <Tabs
+              value={view}
+              onValueChange={(value) => onViewChange(value as 'question' | 'hint' | 'solution')}
+              className="flex min-h-0 flex-1 flex-col gap-3"
+            >
+              <TabsList className="h-auto w-fit flex-wrap rounded-2xl border border-slate-800 bg-slate-950 p-2">
+                <TabsTrigger value="question" className="rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-indigo-600 data-[state=active]:text-white">Question</TabsTrigger>
+                {hasMeaningfulHint(solution) && (
+                  <TabsTrigger value="hint" className="rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-amber-600 data-[state=active]:text-white">Show Hint</TabsTrigger>
+                )}
+                <TabsTrigger value="solution" className="rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-emerald-600 data-[state=active]:text-white">Show Solution</TabsTrigger>
+              </TabsList>
 
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-5">
-              {view === 'question' && (
+              <Card className="min-h-0 flex-1 overflow-hidden rounded-2xl border-slate-800 bg-slate-950">
+                <CardContent className="h-full p-5">
+              <TabsContent value="question" className="m-0 h-full">
+                <ScrollArea className="h-full">
                 <>
                   <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">Question</h4>
                   <div
@@ -106,18 +99,21 @@ export const OfficialSolutionModal: React.FC<OfficialSolutionModalProps> = ({
                     dangerouslySetInnerHTML={{ __html: solution.descriptionHtml }}
                   />
                 </>
-              )}
+                </ScrollArea>
+              </TabsContent>
 
-              {view === 'hint' && (
+              <TabsContent value="hint" className="m-0 h-full">
+                <ScrollArea className="h-full">
                 <>
                   <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Hint / Approach</h4>
                   <pre className="whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm leading-7 text-slate-200">
                     {solution.solutionMarkdown}
                   </pre>
                 </>
-              )}
+                </ScrollArea>
+              </TabsContent>
 
-              {view === 'solution' && (
+              <TabsContent value="solution" className="m-0 h-full">
                 <>
                   <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Java Solution</h4>
                   {solution.hasJava ? (
@@ -140,11 +136,13 @@ export const OfficialSolutionModal: React.FC<OfficialSolutionModalProps> = ({
                     Source: {solution.sourcePath}
                   </p>
                 </>
-              )}
-            </div>
+              </TabsContent>
+                </CardContent>
+              </Card>
+            </Tabs>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };

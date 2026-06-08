@@ -11,8 +11,24 @@ import { GlobalQuestionSearch } from './components/GlobalQuestionSearch';
 import { OfficialSolutionModal } from './components/OfficialSolutionModal';
 import { QuestionSearchModal } from './components/QuestionSearchModal';
 import { SolutionNoteModal } from './components/SolutionNoteModal';
+import { AddQuestionModal } from './components/AddQuestionModal';
+import { AuthModal } from './components/AuthModal';
+import { RandomPickOverlay } from './components/RandomPickOverlay';
 import { DifficultyBadge } from './components/appUi';
 import type { AppThemeClasses, CompanyMention, CompanyTimeFilter, SearchQuestionResult, SyncStatus, ThemeMode } from './components/appTypes';
+import { Badge } from './components/ui/badge';
+import { Button } from './components/ui/button';
+import { Card, CardContent } from './components/ui/card';
+import { Input } from './components/ui/input';
+import { Progress } from './components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from './components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 
 const LEGACY_LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
 const LEGACY_SOLUTION_CACHE_KEY = 'dsa-solution-notes-v1';
@@ -1602,47 +1618,55 @@ const App: React.FC = () => {
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
     <>
       <div className="mb-5 flex flex-wrap items-center gap-3">
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={showCompanyFilters ? backToCompanyPicker : backToPatternPicker}
-          className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
+          className={`rounded-xl text-[10px] font-black uppercase tracking-widest ${theme.panelStrong} ${theme.subtle} hover:bg-transparent hover:text-indigo-400`}
         >
           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
           Back
-        </button>
+        </Button>
         <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme.muted}`}>{showCompanyFilters ? selectedSection?.title || 'Company' : selectedPattern.name || 'Pattern'}</span>
-        <div className={`flex p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
+        <Tabs value={gridView} onValueChange={(value) => setGridView(value as 'list' | 'small' | 'big')}>
+        <TabsList className={`h-auto rounded-2xl border p-1 shadow-inner ${theme.panelStrong}`}>
           {([
             ['list', 'Compact'],
             ['small', 'Tiles'],
             ['big', 'Focus']
           ] as const).map(([mode, label]) => (
-            <button
+            <TabsTrigger
               key={mode}
-              onClick={() => setGridView(mode)}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
+              value={mode}
+              className="rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-indigo-600/20"
             >
               {label}
-            </button>
+            </TabsTrigger>
           ))}
-        </div>
+        </TabsList>
+        </Tabs>
         {showCompanyFilters && (
-          <div className={`flex p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
+          <Tabs value={companyTimeFilter} onValueChange={(value) => setCompanyTimeFilter(value as CompanyTimeFilter)}>
+          <TabsList className={`h-auto rounded-2xl border p-1 shadow-inner ${theme.panelStrong}`}>
             {COMPANY_TIME_FILTERS.map(([value, label]) => (
-              <button
+              <TabsTrigger
                 key={value}
-                onClick={() => setCompanyTimeFilter(value)}
-                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : `${theme.muted} hover:text-emerald-500`}`}
+                value={value}
+                className="rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-emerald-600/20"
               >
                 {label}
-              </button>
+              </TabsTrigger>
             ))}
-          </div>
+          </TabsList>
+          </Tabs>
         )}
       </div>
       {filteredPatternQuestions.length === 0 ? (
-        <div className={`rounded-3xl border p-10 text-center ${theme.panel}`}>
+        <Card className={`rounded-3xl text-center ${theme.panel}`}>
+          <CardContent className="p-10">
           <p className={`text-sm font-bold ${theme.subtle}`}>No questions found for this selection and time range.</p>
-        </div>
+          </CardContent>
+        </Card>
       ) : (
       <div className={`pb-32 ${gridView === 'list' ? 'grid grid-cols-1 gap-2 max-w-5xl' : gridView === 'small' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4'}`}>
         {filteredPatternQuestions.map(q => {
@@ -1658,15 +1682,17 @@ const App: React.FC = () => {
               : themeMode === 'light' ? 'bg-white border-slate-200 hover:border-slate-300' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600');
           const isCompact = gridView === 'list';
           return (
-            <div key={q.id} className={`group relative border transition-all duration-300 ${isCompact ? 'min-h-[68px] rounded-2xl p-3' : gridView === 'small' ? 'h-[132px] p-4 rounded-2xl' : 'h-[174px] p-5 rounded-3xl sm:hover:-translate-y-0.5'} ${neutralCardClass}`}>
+            <Card key={q.id} className={`group relative transition-all duration-300 ${isCompact ? 'min-h-[68px] rounded-2xl p-3' : gridView === 'small' ? 'h-[132px] p-4 rounded-2xl' : 'h-[174px] p-5 rounded-3xl sm:hover:-translate-y-0.5'} ${neutralCardClass}`}>
               <div className={`flex h-full ${isCompact ? 'items-center gap-3' : 'flex-col gap-3'}`}>
                 <div className={`flex min-w-0 flex-1 items-start ${isCompact ? 'gap-3' : 'gap-4'}`}>
-                  <button
+                  <Button
+                    variant="outline"
+                    size="icon"
                     onClick={() => toggleQuestion(q)}
-                    className={`shrink-0 ${isCompact || gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-11 h-11 rounded-2xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white' : themeMode === 'light' ? 'bg-slate-50 border-slate-300 text-slate-300 hover:border-slate-500' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
+                    className={`shrink-0 ${isCompact || gridView === 'small' || isMobile ? 'h-9 w-9 rounded-xl' : 'h-11 w-11 rounded-2xl'} border-2 transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white hover:bg-emerald-500' : themeMode === 'light' ? 'bg-slate-50 border-slate-300 text-slate-300 hover:border-slate-500 hover:bg-slate-50' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500 hover:bg-slate-950'}`}
                   >
                     <svg className={`${isCompact || gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-6 h-6'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                  </button>
+                  </Button>
                   <div className="min-w-0 flex-1">
                     <a
                       href={q.link}
@@ -1692,28 +1718,32 @@ const App: React.FC = () => {
                     </div>
                   )}
                   <div className="ml-auto flex items-center gap-1.5">
-                    <button
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={() => openOfficialSolution(q)}
                       title="View official English and Java solution"
-                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 transition-all hover:border-indigo-400 hover:bg-indigo-500/20`}
+                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} border-indigo-500/30 bg-indigo-500/10 text-indigo-400 hover:border-indigo-400 hover:bg-indigo-500/20`}
                     >
                       <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.75v10.5M8.25 9.75h7.5M5.25 4.5h13.5A1.5 1.5 0 0120.25 6v13.5l-3.75-2.25-4.5 2.25-4.5-2.25-3.75 2.25V6a1.5 1.5 0 011.5-1.5z" />
                       </svg>
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={() => openSolutionEditor(q)}
                       title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
-                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border transition-all ${hasSolution ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : themeMode === 'light' ? 'text-slate-500 border-slate-300 bg-slate-50 hover:text-indigo-500 hover:border-indigo-400' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'}`}
+                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} ${hasSolution ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/10' : themeMode === 'light' ? 'text-slate-500 border-slate-300 bg-slate-50 hover:text-indigo-500 hover:border-indigo-400 hover:bg-slate-50' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40 hover:bg-slate-900'}`}
                     >
                       <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
                       </svg>
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
-            </div>
+            </Card>
           );
         })}
       </div>
@@ -1723,50 +1753,53 @@ const App: React.FC = () => {
 
   const renderPatternPicker = () => (
     <div className="pb-32 space-y-8">
-      <div className={`rounded-3xl border p-6 md:p-8 ${theme.panel}`}>
+      <Card className={`rounded-3xl ${theme.panel}`}>
+        <CardContent className="p-6 md:p-8">
         <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Choose Pattern</p>
         <h3 className={`mt-2 text-2xl font-black tracking-tight ${theme.text}`}>Pick a syllabus pattern to start</h3>
         <p className={`mt-2 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Questions stay hidden until you choose a pattern. Your last progress and notes remain linked by LeetCode ID.</p>
-      </div>
+        </CardContent>
+      </Card>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {sectionsData.map((section) => {
           const stat = sectionStats.find((item) => item.id === section.id);
           const pct = stat && stat.total > 0 ? Math.round((stat.solved / stat.total) * 100) : 0;
           return (
-            <section key={section.id} className={`rounded-3xl border p-5 ${theme.panel}`}>
+            <Card key={section.id} className={`rounded-3xl ${theme.panel}`}>
+              <CardContent className="p-5">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <h4 className={`truncate text-lg font-black tracking-tight ${theme.text}`}>{section.title}</h4>
                   <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{stat?.solved || 0}/{stat?.total || 0} solved</p>
                 </div>
-                <span className="shrink-0 rounded-2xl border border-indigo-500/25 bg-indigo-500/10 px-3 py-1.5 text-[10px] font-black text-indigo-400">{pct}%</span>
+                <Badge variant="outline" className="shrink-0 rounded-2xl border-indigo-500/25 bg-indigo-500/10 px-3 py-1.5 text-[10px] font-black text-indigo-400">{pct}%</Badge>
               </div>
-              <div className="h-1.5 w-full rounded-full bg-slate-800/20 overflow-hidden mb-4">
-                <div className="h-full bg-indigo-500 transition-all duration-700" style={{ width: `${pct}%` }} />
-              </div>
+              <Progress value={pct} className="mb-4 h-1.5 bg-slate-800/20 [&>div]:bg-indigo-500 [&>div]:duration-700" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {section.patterns.map((pattern) => {
                   const doneCount = pattern.questions.filter((q) => completedMap[q.id]).length;
                   const total = pattern.questions.length;
                   const patternPct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
                   return (
-                    <button
+                    <Button
                       key={pattern.id}
+                      variant="outline"
                       onClick={() => selectPattern(section, pattern)}
-                      className={`h-[76px] rounded-2xl border p-3 text-left transition-all hover:-translate-y-0.5 ${themeMode === 'light' ? 'border-slate-200 bg-slate-50 hover:border-indigo-300' : 'border-slate-800 bg-slate-950/45 hover:border-indigo-500/40'}`}
+                      className={`h-[76px] justify-start rounded-2xl p-3 text-left transition-all hover:-translate-y-0.5 hover:bg-transparent ${themeMode === 'light' ? 'border-slate-200 bg-slate-50 hover:border-indigo-300' : 'border-slate-800 bg-slate-950/45 hover:border-indigo-500/40'}`}
                     >
-                      <div className="flex h-full flex-col justify-between">
+                      <div className="flex h-full w-full flex-col justify-between">
                         <span title={pattern.name} className={`line-clamp-2 text-sm font-black leading-tight ${theme.text}`}>{pattern.name}</span>
                         <div className="flex items-center justify-between">
                           <span className={`text-[9px] font-black uppercase tracking-widest ${theme.muted}`}>{total} Qs</span>
                           <span className="text-[10px] font-black font-mono text-indigo-400">{patternPct}%</span>
                         </div>
                       </div>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
-            </section>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
@@ -1775,7 +1808,8 @@ const App: React.FC = () => {
 
   const renderCompanyPicker = () => (
     <div className="pb-32 space-y-6">
-      <div className={`rounded-3xl border p-6 md:p-8 ${theme.panel}`}>
+      <Card className={`rounded-3xl ${theme.panel}`}>
+        <CardContent className="p-6 md:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Company Bank</p>
@@ -1783,30 +1817,35 @@ const App: React.FC = () => {
             <p className={`mt-2 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Time filters show availability, but questions open only after you enter a company.</p>
           </div>
           <div className="w-full lg:w-80">
-            <input
+            <Input
               value={companySearchTerm}
               onChange={(e) => setCompanySearchTerm(e.target.value)}
               placeholder="Search companies..."
-              className={`w-full rounded-2xl border px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${theme.input}`}
+              className={`h-auto rounded-2xl px-4 py-3 text-sm font-bold focus-visible:ring-emerald-500/30 ${theme.input}`}
             />
           </div>
         </div>
-        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-2">
+        <Tabs value={companyTimeFilter} onValueChange={(value) => setCompanyTimeFilter(value as CompanyTimeFilter)} className="mt-6">
+        <TabsList className="grid h-auto grid-cols-2 gap-2 bg-transparent p-0 md:grid-cols-4">
           {COMPANY_TIME_FILTERS.map(([bucket, label]) => {
             const count = companyBucketSections[bucket].length;
             return (
-              <button
+              <TabsTrigger
                 key={bucket}
-                onClick={() => setCompanyTimeFilter(bucket)}
-                className={`rounded-2xl border px-4 py-3 text-left transition-all ${companyTimeFilter === bucket ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : `${theme.panelStrong} ${theme.subtle}`}`}
+                value={bucket}
+                className={`h-auto rounded-2xl border px-4 py-3 text-left transition-all data-[state=active]:border-emerald-500/40 data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-500 ${theme.panelStrong} ${theme.subtle}`}
               >
-                <span className="block text-[10px] font-black uppercase tracking-widest">{label}</span>
-                <span className="mt-1 block text-lg font-black">{count}</span>
-              </button>
+                <span className="flex w-full flex-col items-start">
+                  <span className="block text-[10px] font-black uppercase tracking-widest">{label}</span>
+                  <span className="mt-1 block text-lg font-black">{count}</span>
+                </span>
+              </TabsTrigger>
             );
           })}
-        </div>
-      </div>
+        </TabsList>
+        </Tabs>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {companySummaries.map(({ section, bucketCounts, solved }) => {
@@ -1814,18 +1853,19 @@ const App: React.FC = () => {
           const allCount = bucketCounts.all;
           const pct = allCount > 0 ? Math.round((solved / allCount) * 100) : 0;
           return (
-            <button
+            <Button
               key={section.id}
+              variant="outline"
               onClick={() => selectCompany(section)}
-              className={`h-[132px] rounded-3xl border p-4 text-left transition-all hover:-translate-y-0.5 ${themeMode === 'light' ? 'border-slate-200 bg-white hover:border-emerald-300 shadow-sm' : 'border-slate-800 bg-slate-900/45 hover:border-emerald-500/40'}`}
+              className={`h-[132px] justify-start rounded-3xl p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-transparent ${themeMode === 'light' ? 'border-slate-200 bg-white hover:border-emerald-300 shadow-sm' : 'border-slate-800 bg-slate-900/45 hover:border-emerald-500/40'}`}
             >
-              <div className="flex h-full flex-col justify-between">
+              <div className="flex h-full w-full flex-col justify-between">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h4 title={section.title} className={`truncate text-lg font-black tracking-tight ${theme.text}`}>{section.title}</h4>
                     <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{activeCount} in {COMPANY_TIME_FILTERS.find(([bucket]) => bucket === companyTimeFilter)?.[1]}</p>
                   </div>
-                  <span className="shrink-0 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">{pct}%</span>
+                  <Badge variant="outline" className="shrink-0 rounded-xl border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">{pct}%</Badge>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
                   {COMPANY_TIME_FILTERS.map(([bucket, label]) => {
@@ -1841,7 +1881,7 @@ const App: React.FC = () => {
                   })}
                 </div>
               </div>
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -1903,44 +1943,44 @@ const App: React.FC = () => {
                   {/* Category Tracker Bar */}
                   <div className="flex justify-center gap-2 overflow-x-auto no-scrollbar py-2">
                     {sectionStats.map(stat => (
-                      <button 
+                      <Button
                         key={stat.id}
+                        variant="outline"
                         onClick={() => setSelectedSectionId(stat.id)}
-                        className={`flex-none cursor-pointer px-4 py-2.5 rounded-2xl border transition-all active:scale-95 ${stat.id === selectedSectionId ? 'bg-indigo-500/10 border-indigo-500/40 shadow-xl shadow-indigo-500/5' : 'bg-slate-900/40 border-slate-800/40 opacity-40 hover:opacity-100'}`}
+                        className={`h-auto flex-none rounded-2xl px-4 py-2.5 transition-all active:scale-95 hover:bg-transparent ${stat.id === selectedSectionId ? 'bg-indigo-500/10 border-indigo-500/40 shadow-xl shadow-indigo-500/5' : 'bg-slate-900/40 border-slate-800/40 opacity-40 hover:opacity-100'}`}
                       >
                          <div className="flex items-center gap-3">
                             <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider truncate max-w-[100px]">{stat.title}</span>
                             <span className="text-[10px] font-black font-mono text-indigo-400">{Math.round((stat.solved / stat.total) * 100)}%</span>
                          </div>
-                      </button>
+                      </Button>
                     ))}
                   </div>
 
                   {/* Compact Control Center */}
-                  <div className="group relative p-8 md:p-14 rounded-[3.5rem] bg-slate-900/40 border border-slate-800/60 shadow-2xl overflow-hidden backdrop-blur-md">
+                  <Card className="group relative overflow-hidden rounded-[3.5rem] border-slate-800/60 bg-slate-900/40 shadow-2xl backdrop-blur-md">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 opacity-50" />
                     
-                    <div className="flex flex-col items-center text-center space-y-8 md:space-y-10">
+                    <CardContent className="flex flex-col items-center space-y-8 p-8 text-center md:space-y-10 md:p-14">
                         <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-500/10 rounded-[2rem] flex items-center justify-center border border-indigo-500/20 text-indigo-400 shadow-inner group-hover:rotate-12 transition-transform">
                           <svg className="w-8 h-8 md:w-10 md:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </div>
 
                         <div className="w-full space-y-4">
                           <label className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-600 block">Search Scope Configuration</label>
-                          <div className="relative group/select">
-                            <select 
+                          <Select
                               value={selectedSectionId}
-                              onChange={(e) => setSelectedSectionId(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-slate-100 py-4 md:py-5 px-8 rounded-[1.8rem] appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all cursor-pointer font-bold text-sm tracking-tight hover:border-slate-700"
+                              onValueChange={setSelectedSectionId}
                             >
-                                {sectionsData.map(s => (
-                                  <option key={s.id} value={s.id}>{s.title}</option>
-                                ))}
-                            </select>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-slate-600">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                            </div>
-                          </div>
+                            <SelectTrigger className="h-auto rounded-[1.8rem] border-slate-800 bg-slate-950 px-8 py-4 text-sm font-bold tracking-tight text-slate-100 hover:border-slate-700 md:py-5">
+                              <SelectValue placeholder="Select section" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {sectionsData.map(s => (
+                                <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           {currentSectionData && (
                             <div className="flex justify-between items-center px-6">
                                <div className="flex items-center gap-2">
@@ -1953,23 +1993,24 @@ const App: React.FC = () => {
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-                          <button 
+                          <Button
                             onClick={() => pickRandom('section')}
-                            className="py-5 px-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.3em] shadow-xl shadow-indigo-600/20 transition-all active:scale-95 flex items-center justify-center gap-3 group/spin"
+                            className="rounded-[1.8rem] bg-indigo-600 px-10 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-white shadow-xl shadow-indigo-600/20 hover:bg-indigo-500 active:scale-95 group/spin"
                           >
                              <span>Spin Section</span>
                              <svg className="w-4 h-4 group-hover/spin:rotate-45 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7" /></svg>
-                          </button>
-                          <button 
+                          </Button>
+                          <Button
                             onClick={() => pickRandom('global')}
-                            className="py-5 px-10 bg-slate-800 hover:bg-slate-700 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.3em] transition-all active:scale-95 flex items-center justify-center gap-3 group/spin"
+                            variant="secondary"
+                            className="rounded-[1.8rem] bg-slate-800 px-10 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-white hover:bg-slate-700 active:scale-95 group/spin"
                           >
                              <span>Global Spin</span>
                              <svg className="w-4 h-4 group-hover/spin:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
-                          </button>
+                          </Button>
                         </div>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
                 </div>
 
              </div>
@@ -2011,221 +2052,57 @@ const App: React.FC = () => {
       />
 
 
-      {showAddQuestionModal && (
-        <div className="fixed inset-0 z-[105] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl">
-          <div className="w-full max-w-lg rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-8">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-white tracking-tight">Add New Question</h3>
-              <button onClick={() => setShowAddQuestionModal(false)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-            <form onSubmit={handleClassifyQuestion} className="space-y-4">
-              <label className="block text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black">LeetCode Question ID</label>
-              <input
-                value={questionIdInput}
-                onChange={(e) => setQuestionIdInput(e.target.value)}
-                placeholder="e.g. 76"
-                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-              />
-              <button type="submit" disabled={isClassifying} className="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
-                {isClassifying ? 'Classifying...' : 'Get AI Suggestion'}
-              </button>
-            </form>
-
-            {aiSuggestion && (
-              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
-                <p className="text-xs text-slate-300"><span className="text-slate-500">Title:</span> {aiSuggestion.title}</p>
-                <p className="text-xs text-slate-300"><span className="text-slate-500">Difficulty:</span> {aiSuggestion.difficulty}</p>
-                <div>
-                  <label className="block text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black mb-2">Confirm Category</label>
-                  <select
-                    value={manualCategory}
-                    onChange={(e) => setManualCategory(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  >
-                    {CATEGORY_OPTIONS.map(category => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                  </select>
-                </div>
-                <button onClick={handleSaveNewQuestion} disabled={isSavingQuestion} className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
-                  {isSavingQuestion ? 'Saving...' : 'Confirm & Save'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <AddQuestionModal
+        open={showAddQuestionModal}
+        questionIdInput={questionIdInput}
+        aiSuggestion={aiSuggestion}
+        manualCategory={manualCategory}
+        categoryOptions={CATEGORY_OPTIONS}
+        isClassifying={isClassifying}
+        isSavingQuestion={isSavingQuestion}
+        onOpenChange={setShowAddQuestionModal}
+        onQuestionIdChange={setQuestionIdInput}
+        onManualCategoryChange={setManualCategory}
+        onClassifyQuestion={handleClassifyQuestion}
+        onSaveQuestion={handleSaveNewQuestion}
+      />
 
       {/* Global Handle Setup Modal */}
-      {showWelcome && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-slate-950/98 backdrop-blur-3xl animate-in fade-in duration-500">
-           <div className="bg-[#0f172a] border border-slate-800/80 rounded-[3.5rem] w-full max-w-md p-14 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-indigo-500" />
-              <div className="text-center mb-12">
-                 <h3 className="text-4xl font-black text-white mb-4 tracking-tighter leading-none">DSA Login</h3>
-                 <p className="text-sm text-slate-500 leading-relaxed font-medium">Sign in with your username and password to sync progress across devices.</p>
-              </div>
-              <div className="mb-8 grid grid-cols-3 gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-1">
-                {([
-                  ['login', 'Login'],
-                  ['signup', 'Signup'],
-                  ['admin', 'Admin']
-                ] as const).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => { setAuthMode(mode); setAuthError(''); }}
-                    className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-[0.2em] ${authMode === mode ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {authMode === 'admin' ? (
-                <form onSubmit={handleAdminLogin} className="space-y-6">
-                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
-                    <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Admin Key</label>
-                    <input
-                      autoFocus
-                      type="password"
-	                      placeholder="6-12 character access key"
-	                      value={adminKey}
-	                      onFocus={warmDatabaseOnce}
-	                      onChange={(e) => setAdminKey(e.target.value)}
-                      className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800"
-                    />
-                  </div>
-                  {authError && <p className="text-center text-xs font-bold text-rose-400">{authError}</p>}
-                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-indigo-600/20 transition-all active:scale-95">
-                    {isAuthBusy ? 'Checking...' : 'Unlock Admin'}
-                  </button>
-                  {adminMessage && <p className="text-center text-xs font-bold text-amber-300">{adminMessage}</p>}
-                  {isAdminUnlocked && (
-                    <button
-                      type="button"
-                      onClick={handleEnsurePerformanceIndexes}
-                      disabled={isAdminBusy}
-                      className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300 disabled:opacity-60"
-                    >
-                      {isAdminBusy ? 'Preparing...' : 'Prepare DB Indexes'}
-                    </button>
-                  )}
-                  {adminUsers.length > 0 && (
-                    <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70">
-                      <div className="sticky top-0 border-b border-slate-800 bg-slate-950 p-3">
-                        <input
-                          value={adminSearchTerm}
-                          onChange={(e) => setAdminSearchTerm(e.target.value)}
-                          placeholder="Search users..."
-                          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                        />
-                      </div>
-                      {filteredAdminUsers.map((user) => (
-                        <div key={user.handle} className="flex items-center justify-between gap-3 border-b border-slate-800 p-3 last:border-b-0">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-black text-slate-100">@{user.handle}</div>
-                            <div className="text-[10px] font-bold text-slate-500">{user.completedCount}/{user.progressCount} done {user.disabledAt ? '- disabled' : '- active'}</div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => toggleAdminUser(user)}
-                            disabled={isAdminBusy}
-                            className={`shrink-0 rounded-xl px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60 ${user.disabledAt ? 'bg-emerald-600' : 'bg-rose-600'}`}
-                          >
-                            {user.disabledAt ? 'Enable' : 'Disable'}
-                          </button>
-                        </div>
-                      ))}
-                      <div className="border-t border-slate-800 p-3">
-                        <div className="grid gap-2">
-                          <input
-                            value={adminResetHandle}
-                            onChange={(e) => setAdminResetHandle(e.target.value)}
-                            placeholder="username"
-                            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          />
-                          <input
-                            value={adminResetPassword}
-                            onChange={(e) => setAdminResetPassword(e.target.value)}
-                            type="password"
-                            placeholder="new password (4-10 chars)"
-                            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleAdminResetPassword}
-                            disabled={isAdminBusy}
-                            className="rounded-xl bg-emerald-600 px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60"
-                          >
-                            Reset Password
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </form>
-              ) : (
-                <form onSubmit={setupHandle} className="space-y-6">
-                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
-                    <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Username</label>
-                    <div className="flex items-center gap-3 text-xl font-mono">
-                      <span className="text-emerald-500/40">@</span>
-	                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onFocus={warmDatabaseOnce} onChange={(e) => setAuthUsername(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
-                    </div>
-                  </div>
-                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
-                    <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Password</label>
-	                    <input type="password" placeholder="4-10 characters" value={authPassword} onFocus={warmDatabaseOnce} onChange={(e) => setAuthPassword(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
-                  </div>
-                  {authError && <p className="text-center text-xs font-bold text-rose-400">{authError}</p>}
-                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-indigo-600/20 transition-all active:scale-95">
-                    {isAuthBusy ? 'Working...' : authMode === 'signup' ? 'Create Account' : 'Login'}
-                  </button>
-              </form>
-              )}
-           </div>
-        </div>
-      )}
+      <AuthModal
+        open={showWelcome}
+        authMode={authMode}
+        authUsername={authUsername}
+        authPassword={authPassword}
+        authError={authError}
+        isAuthBusy={isAuthBusy}
+        adminKey={adminKey}
+        adminMessage={adminMessage}
+        isAdminUnlocked={isAdminUnlocked}
+        isAdminBusy={isAdminBusy}
+        adminUsers={adminUsers}
+        filteredAdminUsers={filteredAdminUsers}
+        adminSearchTerm={adminSearchTerm}
+        adminResetHandle={adminResetHandle}
+        adminResetPassword={adminResetPassword}
+        onOpenChange={setShowWelcome}
+        onAuthModeChange={setAuthMode}
+        onAuthErrorChange={setAuthError}
+        onAuthUsernameChange={setAuthUsername}
+        onAuthPasswordChange={setAuthPassword}
+        onAdminKeyChange={setAdminKey}
+        onAdminSearchTermChange={setAdminSearchTerm}
+        onAdminResetHandleChange={setAdminResetHandle}
+        onAdminResetPasswordChange={setAdminResetPassword}
+        onWarmDatabase={warmDatabaseOnce}
+        onAuthSubmit={setupHandle}
+        onAdminLogin={handleAdminLogin}
+        onEnsurePerformanceIndexes={handleEnsurePerformanceIndexes}
+        onToggleAdminUser={toggleAdminUser}
+        onAdminResetPasswordSubmit={handleAdminResetPassword}
+      />
 
       {/* Target Focus Overlay (The Random Pick Result) - TRANSPARENT GLASS CARD */}
-      {randomPick && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-8 bg-slate-950/40 backdrop-blur-2xl animate-in zoom-in-95 duration-300">
-           <div className="bg-[#0f172a]/60 border border-emerald-500/30 rounded-[3rem] p-10 max-w-md w-full text-center relative overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.1)]">
-              <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500" />
-              
-              <div className="w-16 h-16 bg-emerald-500/20 rounded-[1.8rem] flex items-center justify-center mx-auto mb-8 text-emerald-400 border border-emerald-500/20">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-              </div>
-              
-              <p className="text-[9px] font-black text-emerald-500 uppercase tracking-[0.4em] mb-3">Objective Acquired</p>
-              <h3 className="text-2xl font-black text-white mb-6 tracking-tight leading-snug">{randomPick.title}</h3>
-              
-              <div className="flex justify-center items-center gap-3 mb-10">
-                 <DifficultyBadge diff={randomPick.difficulty} />
-                 <span className="text-[10px] font-black text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-800 font-mono">LC #{randomPick.id}</span>
-              </div>
-              
-              <div className="flex flex-col gap-3">
-                 <a 
-                   href={randomPick.link} 
-                   target="_blank" 
-                   rel="noreferrer" 
-                   onClick={() => setRandomPick(null)} 
-                   className="py-5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
-                 >
-                   Launch LeetCode
-                 </a>
-                 <button 
-                   onClick={() => setRandomPick(null)} 
-                   className="py-4 text-slate-500 hover:text-slate-300 font-black text-[9px] uppercase tracking-widest transition-colors"
-                 >
-                   Dismiss
-                 </button>
-              </div>
-           </div>
-        </div>
-      )}
+      <RandomPickOverlay randomPick={randomPick} onClose={() => setRandomPick(null)} />
     </div>
   );
 };
