@@ -1,13 +1,18 @@
 
-import React, { lazy, Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AdminUserRow, backendApi, CompanyQuestionRow, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
 import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
 import { getOfficialSolution, OfficialSolutionEntry } from './lib/officialSolutions';
 import { Pattern, Question, Section } from './types';
-
-const JavaSolutionEditor = lazy(() => import('./components/JavaSolutionEditor'));
+import { AppHeader } from './components/AppHeader';
+import { GlobalQuestionSearch } from './components/GlobalQuestionSearch';
+import { OfficialSolutionModal } from './components/OfficialSolutionModal';
+import { QuestionSearchModal } from './components/QuestionSearchModal';
+import { SolutionNoteModal } from './components/SolutionNoteModal';
+import { DifficultyBadge } from './components/appUi';
+import type { AppThemeClasses, CompanyMention, CompanyTimeFilter, SearchQuestionResult, SyncStatus, ThemeMode } from './components/appTypes';
 
 const LEGACY_LOCAL_CACHE_KEY = 'dsa-completed-v4-map';
 const LEGACY_SOLUTION_CACHE_KEY = 'dsa-solution-notes-v1';
@@ -24,8 +29,6 @@ const REMOTE_PROGRESS_POLL_MS = 90_000;
 
 type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
 type AuthMode = 'login' | 'signup' | 'admin';
-type ThemeMode = 'dark' | 'light';
-type SyncStatus = 'signed-out' | 'idle' | 'syncing' | 'synced' | 'paused' | 'error';
 
 interface LcMetadata {
   questionId: string;
@@ -57,19 +60,7 @@ interface PendingProgressRow {
   metadata?: QuestionProgressMetadata;
 }
 
-type CompanyTimeFilter = 'all' | '30d' | '3m' | '6m';
 type CompanyBucketSections = Record<CompanyTimeFilter, Section[]>;
-
-interface CompanyMention {
-  company: string;
-  buckets: CompanyTimeFilter[];
-}
-
-interface SearchQuestionResult {
-  question: Question;
-  sourceLabels: string[];
-  companies: CompanyMention[];
-}
 
 const CATEGORY_OPTIONS = [
   'Dynamic Programming',
@@ -328,39 +319,7 @@ const mockClassifyQuestion = async (questionId: string): Promise<LcMetadata> => 
 };
 
 
-// --- UI COMPONENTS ---
-
-const GlobalStatBadge: React.FC<{ diff: string, solved: number, total: number }> = ({ diff, solved, total }) => {
-  const styles = {
-    Easy: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5",
-    Medium: "text-amber-400 border-amber-500/20 bg-amber-500/5",
-    Hard: "text-rose-400 border-rose-500/20 bg-rose-500/5"
-  };
-  const colorClass = styles[diff as keyof typeof styles] || "text-slate-400 border-slate-800 bg-slate-900";
-  
-  return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${colorClass} transition-all duration-300`}>
-      <span className="text-[10px] font-black">{diff[0]}</span>
-      <div className="flex items-baseline gap-0.5">
-        <span className="text-xs font-black font-mono">{solved}</span>
-        <span className="text-[9px] opacity-40 font-bold">/{total}</span>
-      </div>
-    </div>
-  );
-};
-
-const DifficultyBadge: React.FC<{ diff: string }> = ({ diff }) => {
-  const styles = {
-    Easy: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    Medium: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    Hard: "bg-rose-500/10 text-rose-400 border-rose-500/20"
-  };
-  return (
-    <span className={`text-[9px] font-black uppercase tracking-widest border px-2 py-0.5 rounded-full ${styles[diff as keyof typeof styles]}`}>
-      {diff}
-    </span>
-  );
-};
+// --- UI HELPERS ---
 
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState<boolean>(() => {
@@ -375,16 +334,6 @@ const useIsMobile = () => {
   }, []);
 
   return isMobile;
-};
-
-const WakeBanner: React.FC<{ visible: boolean }> = ({ visible }) => {
-  if (!visible) return null;
-  return (
-    <div className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300">
-      <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-      <span className="text-[10px] font-black uppercase tracking-[0.15em]">Waking backend... retrying automatically</span>
-    </div>
-  );
 };
 
 const isAuthFailure = (error: unknown) => {
@@ -1638,7 +1587,7 @@ const App: React.FC = () => {
     setSelectedPattern(EMPTY_PATTERN);
   };
 
-  const theme = {
+  const theme: AppThemeClasses = {
     app: themeMode === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-[#020617] text-slate-200',
     shell: themeMode === 'light' ? 'bg-white border-slate-200' : 'bg-[#0f172a] border-slate-800/60',
     header: themeMode === 'light' ? 'bg-slate-100/85 border-slate-200' : 'bg-[#020617]/80 border-slate-800/60',
@@ -1649,120 +1598,6 @@ const App: React.FC = () => {
     subtle: themeMode === 'light' ? 'text-slate-600' : 'text-slate-400',
     input: themeMode === 'light' ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400' : 'bg-slate-950 border-slate-800 text-slate-200 placeholder:text-slate-600'
   };
-
-  const renderGlobalQuestionSearch = () => {
-    const query = questionSearchQuery.trim();
-    const showResults = isQuestionSearchOpen && query.length > 0;
-
-    return (
-      <div className="relative w-full max-w-2xl xl:flex-1">
-        <div className={`flex h-12 items-center gap-3 rounded-2xl border px-4 shadow-inner transition-all focus-within:ring-2 focus-within:ring-indigo-500/30 ${theme.input}`}>
-          <svg className="h-4 w-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 21-4.35-4.35M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z" />
-          </svg>
-          <input
-            value={questionSearchQuery}
-            onChange={(e) => {
-              setQuestionSearchQuery(e.target.value);
-              setIsQuestionSearchOpen(true);
-            }}
-            onFocus={() => setIsQuestionSearchOpen(true)}
-            placeholder="Search LC ID or question name..."
-            className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none placeholder:text-slate-500"
-          />
-          {questionSearchQuery && (
-            <button
-              type="button"
-              onClick={() => {
-                setQuestionSearchQuery('');
-                setIsQuestionSearchOpen(false);
-              }}
-              className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-400"
-              title="Clear question search"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
-        {showResults && (
-          <div className={`absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[80] max-h-[420px] overflow-y-auto rounded-2xl border p-2 shadow-2xl ${themeMode === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-950'}`}>
-            {questionSearchResults.length === 0 ? (
-              <div className={`p-4 text-sm font-bold ${theme.subtle}`}>No matching questions found.</div>
-            ) : (
-              questionSearchResults.map((result) => {
-                const companyCount = result.companies.length;
-                const sourcePreview = result.sourceLabels.slice(0, 2).join(' • ');
-                return (
-                  <button
-                    key={result.question.id}
-                    type="button"
-                    onClick={() => openSearchQuestion(result)}
-                    className={`w-full rounded-xl p-3 text-left transition-all ${themeMode === 'light' ? 'hover:bg-slate-100' : 'hover:bg-slate-900'}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className={`truncate text-sm font-black ${theme.text}`}>{result.question.title}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-[10px] font-black text-slate-500">LC #{result.question.id}</span>
-                          <DifficultyBadge diff={result.question.difficulty} />
-                        </div>
-                      </div>
-                      {companyCount > 0 && (
-                        <span className="shrink-0 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">
-                          {companyCount} co
-                        </span>
-                      )}
-                    </div>
-                    <p className={`mt-2 truncate text-[10px] font-bold ${theme.muted}`}>
-                      {companyCount > 0 ? `Asked by ${result.companies.slice(0, 3).map((item) => item.company).join(', ')}` : sourcePreview}
-                    </p>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderGlobalHeaderAccount = () => {
-    const statusConfig = SYNC_STATUS_CONFIG[syncStatus];
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          setAuthMode(handle ? 'login' : 'login');
-          setShowWelcome(true);
-        }}
-        className={`min-w-[178px] rounded-2xl border px-4 py-3 text-left transition-all ${theme.panelStrong} hover:border-indigo-500/40`}
-        title={handle ? `Signed in as @${handle}` : 'Sign in to sync'}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <span className={`block truncate text-[10px] font-black uppercase tracking-[0.2em] ${theme.muted}`}>
-              {handle ? `@${handle}` : 'guest'}
-            </span>
-            <span className={`mt-1 block truncate text-[10px] font-bold ${theme.subtle}`}>{statusConfig.label}</span>
-          </div>
-          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusConfig.color}`} />
-        </div>
-      </button>
-    );
-  };
-
-  const renderGlobalProgress = () => (
-    <div className={`min-w-[150px] rounded-2xl border px-4 py-3 ${theme.panelStrong}`}>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme.muted}`}>Progress</span>
-        <span className={`font-mono text-sm font-black ${theme.text}`}>{overallPercent}%</span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-slate-800/70">
-        <div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-1000" style={{ width: `${overallPercent}%` }} />
-      </div>
-    </div>
-  );
 
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
     <>
@@ -2013,64 +1848,48 @@ const App: React.FC = () => {
     </div>
   );
 
-  return (
-    <div className={`min-h-screen font-sans selection:bg-indigo-500/30 ${theme.app}`}>
-      <main className="flex min-h-screen flex-col overflow-hidden">
-        <header className={`px-8 py-6 md:px-14 md:py-8 border-b backdrop-blur-2xl z-20 sticky top-0 ${theme.header}`}>
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center">
-              <div>
-                <h2 className={`text-xl md:text-2xl font-black tracking-tighter ${theme.text}`}>
-                  {isProfile ? (hasActiveQuestionSelection ? selectedSection?.title || 'Companies' : 'Companies') : isSyllabus ? (hasActiveQuestionSelection ? selectedPattern.name : 'Syllabus') : 'Objective Selection'}
-                </h2>
-                <WakeBanner visible={isBackendWaking} />
-              </div>
-              <div className={`flex w-fit p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
-                <button
-                  onClick={goToSyllabusView}
-                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isSyllabus ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
-                >
-                  Syllabus
-                </button>
-                <button
-                  onClick={goToCompaniesView}
-                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
-                >
-                  Companies
-                </button>
-                <button
-                  onClick={goToRouletteView}
-                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRoulette ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
-                >
-                  Roulette
-                </button>
-              </div>
-            </div>
+  const headerTitle = isProfile
+    ? (hasActiveQuestionSelection ? selectedSection?.title || 'Companies' : 'Companies')
+    : isSyllabus
+      ? (hasActiveQuestionSelection ? selectedPattern.name : 'Syllabus')
+      : 'Objective Selection';
 
-            {renderGlobalQuestionSearch()}
-            
-            <div className="flex flex-wrap items-center gap-4 xl:justify-end">
-              <div className="hidden lg:flex gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800/50">
-                {(Object.entries(globalStats) as [string, { total: number; solved: number }][]).map(([diff, data]) => (
-                  <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
-                ))}
-              </div>
-              {renderGlobalProgress()}
-              {renderGlobalHeaderAccount()}
-              <button
-                onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-                className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition-all ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
-                title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                {themeMode === 'dark' ? (
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36l-1.42-1.42M7.06 7.06 5.64 5.64m12.72 0-1.42 1.42M7.06 16.94l-1.42 1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" /></svg>
-                ) : (
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8Z" /></svg>
-                )}
-              </button>
-            </div>
-          </div>
-        </header>
+  return (
+    <div className={`${themeMode} min-h-screen font-sans selection:bg-indigo-500/30 ${theme.app}`}>
+      <main className="flex min-h-screen flex-col overflow-hidden">
+        <AppHeader
+          title={headerTitle}
+          theme={theme}
+          themeMode={themeMode}
+          isBackendWaking={isBackendWaking}
+          isSyllabus={isSyllabus}
+          isProfile={isProfile}
+          isRoulette={isRoulette}
+          search={(
+            <GlobalQuestionSearch
+              query={questionSearchQuery}
+              isOpen={isQuestionSearchOpen}
+              results={questionSearchResults}
+              theme={theme}
+              themeMode={themeMode}
+              onQueryChange={setQuestionSearchQuery}
+              onOpenChange={setIsQuestionSearchOpen}
+              onOpenQuestion={openSearchQuestion}
+            />
+          )}
+          globalStats={globalStats}
+          overallPercent={overallPercent}
+          handle={handle}
+          syncStatusConfig={SYNC_STATUS_CONFIG[syncStatus]}
+          onGoSyllabus={goToSyllabusView}
+          onGoCompanies={goToCompaniesView}
+          onGoRoulette={goToRouletteView}
+          onOpenAuth={() => {
+            setAuthMode('login');
+            setShowWelcome(true);
+          }}
+          onToggleTheme={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+        />
 
         <div className="flex-1 overflow-y-auto p-8 md:p-14 custom-scrollbar">
            {isProfile ? (
@@ -2158,248 +1977,38 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {selectedSearchQuestion && (
-        <div className="fixed inset-0 z-[105] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
-          <div className={`mx-auto my-4 w-full max-w-4xl rounded-[2rem] border p-6 shadow-2xl md:my-8 md:p-8 ${themeMode === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-[#0f172a]'}`}>
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Question Lookup</p>
-                <h3 className={`mt-2 text-2xl font-black tracking-tight ${theme.text}`}>{selectedSearchQuestion.question.title}</h3>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs font-black text-slate-500">LC #{selectedSearchQuestion.question.id}</span>
-                  <DifficultyBadge diff={selectedSearchQuestion.question.difficulty} />
-                </div>
-              </div>
-              <button
-                onClick={closeSearchQuestion}
-                className={`shrink-0 rounded-xl border px-3 py-2 text-sm font-black ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
-                title="Close question lookup"
-              >
-                X
-              </button>
-            </div>
+      <QuestionSearchModal
+        selectedSearchQuestion={selectedSearchQuestion}
+        solutionMap={solutionMap}
+        solutionNotePresenceMap={solutionNotePresenceMap}
+        companyTimeFilters={COMPANY_TIME_FILTERS}
+        theme={theme}
+        themeMode={themeMode}
+        onClose={closeSearchQuestion}
+        onOpenOfficialSolution={openOfficialSolution}
+        onOpenSolutionEditor={openSolutionEditor}
+      />
 
-            <div className="mb-6 flex flex-wrap gap-2">
-              <a
-                href={selectedSearchQuestion.question.link}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20"
-              >
-                Open LeetCode
-              </a>
-              <button
-                type="button"
-                onClick={() => openOfficialSolution(selectedSearchQuestion.question)}
-                className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20"
-              >
-                Official Solution
-              </button>
-              <button
-                type="button"
-                onClick={() => openSolutionEditor(selectedSearchQuestion.question)}
-                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[10px] font-black uppercase tracking-widest ${solutionNotePresenceMap[selectedSearchQuestion.question.id] || solutionMap[selectedSearchQuestion.question.id] ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : themeMode === 'light' ? 'border-slate-300 bg-slate-50 text-slate-500 hover:text-indigo-500' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-indigo-300'}`}
-              >
-                {solutionNotePresenceMap[selectedSearchQuestion.question.id] || solutionMap[selectedSearchQuestion.question.id] ? 'Edit Note' : 'Add Note'}
-              </button>
-            </div>
+      <OfficialSolutionModal
+        question={officialSolutionQuestion}
+        solution={officialSolution}
+        status={officialSolutionStatus}
+        view={officialSolutionView}
+        themeMode={themeMode}
+        onClose={closeOfficialSolution}
+        onViewChange={setOfficialSolutionView}
+        hasMeaningfulHint={hasMeaningfulHint}
+      />
 
-            <div className={`rounded-2xl border p-5 ${theme.panelStrong}`}>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h4 className={`text-sm font-black uppercase tracking-[0.2em] ${theme.text}`}>Asked By Companies</h4>
-                <span className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">
-                  {selectedSearchQuestion.companies.length}
-                </span>
-              </div>
-
-              {selectedSearchQuestion.companies.length === 0 ? (
-                <div className={`rounded-xl border border-dashed p-5 text-sm font-bold ${themeMode === 'light' ? 'border-slate-300 text-slate-500' : 'border-slate-700 text-slate-400'}`}>
-                  No company mentions are available for this question in the current company bank.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {selectedSearchQuestion.companies.map((mention) => (
-                    <div key={mention.company} className={`rounded-xl border p-3 ${themeMode === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-950/70'}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <p className={`min-w-0 truncate text-sm font-black ${theme.text}`} title={mention.company}>{mention.company}</p>
-                        <div className="flex shrink-0 flex-wrap justify-end gap-1">
-                          {mention.buckets.map((bucket) => (
-                            <span key={bucket} className={`rounded-lg px-2 py-0.5 text-[9px] font-black uppercase ${bucket === 'all' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-500'}`}>
-                              {COMPANY_TIME_FILTERS.find(([value]) => value === bucket)?.[1] || bucket}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {officialSolutionQuestion && (
-        <div className="fixed inset-0 z-[106] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
-          <div className="mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-6 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-8">
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-black tracking-tight text-white">Official Solution</h3>
-                <p className="mt-1 text-xs text-slate-400">
-                  LC #{officialSolutionQuestion.id} • {officialSolutionQuestion.title}
-                </p>
-              </div>
-              <button onClick={closeOfficialSolution} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-
-            {officialSolutionStatus === 'loading' && (
-              <div className="flex flex-1 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 p-8 text-sm font-bold text-slate-400">
-                Loading official solution...
-              </div>
-            )}
-
-            {officialSolutionStatus === 'missing' && (
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6 text-sm text-amber-100">
-                Official solution data is not available for this question yet.
-              </div>
-            )}
-
-            {officialSolutionStatus === 'error' && (
-              <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-6 text-sm text-rose-100">
-                Unable to load official solution data.
-              </div>
-            )}
-
-            {officialSolutionStatus === 'ready' && officialSolution && (
-              <div className="flex flex-1 flex-col gap-5 overflow-hidden">
-                <div className="flex flex-wrap items-center gap-2">
-                  <DifficultyBadge diff={officialSolution.difficulty} />
-                  {officialSolution.tags.map((tag) => (
-                    <span key={tag} className="rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-2">
-                  <button
-                    type="button"
-                    onClick={() => setOfficialSolutionView('question')}
-                    className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${officialSolutionView === 'question' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                  >
-                    Question
-                  </button>
-                  {hasMeaningfulHint(officialSolution) && (
-                    <button
-                      type="button"
-                      onClick={() => setOfficialSolutionView('hint')}
-                      className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${officialSolutionView === 'hint' ? 'bg-amber-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                      Show Hint
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setOfficialSolutionView('solution')}
-                    className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${officialSolutionView === 'solution' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                  >
-                    Show Solution
-                  </button>
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                  {officialSolutionView === 'question' && (
-                    <>
-                      <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">Question</h4>
-                      <div
-                        className="prose prose-invert max-w-none text-sm leading-7 text-slate-200 prose-p:text-slate-300 prose-li:text-slate-300 prose-pre:border prose-pre:border-slate-800 prose-pre:bg-slate-900"
-                        dangerouslySetInnerHTML={{ __html: officialSolution.descriptionHtml }}
-                      />
-                    </>
-                  )}
-
-                  {officialSolutionView === 'hint' && (
-                    <>
-                      <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Hint / Approach</h4>
-                      <pre className="whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm leading-7 text-slate-200">
-                        {officialSolution.solutionMarkdown}
-                      </pre>
-                    </>
-                  )}
-
-                  {officialSolutionView === 'solution' && (
-                    <>
-                      <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Java Solution</h4>
-                      {officialSolution.hasJava ? (
-                        <pre className="overflow-x-auto rounded-2xl border border-slate-800 bg-[#020617] p-4 text-[12px] leading-6 text-slate-100">
-                          <code>{officialSolution.java}</code>
-                        </pre>
-                      ) : (
-                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-sm text-amber-100">
-                          Java solution is unavailable for this problem in the source repo.
-                        </div>
-                      )}
-                      <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-slate-600">
-                        Source: {officialSolution.sourcePath}
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {editingSolutionQuestion && (
-        <div className="fixed inset-0 z-[106] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
-          <div className="mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-6 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-8">
-            <div className="flex items-start justify-between gap-4 mb-6">
-              <div>
-                <h3 className="text-xl font-black text-white tracking-tight">Solution Notes</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  LC #{editingSolutionQuestion.id} • {editingSolutionQuestion.title}
-                </p>
-              </div>
-              <button onClick={closeSolutionEditor} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-
-            <div className={`overflow-hidden rounded-2xl border ${themeMode === 'light' ? 'border-slate-300 bg-white' : 'border-slate-700 bg-slate-950'}`}>
-              <div className={`flex items-center justify-between border-b px-4 py-2 ${themeMode === 'light' ? 'border-slate-200 bg-slate-50 text-slate-500' : 'border-slate-800 bg-slate-900/80 text-slate-500'}`}>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Java Editor</span>
-                <span className="font-mono text-[10px] font-bold">{solutionEditorValue.length} chars</span>
-              </div>
-              <Suspense fallback={<div className="flex h-[55vh] items-center justify-center font-mono text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Loading Java editor...</div>}>
-                <JavaSolutionEditor
-                  themeMode={themeMode}
-                  value={solutionEditorValue}
-                  onChange={handleSolutionEditorChange}
-                />
-              </Suspense>
-            </div>
-
-            <div className="mt-5 flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">
-                {isLoadingSolutionNote ? 'Loading saved note...' : 'Your note is stored per handle and question.'}
-              </span>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={closeSolutionEditor}
-                  className="px-5 py-2.5 rounded-2xl border border-slate-700 text-xs font-black uppercase tracking-[0.15em] text-slate-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveSolutionNote}
-                  className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-xs font-black uppercase tracking-[0.15em] text-white"
-                >
-                  Save Note
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <SolutionNoteModal
+        question={editingSolutionQuestion}
+        themeMode={themeMode}
+        value={solutionEditorValue}
+        isLoading={isLoadingSolutionNote}
+        onChange={handleSolutionEditorChange}
+        onClose={closeSolutionEditor}
+        onSave={saveSolutionNote}
+      />
 
 
       {showAddQuestionModal && (
