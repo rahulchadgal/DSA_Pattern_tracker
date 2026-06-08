@@ -12,7 +12,6 @@ const LEGACY_SOLUTION_CACHE_KEY = 'dsa-solution-notes-v1';
 const PROGRESS_CACHE_PREFIX = 'dsa-progress-cache-v1';
 const SOLUTION_CACHE_PREFIX = 'dsa-solution-notes-v1';
 const PENDING_PROGRESS_PREFIX = 'dsa-pending-progress-v1';
-const NAVBAR_COLLAPSED_KEY = 'dsa-navbar-collapsed-v1';
 const GRID_VIEW_KEY = 'dsa-grid-view-v1';
 const LEGACY_CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
 const CUSTOM_QUESTIONS_CACHE_PREFIX = 'dsa-custom-questions-v1';
@@ -88,6 +87,15 @@ const COMPANY_TIME_FILTERS: Array<[CompanyTimeFilter, string]> = [
   ['3m', '3 Months'],
   ['6m', '6 Months']
 ];
+
+const SYNC_STATUS_CONFIG = {
+  'signed-out': { color: 'bg-slate-600', label: 'Sign in to sync' },
+  idle: { color: 'bg-slate-500', label: 'Ready to sync' },
+  syncing: { color: 'bg-amber-400', label: 'Sync in progress' },
+  synced: { color: 'bg-emerald-500', label: 'Synced' },
+  paused: { color: 'bg-orange-500', label: 'Sync unavailable' },
+  error: { color: 'bg-rose-500', label: 'Sync failed' }
+} satisfies Record<SyncStatus, { color: string; label: string }>;
 
 const emptyCompanyBucketSections = (): CompanyBucketSections => ({
   all: [],
@@ -291,28 +299,6 @@ const mockClassifyQuestion = async (questionId: string): Promise<LcMetadata> => 
 
 // --- UI COMPONENTS ---
 
-const CloudStatus: React.FC<{ status: SyncStatus }> = ({ status }) => {
-  const configs = {
-    'signed-out': { color: "bg-slate-600", label: "Sign in to sync" },
-    idle: { color: "bg-slate-500", label: "Ready to sync" },
-    syncing: { color: "bg-amber-400", label: "Sync in progress" },
-    synced: { color: "bg-emerald-500", label: "Synced" },
-    paused: { color: "bg-orange-500", label: "Sync unavailable" },
-    error: { color: "bg-rose-500", label: "Sync failed" },
-  } satisfies Record<SyncStatus, { color: string; label: string }>;
-  const cfg = configs[status];
-  
-  return (
-    <div
-      title={cfg.label}
-      aria-label={cfg.label}
-      className="flex items-center justify-center h-8 w-8 bg-slate-900/60 rounded-full border border-slate-800/50 backdrop-blur-xl"
-    >
-      <div className={`w-2.5 h-2.5 rounded-full ${cfg.color} ${status === 'syncing' ? 'animate-pulse' : ''}`} />
-    </div>
-  );
-};
-
 const GlobalStatBadge: React.FC<{ diff: string, solved: number, total: number }> = ({ diff, solved, total }) => {
   const styles = {
     Easy: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5",
@@ -378,7 +364,7 @@ const isAuthFailure = (error: unknown) => {
 
 const App: React.FC = () => {
   const { handle, setHandle, showWelcome, setShowWelcome, persistHandle, clearHandle } = useProfileHandle();
-  const { isProfile, isRoulette, isSyllabus, goMain, goProfile, goSyllabus, goRoulette } = useAppRoute();
+  const { isProfile, isRoulette, isSyllabus, goProfile, goSyllabus, goRoulette } = useAppRoute();
   const isMobile = useIsMobile();
 
   // --- PROGRESS STATE (Map of ID -> Timestamp) ---
@@ -392,9 +378,6 @@ const App: React.FC = () => {
   const [companyBucketSections, setCompanyBucketSections] = useState<CompanyBucketSections>(() => emptyCompanyBucketSections());
   const [selectedPattern, setSelectedPattern] = useState<Pattern>(() => EMPTY_PATTERN);
   const [selectedSectionId, setSelectedSectionId] = useState<string>('');
-  const [openSections, setOpenSections] = useState<string[]>([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => localStorage.getItem(NAVBAR_COLLAPSED_KEY) === 'true');
   const [randomPick, setRandomPick] = useState<Question | null>(null);
   const [gridView, setGridView] = useState<'list' | 'small' | 'big'>(() => {
     const saved = localStorage.getItem(GRID_VIEW_KEY);
@@ -415,6 +398,8 @@ const App: React.FC = () => {
   const [officialSolutionView, setOfficialSolutionView] = useState<'question' | 'hint' | 'solution'>('question');
   const [isLoadingSolutionNote, setIsLoadingSolutionNote] = useState(false);
   const solutionEditorRef = useRef<HTMLDivElement | null>(null);
+  const solutionEditorDirtyRef = useRef(false);
+  const loadedEditorQuestionRef = useRef('');
   const pendingProgressRef = useRef<Record<string, PendingProgressRow>>({});
   const progressSyncPromiseRef = useRef<Promise<void> | null>(null);
   const customSyncPromiseRef = useRef<Promise<void> | null>(null);
@@ -492,7 +477,6 @@ const App: React.FC = () => {
     setSectionsData(nextSections);
     setSelectedSectionId('');
     setSelectedPattern(EMPTY_PATTERN);
-    setOpenSections([]);
   }, []);
 
   const applyCustomRowsToSections = useCallback((rows: CustomQuestionRow[]) => {
@@ -1086,10 +1070,6 @@ const App: React.FC = () => {
   }, [baseSectionsData, handle, applyCustomRowsToSections]);
 
   useEffect(() => {
-    localStorage.setItem(NAVBAR_COLLAPSED_KEY, String(isSidebarCollapsed));
-  }, [isSidebarCollapsed]);
-
-  useEffect(() => {
     localStorage.setItem(GRID_VIEW_KEY, gridView);
   }, [gridView]);
 
@@ -1124,10 +1104,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!editingSolutionQuestion || !solutionEditorRef.current) return;
     const questionId = normalizeQuestionId(editingSolutionQuestion.id);
+    if (loadedEditorQuestionRef.current === questionId) return;
+    solutionEditorDirtyRef.current = false;
+    loadedEditorQuestionRef.current = questionId;
     solutionEditorRef.current.innerHTML = solutionMap[questionId] || '';
     solutionEditorRef.current.style.height = 'auto';
     solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
-  }, [editingSolutionQuestion, solutionMap]);
+  }, [editingSolutionQuestion]);
 
   useEffect(() => {
     if (!editingSolutionQuestion || !handle || !backendApi.hasAuthSession()) return;
@@ -1153,6 +1136,11 @@ const App: React.FC = () => {
           writeUserMapCache(SOLUTION_CACHE_PREFIX, handle, next);
           return next;
         });
+        if (!solutionEditorDirtyRef.current && solutionEditorRef.current && loadedEditorQuestionRef.current === questionId) {
+          solutionEditorRef.current.innerHTML = note;
+          solutionEditorRef.current.style.height = 'auto';
+          solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
+        }
         setSolutionNotePresenceMap(prev => ({ ...prev, [questionId]: true }));
       })
       .catch((error) => {
@@ -1224,6 +1212,8 @@ const App: React.FC = () => {
 
   const closeSolutionEditor = () => {
     setEditingSolutionQuestion(null);
+    solutionEditorDirtyRef.current = false;
+    loadedEditorQuestionRef.current = '';
   };
 
   const openOfficialSolution = async (question: Question) => {
@@ -1260,13 +1250,36 @@ const App: React.FC = () => {
   const applyEditorCommand = (command: string) => {
     document.execCommand(command, false);
     if (!solutionEditorRef.current) return;
+    solutionEditorDirtyRef.current = true;
     solutionEditorRef.current.focus();
+    solutionEditorRef.current.style.height = 'auto';
+    solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
+  };
+
+  const escapeHtml = (value: string) => value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const applyCodeFormat = (mode: 'inline' | 'block') => {
+    if (!solutionEditorRef.current) return;
+    solutionEditorRef.current.focus();
+    const selection = window.getSelection();
+    const selectedText = selection && selection.rangeCount > 0 ? selection.toString() : '';
+    const html = mode === 'inline'
+      ? `<code>${escapeHtml(selectedText || 'code')}</code>`
+      : `<pre><code>${escapeHtml(selectedText || 'write code here')}</code></pre><div><br></div>`;
+    document.execCommand('insertHTML', false, html);
+    solutionEditorDirtyRef.current = true;
     solutionEditorRef.current.style.height = 'auto';
     solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
   };
 
   const handleSolutionEditorInput = () => {
     if (!solutionEditorRef.current) return;
+    solutionEditorDirtyRef.current = true;
     solutionEditorRef.current.style.height = 'auto';
     solutionEditorRef.current.style.height = `${solutionEditorRef.current.scrollHeight}px`;
   };
@@ -1533,13 +1546,6 @@ const App: React.FC = () => {
   const resetQuestionSelection = () => {
     setSelectedSectionId('');
     setSelectedPattern(EMPTY_PATTERN);
-    setOpenSections([]);
-  };
-
-  const goToMainView = () => {
-    resetQuestionSelection();
-    setCompanySearchTerm('');
-    goMain();
   };
 
   const goToCompaniesView = () => {
@@ -1562,8 +1568,6 @@ const App: React.FC = () => {
   const selectPattern = (section: Section, pattern: Pattern) => {
     setSelectedSectionId(section.id);
     setSelectedPattern(pattern);
-    setOpenSections(prev => prev.includes(section.id) ? prev : [...prev, section.id]);
-    setIsSidebarOpen(false);
     goSyllabus();
   };
 
@@ -1571,8 +1575,6 @@ const App: React.FC = () => {
     const pattern = section.patterns[0] || EMPTY_PATTERN;
     setSelectedSectionId(section.id);
     setSelectedPattern(pattern);
-    setOpenSections([section.id]);
-    setIsSidebarOpen(false);
     goProfile();
   };
 
@@ -1674,6 +1676,43 @@ const App: React.FC = () => {
       </div>
     );
   };
+
+  const renderGlobalHeaderAccount = () => {
+    const statusConfig = SYNC_STATUS_CONFIG[syncStatus];
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setAuthMode(handle ? 'login' : 'login');
+          setShowWelcome(true);
+        }}
+        className={`min-w-[178px] rounded-2xl border px-4 py-3 text-left transition-all ${theme.panelStrong} hover:border-indigo-500/40`}
+        title={handle ? `Signed in as @${handle}` : 'Sign in to sync'}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <span className={`block truncate text-[10px] font-black uppercase tracking-[0.2em] ${theme.muted}`}>
+              {handle ? `@${handle}` : 'guest'}
+            </span>
+            <span className={`mt-1 block truncate text-[10px] font-bold ${theme.subtle}`}>{statusConfig.label}</span>
+          </div>
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusConfig.color}`} />
+        </div>
+      </button>
+    );
+  };
+
+  const renderGlobalProgress = () => (
+    <div className={`min-w-[150px] rounded-2xl border px-4 py-3 ${theme.panelStrong}`}>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme.muted}`}>Progress</span>
+        <span className={`font-mono text-sm font-black ${theme.text}`}>{overallPercent}%</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-slate-800/70">
+        <div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-1000" style={{ width: `${overallPercent}%` }} />
+      </div>
+    </div>
+  );
 
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
     <>
@@ -1925,179 +1964,60 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className={`flex flex-col md:flex-row min-h-screen font-sans selection:bg-indigo-500/30 ${theme.app}`}>
-      
-      {/* Sidebar Navigation */}
-      <aside className={`
-        fixed md:sticky top-0 left-0 h-screen border-r flex flex-col z-50 ${theme.shell}
-        transition-all duration-500 md:translate-x-0 ${isSidebarCollapsed ? 'md:w-24' : 'md:w-80'} w-80
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className={`${isSidebarCollapsed ? 'p-4' : 'p-8'} border-b ${themeMode === 'light' ? 'border-slate-200' : 'border-slate-800/40'}`}>
-          <div className="flex items-center justify-between gap-2">
-            {!isSidebarCollapsed && <h1 className={`text-2xl font-black tracking-tighter mb-2 underline decoration-indigo-500 underline-offset-8 ${theme.text}`}>DSA ENGINE</h1>}
-            {isSidebarCollapsed && <h1 className={`text-lg font-black tracking-tighter ${theme.text}`}>DSA</h1>}
-            <button
-              onClick={() => setIsSidebarCollapsed(prev => !prev)}
-              className={`hidden md:flex p-2 rounded-xl border ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
-              title={isSidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-            >
-              <svg className={`w-4 h-4 transition-transform ${isSidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-            </button>
-          </div>
-          <div className="mt-4 flex flex-col gap-2">
-            <button onClick={() => setShowWelcome(true)} className="flex items-center gap-2 group w-fit text-left">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              {!isSidebarCollapsed && <span className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${theme.muted} group-hover:text-indigo-400`}>@{handle || 'guest'}</span>}
-            </button>
-          </div>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-4">
-          {isProfile && (
-            <div className="mb-3">
-              <input
-                value={companySearchTerm}
-                onChange={(e) => setCompanySearchTerm(e.target.value)}
-                placeholder="Search companies..."
-                className={`w-full rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${theme.input}`}
-              />
-            </div>
-          )}
-          {displayedSections.map(section => (
-            <div key={section.id} className="space-y-1">
-              <button
-                title={section.title}
-                onClick={() => setOpenSections(prev => prev.includes(section.id) ? prev.filter(i => i !== section.id) : [...prev, section.id])}
-                className={`w-full flex items-center justify-between p-3 text-left group ${isSidebarCollapsed ? 'px-1' : ''}`}
-              >
-                <span className={`text-[10px] font-black uppercase tracking-widest ${openSections.includes(section.id) ? 'text-indigo-400' : 'text-slate-600 group-hover:text-slate-400'} ${isSidebarCollapsed ? 'mx-auto text-center' : ''}`}>{isSidebarCollapsed ? section.title.slice(0, 3) : section.title}</span>
-                {!isSidebarCollapsed && <svg className={`w-3 h-3 text-slate-700 transition-transform ${openSections.includes(section.id) ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>}
-              </button>
-              
-              {openSections.includes(section.id) && !isSidebarCollapsed && (
-                <div className="space-y-1 ml-2">
-                  {section.patterns.map(pattern => {
-                    const active = selectedSectionId === section.id && selectedPattern.id === pattern.id;
-                    const doneCount = pattern.questions.filter(q => completedMap[q.id]).length;
-                    const total = pattern.questions.length;
-                    const pct = Math.round((doneCount/total)*100);
-                    return (
-                      <button 
-                        key={pattern.id} 
-                        onClick={() => {
-                          if (isProfile) {
-                            selectCompany(section);
-                          } else {
-                            selectPattern(section, pattern);
-                          }
-                        }}
-                        className={`w-full group px-4 py-3 rounded-2xl text-[12px] text-left transition-all border ${active ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-lg shadow-indigo-500/5' : `${theme.muted} ${themeMode === 'light' ? 'hover:bg-slate-100' : 'hover:bg-slate-800/40'} border-transparent`}`}
-                      >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="truncate font-bold tracking-tight pr-4">{isProfile ? section.title : pattern.name}</span>
-                          <span className={`text-[9px] font-black font-mono ${pct === 100 ? 'text-emerald-500' : 'opacity-60'}`}>{pct}%</span>
-                        </div>
-                        <div className="h-1 w-full bg-slate-800/50 rounded-full overflow-hidden">
-                           <div className={`h-full transition-all duration-700 ${pct === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
-        </nav>
-
-        <div className={`${isSidebarCollapsed ? 'p-4' : 'p-8'} border-t ${themeMode === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/50 border-slate-800/40'}`}>
-           <div className="flex justify-between items-end mb-3">
-              <span className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Overall Progress</span>
-              <span className={`text-xl font-black ${theme.text}`}>{overallPercent}%</span>
-           </div>
-           <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-1000" style={{ width: `${overallPercent}%` }} />
-           </div>
-        </div>
-      </aside>
-
-      {/* Main Viewport */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+    <div className={`min-h-screen font-sans selection:bg-indigo-500/30 ${theme.app}`}>
+      <main className="flex min-h-screen flex-col overflow-hidden">
         <header className={`px-8 py-6 md:px-14 md:py-8 border-b backdrop-blur-2xl z-20 sticky top-0 ${theme.header}`}>
           <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-center gap-6">
-              <button onClick={() => setIsSidebarOpen(true)} className={`md:hidden p-3 rounded-2xl border ${theme.panelStrong} ${theme.subtle}`}>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-              </button>
-              <button onClick={() => setIsSidebarCollapsed(prev => !prev)} className={`hidden md:flex p-3 rounded-2xl border ${theme.panelStrong} ${theme.subtle}`}>
-                <svg className={`w-5 h-5 transition-transform ${isSidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-              </button>
+            <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center">
               <div>
                 <h2 className={`text-xl md:text-2xl font-black tracking-tighter ${theme.text}`}>
                   {isProfile ? (hasActiveQuestionSelection ? selectedSection?.title || 'Companies' : 'Companies') : isSyllabus ? (hasActiveQuestionSelection ? selectedPattern.name : 'Syllabus') : 'Objective Selection'}
                 </h2>
-                <div className="flex items-center gap-3 mt-1.5">
-                   <CloudStatus status={syncStatus} />
-                   <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-900/60 rounded-xl border border-slate-800/50">
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Global</span>
-                      <span className="text-[10px] font-black text-indigo-400 font-mono">{overallPercent}%</span>
-                   </div>
-                </div>
                 <WakeBanner visible={isBackendWaking} />
+              </div>
+              <div className={`flex w-fit p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
+                <button
+                  onClick={goToSyllabusView}
+                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isSyllabus ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
+                >
+                  Syllabus
+                </button>
+                <button
+                  onClick={goToCompaniesView}
+                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
+                >
+                  Companies
+                </button>
+                <button
+                  onClick={goToRouletteView}
+                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRoulette ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
+                >
+                  Roulette
+                </button>
               </div>
             </div>
 
             {renderGlobalQuestionSearch()}
             
             <div className="flex flex-wrap items-center gap-4 xl:justify-end">
-               <div className="hidden lg:flex gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800/50">
-                  {(Object.entries(globalStats) as [string, { total: number; solved: number }][]).map(([diff, data]) => (
-                    <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
-                  ))}
-               </div>
-               <button
-                 onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-                 className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition-all ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
-                 title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-               >
-                 {themeMode === 'dark' ? (
-                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36l-1.42-1.42M7.06 7.06 5.64 5.64m12.72 0-1.42 1.42M7.06 16.94l-1.42 1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" /></svg>
-                 ) : (
-                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8Z" /></svg>
-                 )}
-               </button>
-
-               {/* Header Mode Switcher */}
-               <div className={`flex p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
-	                  <button
-	                    onClick={goToMainView}
-                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
-                  >
-                    Main
-                  </button>
-	                  <button
-	                    onClick={goToCompaniesView}
-                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isProfile ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
-                  >
-                    Companies
-                  </button>
-               </div>
-               {!isProfile && (
-                 <div className={`hidden sm:flex p-1 rounded-2xl border shadow-inner ${theme.panelStrong}`}>
-                    <button 
-	                      onClick={goToSyllabusView}
-                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isSyllabus ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
-                    >
-                      Syllabus
-                    </button>
-                    <button 
-	                      onClick={goToRouletteView}
-                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRoulette ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
-                    >
-                      Roulette
-                    </button>
-                 </div>
-               )}
+              <div className="hidden lg:flex gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800/50">
+                {(Object.entries(globalStats) as [string, { total: number; solved: number }][]).map(([diff, data]) => (
+                  <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
+                ))}
+              </div>
+              {renderGlobalProgress()}
+              {renderGlobalHeaderAccount()}
+              <button
+                onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition-all ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
+                title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {themeMode === 'dark' ? (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36l-1.42-1.42M7.06 7.06 5.64 5.64m12.72 0-1.42 1.42M7.06 16.94l-1.42 1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" /></svg>
+                ) : (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8Z" /></svg>
+                )}
+              </button>
             </div>
           </div>
         </header>
@@ -2394,37 +2314,66 @@ const App: React.FC = () => {
               <button onClick={closeSolutionEditor} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
-            <div className="mb-3 flex flex-wrap gap-2">
-              <button
-                onClick={() => applyEditorCommand('bold')}
-                type="button"
-                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
-              >
-                Bold
-              </button>
-              <button
-                onClick={() => applyEditorCommand('italic')}
-                type="button"
-                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
-              >
-                Italic
-              </button>
-              <button
-                onClick={() => applyEditorCommand('insertUnorderedList')}
-                type="button"
-                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
-              >
-                Bullet
-              </button>
-            </div>
+	                <div className="mb-3 flex flex-wrap gap-2">
+	                  <button
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      applyEditorCommand('bold');
+                    }}
+	                    type="button"
+	                    className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
+	                  >
+	                    Bold
+	                  </button>
+	                  <button
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      applyEditorCommand('italic');
+                    }}
+	                    type="button"
+	                    className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
+	                  >
+	                    Italic
+	                  </button>
+	                  <button
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      applyEditorCommand('insertUnorderedList');
+                    }}
+	                    type="button"
+	                    className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
+	                  >
+	                    Bullet
+	                  </button>
+                  <button
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      applyCodeFormat('inline');
+                    }}
+                    type="button"
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
+                  >
+                    Inline Code
+                  </button>
+                  <button
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      applyCodeFormat('block');
+                    }}
+                    type="button"
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200"
+                  >
+                    Code Block
+                  </button>
+	                </div>
 
             <div
               ref={solutionEditorRef}
-              contentEditable
-              onInput={handleSolutionEditorInput}
-              suppressContentEditableWarning
-              className="min-h-[55vh] w-full flex-1 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 overflow-hidden"
-            />
+	              contentEditable
+	              onInput={handleSolutionEditorInput}
+	              suppressContentEditableWarning
+	              className="min-h-[55vh] w-full flex-1 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 font-mono text-sm leading-7 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 [&_code]:rounded-md [&_code]:border [&_code]:border-slate-700 [&_code]:bg-slate-900 [&_code]:px-1.5 [&_code]:py-0.5 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-2xl [&_pre]:border [&_pre]:border-slate-700 [&_pre]:bg-[#020617] [&_pre]:p-4 [&_pre_code]:border-0 [&_pre_code]:bg-transparent [&_pre_code]:p-0"
+	            />
 
             <div className="mt-5 flex items-center justify-between">
               <span className="text-[11px] text-slate-500">

@@ -1,10 +1,31 @@
 import { query } from '../server/db.js';
 import { allowMethods, parseBody, sendError, sendJson } from '../server/http.js';
 import { requireUser, requireUserHandle } from '../server/auth.js';
+import sanitizeHtml from 'sanitize-html';
 
 function authStatus(message) {
   return message === 'Unauthorized' || message === 'Invalid token' || message === 'Expired token' ? 401 : 500;
 }
+
+const sanitizeSolutionHtml = (value) => {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+  const sanitized = sanitizeHtml(value, {
+    allowedTags: ['p', 'div', 'br', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'pre', 'code', 'span'],
+    allowedAttributes: {},
+    disallowedTagsMode: 'discard',
+    enforceHtmlBoundary: true,
+    parser: {
+      lowerCaseAttributeNames: true,
+      lowerCaseTags: true
+    },
+    transformTags: {
+      span: 'span'
+    }
+  }).trim();
+  return sanitized.length > 0 ? sanitized : null;
+};
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
@@ -34,9 +55,10 @@ async function getProgress(req, res) {
            AND q.leetcode_id = $2`,
         [user.id, leetcodeId]
       );
+      const solutionRichText = sanitizeSolutionHtml(noteResult.rows[0]?.solutionRichText || null);
       return sendJson(res, 200, {
         leetcodeId,
-        solutionRichText: noteResult.rows[0]?.solutionRichText || null
+        solutionRichText
       });
     }
 
@@ -83,7 +105,7 @@ async function upsertProgress(req, res) {
   const completed = Boolean(body.completed);
   const solutionRichText =
     typeof body.solutionRichText === 'string' && body.solutionRichText.trim().length > 0
-      ? body.solutionRichText
+      ? sanitizeSolutionHtml(body.solutionRichText)
       : null;
   const hasSolutionRichText = Object.prototype.hasOwnProperty.call(body, 'solutionRichText');
   const title = typeof body.title === 'string' ? body.title.trim() : '';
