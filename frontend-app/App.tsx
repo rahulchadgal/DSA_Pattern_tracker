@@ -1749,28 +1749,38 @@ const App: React.FC = () => {
 
   const renderPatternPicker = () => (
     <div className="pb-32 space-y-8">
-      <div className={`rounded-3xl border p-6 md:p-8 ${theme.panel}`}>
-        <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Choose Pattern</p>
-        <h3 className={`mt-2 text-2xl font-black tracking-normal ${theme.text}`}>Pick a syllabus pattern to start</h3>
-        <p className={`mt-2 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Questions stay hidden until you choose a pattern. Your last progress and notes remain linked by LeetCode ID.</p>
+      <div className={`rounded-3xl border p-7 md:p-9 ${theme.panel}`}>
+        <div className="flex flex-col gap-6 md:flex-row md:items-center">
+          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-[28px] border border-purple-400/25 bg-purple-500/15 text-purple-200 shadow-[0_0_40px_rgba(168,85,247,0.35)]">
+            <div className="absolute inset-3 rounded-2xl bg-purple-400/10 blur-lg" />
+            <svg className="relative h-11 w-11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 3h12M6 8h12M8 13h8M10 18h4M7 3v5l3 5v5h4v-5l3-5V3" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Choose Pattern</p>
+            <h3 className={`mt-2 text-2xl font-black tracking-normal md:text-3xl ${theme.text}`}>Pick a syllabus pattern to start</h3>
+            <p className={`mt-3 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Questions stay hidden until you choose a pattern. Your last progress and notes remain linked by LeetCode ID.</p>
+          </div>
+        </div>
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {sectionsData.map((section) => {
           const stat = sectionStats.find((item) => item.id === section.id);
           const pct = stat && stat.total > 0 ? Math.round((stat.solved / stat.total) * 100) : 0;
           return (
-            <section key={section.id} className={`rounded-3xl border p-5 ${theme.panel}`}>
-              <div className="mb-4 flex items-center justify-between gap-4">
+            <section key={section.id} className={`rounded-[20px] border p-8 ${theme.panel}`}>
+              <div className="mb-5 flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <h4 className={`truncate text-lg font-black tracking-normal ${theme.text}`}>{section.title}</h4>
                   <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{stat?.solved || 0}/{stat?.total || 0} solved</p>
                 </div>
                 <span className="shrink-0 rounded-2xl border border-purple-500/25 bg-purple-500/10 px-3 py-1.5 text-[10px] font-black text-purple-400">{pct}%</span>
               </div>
-              <div className="h-1.5 w-full rounded-full bg-slate-800/20 overflow-hidden mb-4">
-                <div className="h-full bg-purple-500/25 transition-all duration-700" style={{ width: `${pct}%` }} />
+              <div className="mb-5 h-2 w-full overflow-hidden rounded-full bg-white/10">
+                <div className="h-full bg-gradient-to-r from-violet-500 to-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.4)] transition-all duration-700" style={{ width: `${pct}%` }} />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {section.patterns.map((pattern) => {
                   const doneCount = pattern.questions.filter((q) => completedMap[q.id]).length;
                   const total = pattern.questions.length;
@@ -1779,7 +1789,7 @@ const App: React.FC = () => {
                     <button
                       key={pattern.id}
                       onClick={() => selectPattern(section, pattern)}
-                      className="glass-panel hover-lift h-[76px] rounded-[20px] border p-3 text-left"
+                      className="glass-panel hover-lift h-[92px] rounded-[20px] border p-5 text-left"
                     >
                       <div className="flex h-full flex-col justify-between">
                         <span title={pattern.name} className={`line-clamp-2 text-sm font-black leading-tight ${theme.text}`}>{pattern.name}</span>
@@ -1801,7 +1811,7 @@ const App: React.FC = () => {
 
   const renderCompanyPicker = () => (
     <div className="pb-32 space-y-6">
-      <div className={`rounded-3xl border p-6 md:p-8 ${theme.panel}`}>
+      <div className={`rounded-3xl border p-7 md:p-9 ${theme.panel}`}>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Company Bank</p>
@@ -1834,7 +1844,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {companySummaries.map(({ section, bucketCounts, solved }) => {
           const activeCount = bucketCounts[companyTimeFilter];
           const allCount = bucketCounts.all;
@@ -1843,7 +1853,7 @@ const App: React.FC = () => {
             <button
               key={section.id}
               onClick={() => selectCompany(section)}
-              className="glass-panel hover-lift h-[132px] rounded-[20px] border p-4 text-left"
+              className="glass-panel hover-lift h-[156px] rounded-[20px] border p-5 text-left"
             >
               <div className="flex h-full flex-col justify-between">
                 <div className="flex items-start justify-between gap-3">
@@ -1859,7 +1869,7 @@ const App: React.FC = () => {
                     return (
                       <div key={bucket} title={`${label}: ${bucketCounts[bucket]}`} className="flex flex-col items-center gap-1">
                         <div className="flex h-9 w-full items-end rounded-lg bg-white/10 px-1">
-                          <div className={`w-full rounded-md ${bucket === companyTimeFilter ? 'bg-green-500' : 'bg-purple-500/70'}`} style={{ height }} />
+                          <div className={`w-full rounded-md shadow-[0_0_10px_rgba(168,85,247,0.28)] ${bucket === companyTimeFilter ? 'bg-green-500' : 'bg-purple-500/70'}`} style={{ height }} />
                         </div>
                         <span className={`text-[8px] font-black uppercase ${theme.muted}`}>{bucket === 'all' ? 'All' : bucket}</span>
                       </div>
@@ -1895,7 +1905,7 @@ const App: React.FC = () => {
               <button
                 key={stat.id}
                 onClick={() => setSelectedSectionId(stat.id)}
-                className={`flex-none cursor-pointer rounded-2xl border px-4 py-2.5 transition-all active:scale-95 ${stat.id === selectedSectionId ? 'border-purple-500/40 bg-purple-500/10 shadow-xl shadow-purple-500/5' : 'border-white/[0.12] bg-white/[0.06] opacity-55 hover:opacity-100'}`}
+                className={`flex-none cursor-pointer rounded-2xl border px-4 py-2.5 transition-all active:scale-95 ${stat.id === selectedSectionId ? 'border-purple-500/40 bg-purple-500/10 shadow-xl shadow-purple-500/20' : 'glass-panel opacity-90 hover:opacity-100'}`}
               >
                 <div className="flex items-center gap-3">
                   <span className="max-w-[100px] truncate text-[9px] font-black uppercase tracking-normal text-slate-300">{stat.title}</span>
@@ -1917,26 +1927,26 @@ const App: React.FC = () => {
               </motion.div>
 
               <div className="w-full space-y-4">
-                <label className="block text-[9px] font-black uppercase tracking-[0.35em] text-slate-500">Search Scope Configuration</label>
+                <label className="block text-[9px] font-black uppercase tracking-[0.35em] text-[#94A3B8]">Search Scope Configuration</label>
                 <div className="relative group/select">
                   <select
                     value={selectedSectionId}
                     onChange={(e) => setSelectedSectionId(e.target.value)}
-                    className="w-full cursor-pointer appearance-none rounded-[1.8rem] border border-white/[0.12] bg-white/[0.06] px-8 py-4 text-sm font-bold tracking-normal text-yellow-100 transition-all hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500/30 md:py-5"
+                    className="glass-input w-full cursor-pointer appearance-none rounded-[1.8rem] px-8 py-4 text-sm font-bold tracking-normal text-[#F8FAFC] transition-all hover:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-500/30 md:py-5"
                   >
                     {sectionsData.map(s => (
                       <option key={s.id} value={s.id}>{s.title}</option>
                     ))}
                   </select>
-                  <div className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-slate-500">
+                  <div className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-[#94A3B8]">
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                   </div>
                 </div>
                 {currentSectionData && (
                   <div className="flex items-center justify-between px-6">
                     <div className="flex items-center gap-2">
-                      <div className="h-1 w-1 rounded-full bg-purple-500/25" />
-                      <span className="text-[9px] font-black uppercase tracking-normal text-slate-400">{currentSectionData.solved}/{currentSectionData.total} Solved</span>
+                      <div className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+                      <span className="text-[9px] font-black uppercase tracking-normal text-[#CBD5E1]">{currentSectionData.solved}/{currentSectionData.total} Solved</span>
                     </div>
                     <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">{Math.round((currentSectionData.solved / currentSectionData.total) * 100)}%</span>
                   </div>
@@ -1955,7 +1965,7 @@ const App: React.FC = () => {
                 <button
                   onClick={() => pickRandom('global')}
                   disabled={isPickingRandom}
-                  className="flex items-center justify-center gap-3 rounded-[1.8rem] bg-slate-700 px-10 py-5 text-[10px] font-black uppercase tracking-[0.25em] text-white transition-all hover:bg-slate-600 active:scale-95 disabled:opacity-70"
+                  className="glass-panel flex items-center justify-center gap-3 rounded-[1.8rem] px-10 py-5 text-[10px] font-black uppercase tracking-[0.25em] text-white transition-all hover:border-purple-400/50 active:scale-95 disabled:opacity-70"
                 >
                   <span>{isPickingRandom ? 'Picking...' : 'Global Spin'}</span>
                   <svg className="h-4 w-4 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
@@ -2014,7 +2024,7 @@ const App: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="min-h-full"
+              className="mx-auto min-h-full w-full max-w-[1450px]"
             >
               {renderRouteContent()}
             </motion.div>
@@ -2058,18 +2068,18 @@ const App: React.FC = () => {
 
       {showAddQuestionModal && (
         <div className="fixed inset-0 z-[105] flex items-center justify-center p-6 bg-[#081229]/80 backdrop-blur-xl">
-          <div className="w-full max-w-lg rounded-[2.5rem] border border-white/[0.12] bg-white/[0.06] p-8">
+          <div className="glass-card w-full max-w-lg rounded-[2.5rem] p-8">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-black text-white tracking-normal">Add New Question</h3>
               <button onClick={() => setShowAddQuestionModal(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
             <form onSubmit={handleClassifyQuestion} className="space-y-4">
-              <label className="block text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black">LeetCode Question ID</label>
+              <label className="block text-[10px] uppercase tracking-[0.2em] text-[#94A3B8] font-black">LeetCode Question ID</label>
               <input
                 value={questionIdInput}
                 onChange={(e) => setQuestionIdInput(e.target.value)}
                 placeholder="e.g. 76"
-                className="w-full rounded-2xl border border-white/[0.12] bg-white/[0.06] px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                className="glass-input w-full rounded-2xl px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
               />
               <button type="submit" disabled={isClassifying} className="w-full py-3 rounded-2xl bg-purple-500/25 hover:bg-purple-500/25 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
                 {isClassifying ? 'Classifying...' : 'Get AI Suggestion'}
@@ -2077,15 +2087,15 @@ const App: React.FC = () => {
             </form>
 
             {aiSuggestion && (
-              <div className="mt-6 rounded-2xl border border-white/[0.12] bg-white/[0.06] p-4 space-y-3">
-                <p className="text-xs text-slate-300"><span className="text-slate-500">Title:</span> {aiSuggestion.title}</p>
-                <p className="text-xs text-slate-300"><span className="text-slate-500">Difficulty:</span> {aiSuggestion.difficulty}</p>
+              <div className="glass-panel mt-6 rounded-2xl p-4 space-y-3">
+                <p className="text-xs text-[#CBD5E1]"><span className="text-[#94A3B8]">Title:</span> {aiSuggestion.title}</p>
+                <p className="text-xs text-[#CBD5E1]"><span className="text-[#94A3B8]">Difficulty:</span> {aiSuggestion.difficulty}</p>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black mb-2">Confirm Category</label>
+                  <label className="block text-[10px] uppercase tracking-[0.2em] text-[#94A3B8] font-black mb-2">Confirm Category</label>
                   <select
                     value={manualCategory}
                     onChange={(e) => setManualCategory(e.target.value)}
-                    className="w-full rounded-xl border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-sm text-slate-100"
+                    className="glass-input w-full rounded-xl px-3 py-2 text-sm text-slate-100"
                   >
                     {CATEGORY_OPTIONS.map(category => (
                       <option key={category} value={category}>{category}</option>
@@ -2104,13 +2114,13 @@ const App: React.FC = () => {
       {/* Global Handle Setup Modal */}
       {showWelcome && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-[#081229]/92 backdrop-blur-3xl animate-in fade-in duration-500">
-           <div className="bg-white/[0.06] border border-white/[0.12] rounded-[3.5rem] w-full max-w-md p-14 shadow-2xl relative overflow-hidden">
+           <div className="glass-card rounded-[3.5rem] w-full max-w-md p-14 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-purple-500" />
               <div className="text-center mb-12">
                  <h3 className="text-4xl font-black text-white mb-4 tracking-normal leading-none">DSA Login</h3>
-                 <p className="text-sm text-slate-500 leading-relaxed font-medium">Sign in with your username and password to sync progress across devices.</p>
+                 <p className="text-sm text-[#CBD5E1] leading-relaxed font-medium">Sign in with your username and password to sync progress across devices.</p>
               </div>
-              <div className="mb-8 grid grid-cols-3 gap-2 rounded-2xl border border-white/[0.12] bg-white/[0.06] p-1">
+              <div className="glass-panel mb-8 grid grid-cols-3 gap-2 rounded-2xl p-1">
                 {([
                   ['login', 'Login'],
                   ['signup', 'Signup'],
@@ -2120,7 +2130,7 @@ const App: React.FC = () => {
                     key={mode}
                     type="button"
                     onClick={() => { setAuthMode(mode); setAuthError(''); }}
-                    className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-[0.2em] ${authMode === mode ? 'bg-purple-500/25 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-[0.2em] ${authMode === mode ? 'bg-purple-500/25 text-white' : 'text-[#94A3B8] hover:text-[#CBD5E1]'}`}
                   >
                     {label}
                   </button>
@@ -2129,8 +2139,8 @@ const App: React.FC = () => {
 
               {authMode === 'admin' ? (
                 <form onSubmit={handleAdminLogin} className="space-y-6">
-                  <div className="bg-white/[0.06] p-6 rounded-[2rem] border border-white/[0.12] transition-all focus-within:border-purple-500/70">
-                    <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Admin Key</label>
+                  <div className="glass-panel p-6 rounded-[2rem] transition-all focus-within:border-purple-500/70">
+                    <label className="block text-[10px] font-black uppercase text-[#94A3B8] tracking-[0.3em] mb-4 text-center">Admin Key</label>
                     <input
                       autoFocus
                       type="password"
@@ -2167,8 +2177,8 @@ const App: React.FC = () => {
                     </div>
                   )}
                   {adminUsers.length > 0 && (
-                    <div className="max-h-72 overflow-y-auto rounded-2xl border border-white/[0.12] bg-white/[0.06]">
-                      <div className="sticky top-0 border-b border-white/[0.12] bg-white/[0.06] p-3">
+                    <div className="glass-panel max-h-72 overflow-y-auto rounded-2xl">
+                      <div className="sticky top-0 border-b border-white/[0.12] bg-[#081229]/70 p-3">
                         <input
                           value={adminSearchTerm}
                           onChange={(e) => setAdminSearchTerm(e.target.value)}
@@ -2180,7 +2190,7 @@ const App: React.FC = () => {
                         <div key={user.handle} className="flex items-center justify-between gap-3 border-b border-white/[0.12] p-3 last:border-b-0">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-black text-slate-100">@{user.handle}</div>
-                            <div className="text-[10px] font-bold text-slate-500">{user.completedCount}/{user.progressCount} done {user.disabledAt ? '- disabled' : '- active'}</div>
+                            <div className="text-[10px] font-bold text-[#94A3B8]">{user.completedCount}/{user.progressCount} done {user.disabledAt ? '- disabled' : '- active'}</div>
                           </div>
                           <button
                             type="button"
@@ -2222,15 +2232,15 @@ const App: React.FC = () => {
                 </form>
               ) : (
                 <form onSubmit={setupHandle} className="space-y-6">
-                  <div className="bg-white/[0.06] p-6 rounded-[2rem] border border-white/[0.12] transition-all focus-within:border-purple-500/70">
-                    <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Username</label>
+                  <div className="glass-panel p-6 rounded-[2rem] transition-all focus-within:border-purple-500/70">
+                    <label className="block text-[10px] font-black uppercase text-[#94A3B8] tracking-[0.3em] mb-4 text-center">Username</label>
                     <div className="flex items-center gap-3 text-xl font-mono">
                       <span className="text-purple-400/40">@</span>
 	                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onFocus={warmDatabaseOnce} onChange={(e) => setAuthUsername(e.target.value)} className="w-full border-none bg-transparent p-0 text-purple-200 placeholder:text-slate-500 focus:ring-0" />
                     </div>
                   </div>
-                  <div className="bg-white/[0.06] p-6 rounded-[2rem] border border-white/[0.12] transition-all focus-within:border-purple-500/70">
-                    <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Password</label>
+                  <div className="glass-panel p-6 rounded-[2rem] transition-all focus-within:border-purple-500/70">
+                    <label className="block text-[10px] font-black uppercase text-[#94A3B8] tracking-[0.3em] mb-4 text-center">Password</label>
 	                    <input type="password" placeholder="4-10 characters" value={authPassword} onFocus={warmDatabaseOnce} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border-none bg-transparent p-0 text-purple-200 placeholder:text-slate-500 focus:ring-0" />
                   </div>
                   {authError && <p className="text-center text-xs font-bold text-purple-400">{authError}</p>}

@@ -54,7 +54,9 @@
 
   body {
     background:
-      radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 40%),
+      radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.15), transparent 35%),
+      radial-gradient(circle at 85% 70%, rgba(168, 85, 247, 0.20), transparent 45%),
+      radial-gradient(circle at top left, rgba(192, 132, 252, 0.16), transparent 42%),
       radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.18), transparent 40%),
       linear-gradient(135deg, #081229 0%, #111c3f 40%, #1c2258 100%);
     background-attachment: fixed;
@@ -67,30 +69,32 @@
 @layer utilities {
   .gradient-bg {
     background:
-      radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 40%),
+      radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.15), transparent 35%),
+      radial-gradient(circle at 85% 70%, rgba(168, 85, 247, 0.20), transparent 45%),
+      radial-gradient(circle at top left, rgba(192, 132, 252, 0.16), transparent 42%),
       radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.18), transparent 40%),
       linear-gradient(135deg, #081229 0%, #111c3f 40%, #1c2258 100%);
     background-attachment: fixed;
   }
 
   .glass-card {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(18px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(24px);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.20);
   }
 
   .glass-panel {
-    background: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    backdrop-filter: blur(18px);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(24px);
   }
 
   .glass-input {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
     color: #f8fafc;
-    backdrop-filter: blur(18px);
+    backdrop-filter: blur(24px);
   }
 
   .glass-input:focus,
@@ -111,12 +115,17 @@
   }
 
   .hover-lift {
-    transition: all .25s ease;
+    transition: all 250ms ease;
   }
 
   .hover-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  }
+
+  .progress-glow > div {
+    background: linear-gradient(90deg, #8b5cf6, #c084fc);
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
   }
 
   .mono {

@@ -29,8 +29,8 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
 
   return (
     <div className="relative w-full max-w-2xl xl:flex-1">
-      <div className={`flex h-12 items-center gap-3 rounded-2xl border px-4 shadow-inner transition-all focus-within:ring-2 focus-within:ring-purple-500/30 ${theme.input}`}>
-        <Search className="h-4 w-4 shrink-0 text-slate-500" />
+      <div className={`flex h-[60px] items-center gap-3 rounded-2xl border px-5 shadow-inner transition-all focus-within:ring-2 focus-within:ring-purple-500/30 ${theme.input}`}>
+        <Search className="h-4 w-4 shrink-0 text-[#94A3B8]" />
         <input
           value={query}
           onChange={(event) => {
@@ -39,7 +39,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
           }}
           onFocus={() => onOpenChange(true)}
           placeholder="Search LC ID or question name..."
-          className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none placeholder:text-slate-500"
+          className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[#F8FAFC] outline-none placeholder:text-[#94A3B8]"
         />
         {query && (
           <button
@@ -48,7 +48,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
               onQueryChange('');
               onOpenChange(false);
             }}
-            className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-purple-400"
+            className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-[#94A3B8] hover:text-purple-300"
             title="Clear question search"
           >
             Clear

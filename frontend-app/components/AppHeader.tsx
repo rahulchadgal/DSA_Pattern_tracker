@@ -52,19 +52,19 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
   return (
     <header className={`sticky top-0 z-20 border-b px-4 py-4 sm:px-6 md:px-10 xl:px-12 ${theme.header}`}>
-      <div className="grid min-h-[148px] grid-cols-1 gap-4 lg:min-h-[126px] xl:min-h-[92px] xl:grid-cols-[minmax(260px,360px)_minmax(280px,1fr)_auto] xl:items-center">
+      <div className="mx-auto grid min-h-[148px] w-full max-w-[1450px] grid-cols-1 gap-5 lg:min-h-[126px] xl:min-h-[92px] xl:grid-cols-[minmax(260px,360px)_minmax(280px,1fr)_auto] xl:items-center">
         <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center xl:grid-cols-1">
           <div className="min-w-0">
             <h2 title={title} className={`truncate text-xl font-black tracking-normal md:text-2xl ${theme.text}`}>{title}</h2>
             <WakeBanner visible={isBackendWaking} />
           </div>
-          <div className={`grid w-full grid-cols-3 rounded-[20px] border p-1 shadow-inner sm:w-[348px] xl:w-full ${theme.panelStrong}`}>
+          <div className={`grid h-[60px] w-full grid-cols-3 rounded-[20px] border p-1.5 shadow-inner sm:w-[348px] xl:w-full ${theme.panelStrong}`}>
             {navItems.map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={item.onClick}
-                className={`relative h-10 overflow-hidden rounded-xl px-2 text-[10px] font-black uppercase tracking-normal transition-colors ${item.active ? 'text-white' : `${theme.muted} hover:text-purple-400`}`}
+                className={`relative h-full overflow-hidden rounded-xl px-2 text-[10px] font-black uppercase tracking-normal transition-colors ${item.active ? 'text-white' : `${theme.muted} hover:text-purple-400`}`}
               >
                 {item.active && (
                   <motion.span
@@ -81,25 +81,25 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
         <div className="min-w-0 xl:max-w-2xl">{search}</div>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] items-center gap-3 lg:grid-cols-[auto_minmax(150px,170px)_minmax(170px,190px)_44px] xl:justify-end">
-          <div className="glass-panel hidden h-11 gap-1.5 rounded-xl p-1 lg:flex">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_60px] items-center gap-5 lg:grid-cols-[auto_minmax(150px,170px)_minmax(170px,190px)_60px] xl:justify-end">
+          <div className="glass-panel hidden h-[60px] items-center gap-1.5 rounded-2xl p-1.5 lg:flex">
             {(Object.entries(globalStats) as [string, { total: number; solved: number }][]).map(([diff, data]) => (
               <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
             ))}
           </div>
 
-          <div className={`h-[68px] rounded-2xl border px-4 py-3 ${theme.panelStrong}`}>
+          <div className={`h-[60px] rounded-2xl border px-4 py-2.5 ${theme.panelStrong}`}>
             <div className="mb-2 flex items-center justify-between gap-3">
               <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme.muted}`}>Progress</span>
               <span className={`font-mono text-sm font-black ${theme.text}`}>{overallPercent}%</span>
             </div>
-            <Progress value={overallPercent} className="h-2 bg-white/10 [&>div]:bg-gradient-to-r [&>div]:from-violet-500 [&>div]:to-purple-400 [&>div]:duration-1000" />
+            <Progress value={overallPercent} className="progress-glow h-2 bg-white/10 [&>div]:duration-1000" />
           </div>
 
           <button
             type="button"
             onClick={onOpenAuth}
-            className={`h-[68px] rounded-2xl border px-3 py-3 text-left transition-all sm:px-4 ${theme.panelStrong} hover:border-purple-400/50`}
+            className={`h-[60px] rounded-2xl border px-3 py-2.5 text-left transition-all sm:px-4 ${theme.panelStrong} hover:border-purple-400/50`}
             title={handle ? `Signed in as @${handle}` : 'Sign in to sync'}
           >
             <div className="flex items-center justify-between gap-3">
@@ -115,7 +115,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
           <button
             onClick={onToggleTheme}
-            className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition-all ${theme.panelStrong} ${theme.subtle} hover:text-purple-400`}
+            className={`inline-flex h-[60px] w-[60px] items-center justify-center rounded-2xl border transition-all ${theme.panelStrong} ${theme.subtle} hover:text-purple-400`}
             title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {themeMode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
