@@ -181,7 +181,6 @@
   .theme-old-school-classic {
     color: #d5ded8;
     font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    --app-header-height: 126px;
     --radius: 0.55rem;
     --border: 151 16% 58% / 0.12;
     --input: 151 16% 58% / 0.16;
@@ -189,40 +188,8 @@
   }
 
   @media (min-width: 1024px) {
-    .theme-old-school-classic .old-school-header .app-header-inner {
-      position: relative;
-      align-items: flex-start;
-    }
-
-    .theme-old-school-classic .old-school-header .app-header-brand {
-      position: absolute;
-      left: 0;
-      top: 7px;
-    }
-
-    .theme-old-school-classic .old-school-header .app-header-nav {
-      position: absolute;
-      left: 105px;
-      top: 50px;
-    }
-
-    .theme-old-school-classic .old-school-header .app-header-search {
-      position: absolute;
-      left: 416px;
-      top: 50px;
-      width: 450px;
-      flex: none;
-    }
-
-    .theme-old-school-classic .old-school-header .app-header-actions {
-      position: absolute;
-      right: 0;
-      top: 50px;
-      margin-left: 0;
-    }
-
     .theme-old-school-classic .old-school-content-scroll {
-      padding-top: 37px;
+      padding-top: 44px;
       padding-bottom: 28px;
     }
 
