@@ -29,7 +29,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
 
   return (
     <div className="relative w-full max-w-2xl xl:flex-1">
-      <div className={`flex h-12 items-center gap-3 rounded-2xl border px-4 shadow-inner transition-all focus-within:ring-2 focus-within:ring-indigo-500/30 ${theme.input}`}>
+      <div className={`flex h-12 items-center gap-3 rounded-2xl border px-4 shadow-inner transition-all focus-within:ring-2 focus-within:ring-coral-glow-500/30 ${theme.input}`}>
         <Search className="h-4 w-4 shrink-0 text-slate-500" />
         <input
           value={query}
@@ -48,7 +48,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
               onQueryChange('');
               onOpenChange(false);
             }}
-            className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-400"
+            className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-coral-glow-400"
             title="Clear question search"
           >
             Clear
@@ -81,7 +81,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
                       </div>
                     </div>
                     {companyCount > 0 && (
-                      <span className="shrink-0 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">
+                      <span className="shrink-0 rounded-xl border border-moss-green-500/25 bg-moss-green-500/10 px-2.5 py-1 text-[10px] font-black text-moss-green-500">
                         {companyCount} co
                       </span>
                     )}

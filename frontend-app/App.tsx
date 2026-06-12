@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { AdminUserRow, backendApi, CompanyQuestionRow, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
 import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
@@ -86,10 +87,10 @@ const COMPANY_TIME_FILTERS: Array<[CompanyTimeFilter, string]> = [
 const SYNC_STATUS_CONFIG = {
   'signed-out': { color: 'bg-slate-600', label: 'Sign in to sync' },
   idle: { color: 'bg-slate-500', label: 'Ready to sync' },
-  syncing: { color: 'bg-amber-400', label: 'Sync in progress' },
-  synced: { color: 'bg-emerald-500', label: 'Synced' },
+  syncing: { color: 'bg-light-gold-400', label: 'Sync in progress' },
+  synced: { color: 'bg-moss-green-500', label: 'Synced' },
   paused: { color: 'bg-orange-500', label: 'Sync unavailable' },
-  error: { color: 'bg-rose-500', label: 'Sync failed' }
+  error: { color: 'bg-coral-glow-500', label: 'Sync failed' }
 } satisfies Record<SyncStatus, { color: string; label: string }>;
 
 const emptyCompanyBucketSections = (): CompanyBucketSections => ({
@@ -359,6 +360,7 @@ const App: React.FC = () => {
   const [selectedPattern, setSelectedPattern] = useState<Pattern>(() => EMPTY_PATTERN);
   const [selectedSectionId, setSelectedSectionId] = useState<string>('');
   const [randomPick, setRandomPick] = useState<Question | null>(null);
+  const [isPickingRandom, setIsPickingRandom] = useState(false);
   const [gridView, setGridView] = useState<'list' | 'small' | 'big'>(() => {
     const saved = localStorage.getItem(GRID_VIEW_KEY);
     return saved === 'list' || saved === 'small' || saved === 'big' ? saved : 'list';
@@ -1357,7 +1359,12 @@ const App: React.FC = () => {
     }
 
     if (pool.length > 0) {
-      setRandomPick(pool[Math.floor(Math.random() * pool.length)]);
+      const nextPick = pool[Math.floor(Math.random() * pool.length)];
+      setIsPickingRandom(true);
+      window.setTimeout(() => {
+        setRandomPick(nextPick);
+        setIsPickingRandom(false);
+      }, 420);
     } else {
       alert("Mission Accomplished! No unsolved questions found in this scope.");
     }
@@ -1610,15 +1617,15 @@ const App: React.FC = () => {
   };
 
   const theme: AppThemeClasses = {
-    app: themeMode === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-[#020617] text-slate-200',
-    shell: themeMode === 'light' ? 'bg-white border-slate-200' : 'bg-[#0f172a] border-slate-800/60',
-    header: themeMode === 'light' ? 'bg-slate-100/85 border-slate-200' : 'bg-[#020617]/80 border-slate-800/60',
-    panel: themeMode === 'light' ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-900/40 border-slate-800/80',
-    panelStrong: themeMode === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800/80',
-    text: themeMode === 'light' ? 'text-slate-900' : 'text-white',
-    muted: themeMode === 'light' ? 'text-slate-500' : 'text-slate-500',
-    subtle: themeMode === 'light' ? 'text-slate-600' : 'text-slate-400',
-    input: themeMode === 'light' ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400' : 'bg-slate-950 border-slate-800 text-slate-200 placeholder:text-slate-600'
+    app: themeMode === 'light' ? 'bg-light-gold-50 text-turquoise-950' : 'bg-neon-ice-950 text-light-gold-100',
+    shell: themeMode === 'light' ? 'bg-white border-light-gold-200' : 'bg-turquoise-950 border-turquoise-800/70',
+    header: themeMode === 'light' ? 'bg-light-gold-50/90 border-light-gold-200' : 'bg-neon-ice-950/88 border-turquoise-800/70',
+    panel: themeMode === 'light' ? 'bg-white border-light-gold-200 shadow-sm' : 'bg-turquoise-950/55 border-turquoise-800/80',
+    panelStrong: themeMode === 'light' ? 'bg-light-gold-50 border-light-gold-200' : 'bg-neon-ice-950 border-turquoise-800/80',
+    text: themeMode === 'light' ? 'text-turquoise-950' : 'text-light-gold-50',
+    muted: themeMode === 'light' ? 'text-light-gold-800' : 'text-turquoise-300',
+    subtle: themeMode === 'light' ? 'text-turquoise-800' : 'text-turquoise-200',
+    input: themeMode === 'light' ? 'bg-white border-light-gold-300 text-turquoise-950 placeholder:text-light-gold-700' : 'bg-neon-ice-950 border-turquoise-800 text-light-gold-100 placeholder:text-turquoise-700'
   };
 
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
@@ -1626,7 +1633,7 @@ const App: React.FC = () => {
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <button
           onClick={showCompanyFilters ? backToCompanyPicker : backToPatternPicker}
-          className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
+          className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${theme.panelStrong} ${theme.subtle} hover:text-coral-glow-400`}
         >
           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
           Back
@@ -1641,7 +1648,7 @@ const App: React.FC = () => {
             <button
               key={mode}
               onClick={() => setGridView(mode)}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : `${theme.muted} hover:text-indigo-400`}`}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-coral-glow-600 text-white shadow-lg shadow-coral-glow-600/20' : `${theme.muted} hover:text-coral-glow-400`}`}
             >
               {label}
             </button>
@@ -1653,7 +1660,7 @@ const App: React.FC = () => {
               <button
                 key={value}
                 onClick={() => setCompanyTimeFilter(value)}
-                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : `${theme.muted} hover:text-emerald-500`}`}
+                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-moss-green-600 text-white shadow-lg shadow-moss-green-600/20' : `${theme.muted} hover:text-moss-green-500`}`}
               >
                 {label}
               </button>
@@ -1673,10 +1680,10 @@ const App: React.FC = () => {
           const hasSolution = Boolean(solutionNotePresenceMap[q.id] || (solutionMap[q.id] && solutionMap[q.id].trim().length > 0));
           const neutralCardClass = showCompanyFilters
             ? (done
-              ? themeMode === 'light' ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-900/65 border-slate-700/60'
+              ? themeMode === 'light' ? 'bg-moss-green-50 border-moss-green-200' : 'bg-slate-900/65 border-slate-700/60'
               : themeMode === 'light' ? 'bg-white border-slate-200 hover:border-slate-300' : 'bg-slate-900/45 border-slate-700/60 hover:border-slate-600')
             : (done
-              ? themeMode === 'light' ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-lg shadow-emerald-500/5'
+              ? themeMode === 'light' ? 'bg-moss-green-50 border-moss-green-200 shadow-sm' : 'bg-moss-green-500/[0.03] border-moss-green-500/20 shadow-lg shadow-moss-green-500/5'
               : themeMode === 'light' ? 'bg-white border-slate-200 hover:border-slate-300' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600');
           const isCompact = gridView === 'list';
           return (
@@ -1685,7 +1692,7 @@ const App: React.FC = () => {
                 <div className={`flex min-w-0 flex-1 items-start ${isCompact ? 'gap-3' : 'gap-4'}`}>
                   <button
                     onClick={() => toggleQuestion(q)}
-                    className={`shrink-0 ${isCompact || gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-11 h-11 rounded-2xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-emerald-500 border-transparent text-white' : themeMode === 'light' ? 'bg-slate-50 border-slate-300 text-slate-300 hover:border-slate-500' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
+                    className={`shrink-0 ${isCompact || gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-11 h-11 rounded-2xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-moss-green-500 border-transparent text-white' : themeMode === 'light' ? 'bg-slate-50 border-slate-300 text-slate-300 hover:border-slate-500' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
                   >
                     <svg className={`${isCompact || gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-6 h-6'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                   </button>
@@ -1695,21 +1702,21 @@ const App: React.FC = () => {
                       target="_blank"
                       rel="noreferrer"
                       title={q.title}
-                      className={`block min-w-0 overflow-hidden ${isCompact ? 'max-h-[38px] text-[13px]' : gridView === 'small' ? 'max-h-[56px] text-sm' : 'max-h-[72px] text-base'} font-bold leading-tight transition-all ${done ? 'text-slate-500 line-through opacity-70 italic' : themeMode === 'light' ? 'text-slate-900 group-hover:text-indigo-600' : 'text-slate-100 group-hover:text-indigo-400'}`}
+                      className={`block min-w-0 overflow-hidden ${isCompact ? 'max-h-[38px] text-[13px]' : gridView === 'small' ? 'max-h-[56px] text-sm' : 'max-h-[72px] text-base'} font-bold leading-tight transition-all ${done ? 'text-slate-500 line-through opacity-70 italic' : themeMode === 'light' ? 'text-slate-900 group-hover:text-coral-glow-600' : 'text-slate-100 group-hover:text-coral-glow-400'}`}
                     >
                       {q.title}
                     </a>
                     <div className={`mt-2 flex flex-wrap items-center gap-2 ${isCompact ? 'text-[9px]' : 'text-[10px]'}`}>
-                      <span className="font-bold text-slate-500 font-mono tracking-tighter">LC #{q.id}</span>
+                      <span className="font-bold text-slate-500 font-mono tracking-normal">LC #{q.id}</span>
                       <DifficultyBadge diff={q.difficulty} />
-                      {done && isCompact && <span className="hidden sm:inline font-bold text-emerald-500">{formatDate(timestamp)}</span>}
+                      {done && isCompact && <span className="hidden sm:inline font-bold text-moss-green-500">{formatDate(timestamp)}</span>}
                     </div>
                   </div>
                 </div>
                 <div className={`shrink-0 flex items-center ${isCompact ? 'gap-1.5' : 'justify-between border-t border-slate-700/20 pt-2 gap-2'}`}>
                   {!isCompact && done && (
                     <div className="min-w-0 flex-1">
-                      <span className="block text-[8px] font-black uppercase text-emerald-500/50 tracking-[0.2em]">Updated</span>
+                      <span className="block text-[8px] font-black uppercase text-moss-green-500/50 tracking-[0.2em]">Updated</span>
                       <span className="block truncate text-[10px] font-bold text-slate-500 font-mono italic">{formatDate(timestamp)}</span>
                     </div>
                   )}
@@ -1717,7 +1724,7 @@ const App: React.FC = () => {
                     <button
                       onClick={() => openOfficialSolution(q)}
                       title="View official English and Java solution"
-                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 transition-all hover:border-indigo-400 hover:bg-indigo-500/20`}
+                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border border-coral-glow-500/30 bg-coral-glow-500/10 text-coral-glow-400 transition-all hover:border-coral-glow-400 hover:bg-coral-glow-500/20`}
                     >
                       <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.75v10.5M8.25 9.75h7.5M5.25 4.5h13.5A1.5 1.5 0 0120.25 6v13.5l-3.75-2.25-4.5 2.25-4.5-2.25-3.75 2.25V6a1.5 1.5 0 011.5-1.5z" />
@@ -1726,7 +1733,7 @@ const App: React.FC = () => {
                     <button
                       onClick={() => openSolutionEditor(q)}
                       title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
-                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border transition-all ${hasSolution ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : themeMode === 'light' ? 'text-slate-500 border-slate-300 bg-slate-50 hover:text-indigo-500 hover:border-indigo-400' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-indigo-300 hover:border-indigo-500/40'}`}
+                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border transition-all ${hasSolution ? 'text-moss-green-500 border-moss-green-500/30 bg-moss-green-500/10' : themeMode === 'light' ? 'text-slate-500 border-slate-300 bg-slate-50 hover:text-coral-glow-500 hover:border-coral-glow-400' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-coral-glow-300 hover:border-coral-glow-500/40'}`}
                     >
                       <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
@@ -1747,7 +1754,7 @@ const App: React.FC = () => {
     <div className="pb-32 space-y-8">
       <div className={`rounded-3xl border p-6 md:p-8 ${theme.panel}`}>
         <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Choose Pattern</p>
-        <h3 className={`mt-2 text-2xl font-black tracking-tight ${theme.text}`}>Pick a syllabus pattern to start</h3>
+        <h3 className={`mt-2 text-2xl font-black tracking-normal ${theme.text}`}>Pick a syllabus pattern to start</h3>
         <p className={`mt-2 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Questions stay hidden until you choose a pattern. Your last progress and notes remain linked by LeetCode ID.</p>
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
@@ -1758,13 +1765,13 @@ const App: React.FC = () => {
             <section key={section.id} className={`rounded-3xl border p-5 ${theme.panel}`}>
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <h4 className={`truncate text-lg font-black tracking-tight ${theme.text}`}>{section.title}</h4>
+                  <h4 className={`truncate text-lg font-black tracking-normal ${theme.text}`}>{section.title}</h4>
                   <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{stat?.solved || 0}/{stat?.total || 0} solved</p>
                 </div>
-                <span className="shrink-0 rounded-2xl border border-indigo-500/25 bg-indigo-500/10 px-3 py-1.5 text-[10px] font-black text-indigo-400">{pct}%</span>
+                <span className="shrink-0 rounded-2xl border border-coral-glow-500/25 bg-coral-glow-500/10 px-3 py-1.5 text-[10px] font-black text-coral-glow-400">{pct}%</span>
               </div>
               <div className="h-1.5 w-full rounded-full bg-slate-800/20 overflow-hidden mb-4">
-                <div className="h-full bg-indigo-500 transition-all duration-700" style={{ width: `${pct}%` }} />
+                <div className="h-full bg-coral-glow-500 transition-all duration-700" style={{ width: `${pct}%` }} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {section.patterns.map((pattern) => {
@@ -1775,13 +1782,13 @@ const App: React.FC = () => {
                     <button
                       key={pattern.id}
                       onClick={() => selectPattern(section, pattern)}
-                      className={`h-[76px] rounded-2xl border p-3 text-left transition-all hover:-translate-y-0.5 ${themeMode === 'light' ? 'border-slate-200 bg-slate-50 hover:border-indigo-300' : 'border-slate-800 bg-slate-950/45 hover:border-indigo-500/40'}`}
+                      className={`h-[76px] rounded-2xl border p-3 text-left transition-all hover:-translate-y-0.5 ${themeMode === 'light' ? 'border-slate-200 bg-slate-50 hover:border-coral-glow-300' : 'border-slate-800 bg-slate-950/45 hover:border-coral-glow-500/40'}`}
                     >
                       <div className="flex h-full flex-col justify-between">
                         <span title={pattern.name} className={`line-clamp-2 text-sm font-black leading-tight ${theme.text}`}>{pattern.name}</span>
                         <div className="flex items-center justify-between">
                           <span className={`text-[9px] font-black uppercase tracking-widest ${theme.muted}`}>{total} Qs</span>
-                          <span className="text-[10px] font-black font-mono text-indigo-400">{patternPct}%</span>
+                          <span className="text-[10px] font-black font-mono text-coral-glow-400">{patternPct}%</span>
                         </div>
                       </div>
                     </button>
@@ -1801,7 +1808,7 @@ const App: React.FC = () => {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Company Bank</p>
-            <h3 className={`mt-2 text-2xl font-black tracking-tight ${theme.text}`}>Select a company first</h3>
+            <h3 className={`mt-2 text-2xl font-black tracking-normal ${theme.text}`}>Select a company first</h3>
             <p className={`mt-2 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Time filters show availability, but questions open only after you enter a company.</p>
           </div>
           <div className="w-full lg:w-80">
@@ -1809,7 +1816,7 @@ const App: React.FC = () => {
               value={companySearchTerm}
               onChange={(e) => setCompanySearchTerm(e.target.value)}
               placeholder="Search companies..."
-              className={`w-full rounded-2xl border px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${theme.input}`}
+              className={`w-full rounded-2xl border px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-moss-green-500/30 ${theme.input}`}
             />
           </div>
         </div>
@@ -1820,7 +1827,7 @@ const App: React.FC = () => {
               <button
                 key={bucket}
                 onClick={() => setCompanyTimeFilter(bucket)}
-                className={`rounded-2xl border px-4 py-3 text-left transition-all ${companyTimeFilter === bucket ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : `${theme.panelStrong} ${theme.subtle}`}`}
+                className={`rounded-2xl border px-4 py-3 text-left transition-all ${companyTimeFilter === bucket ? 'border-moss-green-500/40 bg-moss-green-500/10 text-moss-green-500' : `${theme.panelStrong} ${theme.subtle}`}`}
               >
                 <span className="block text-[10px] font-black uppercase tracking-widest">{label}</span>
                 <span className="mt-1 block text-lg font-black">{count}</span>
@@ -1839,15 +1846,15 @@ const App: React.FC = () => {
             <button
               key={section.id}
               onClick={() => selectCompany(section)}
-              className={`h-[132px] rounded-3xl border p-4 text-left transition-all hover:-translate-y-0.5 ${themeMode === 'light' ? 'border-slate-200 bg-white hover:border-emerald-300 shadow-sm' : 'border-slate-800 bg-slate-900/45 hover:border-emerald-500/40'}`}
+              className={`h-[132px] rounded-3xl border p-4 text-left transition-all hover:-translate-y-0.5 ${themeMode === 'light' ? 'border-slate-200 bg-white hover:border-moss-green-300 shadow-sm' : 'border-slate-800 bg-slate-900/45 hover:border-moss-green-500/40'}`}
             >
               <div className="flex h-full flex-col justify-between">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h4 title={section.title} className={`truncate text-lg font-black tracking-tight ${theme.text}`}>{section.title}</h4>
+                    <h4 title={section.title} className={`truncate text-lg font-black tracking-normal ${theme.text}`}>{section.title}</h4>
                     <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{activeCount} in {COMPANY_TIME_FILTERS.find(([bucket]) => bucket === companyTimeFilter)?.[1]}</p>
                   </div>
-                  <span className="shrink-0 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">{pct}%</span>
+                  <span className="shrink-0 rounded-xl border border-moss-green-500/25 bg-moss-green-500/10 px-2.5 py-1 text-[10px] font-black text-moss-green-500">{pct}%</span>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
                   {COMPANY_TIME_FILTERS.map(([bucket, label]) => {
@@ -1855,7 +1862,7 @@ const App: React.FC = () => {
                     return (
                       <div key={bucket} title={`${label}: ${bucketCounts[bucket]}`} className="flex flex-col items-center gap-1">
                         <div className="flex h-9 w-full items-end rounded-lg bg-slate-500/10 px-1">
-                          <div className={`w-full rounded-md ${bucket === companyTimeFilter ? 'bg-emerald-500' : 'bg-indigo-500/70'}`} style={{ height }} />
+                          <div className={`w-full rounded-md ${bucket === companyTimeFilter ? 'bg-moss-green-500' : 'bg-coral-glow-500/70'}`} style={{ height }} />
                         </div>
                         <span className={`text-[8px] font-black uppercase ${theme.muted}`}>{bucket === 'all' ? 'All' : bucket}</span>
                       </div>
@@ -1875,9 +1882,97 @@ const App: React.FC = () => {
     : isSyllabus
       ? (hasActiveQuestionSelection ? selectedPattern.name : 'Syllabus')
       : 'Objective Selection';
+  const routeKey = isProfile ? 'companies' : isSyllabus ? 'syllabus' : 'roulette';
+  const renderRouteContent = () => {
+    if (isProfile) {
+      return hasActiveQuestionSelection ? renderQuestionGrid(true) : renderCompanyPicker();
+    }
+    if (isSyllabus) {
+      return hasActiveQuestionSelection ? renderQuestionGrid(false) : renderPatternPicker();
+    }
+    return (
+      <div className="flex h-full flex-col items-center px-4 pt-10 md:pt-16">
+        <div className="w-full max-w-2xl space-y-8 md:space-y-12">
+          <div className="flex justify-center gap-2 overflow-x-auto py-2 no-scrollbar">
+            {sectionStats.map(stat => (
+              <button
+                key={stat.id}
+                onClick={() => setSelectedSectionId(stat.id)}
+                className={`flex-none cursor-pointer rounded-2xl border px-4 py-2.5 transition-all active:scale-95 ${stat.id === selectedSectionId ? 'border-coral-glow-500/40 bg-coral-glow-500/10 shadow-xl shadow-coral-glow-500/5' : 'border-turquoise-800/40 bg-turquoise-950/45 opacity-55 hover:opacity-100'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="max-w-[100px] truncate text-[9px] font-black uppercase tracking-normal text-turquoise-300">{stat.title}</span>
+                  <span className="font-mono text-[10px] font-black text-coral-glow-400">{Math.round((stat.solved / stat.total) * 100)}%</span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="group relative overflow-hidden rounded-[3.5rem] border border-turquoise-800/60 bg-turquoise-950/45 p-8 shadow-2xl backdrop-blur-md md:p-14">
+            <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-coral-glow-500 via-light-gold-500 to-neon-ice-500 opacity-70" />
+            <div className="flex flex-col items-center space-y-8 text-center md:space-y-10">
+              <motion.div
+                animate={isPickingRandom ? { rotate: 360, scale: [1, 1.08, 1] } : { rotate: 0, scale: 1 }}
+                transition={isPickingRandom ? { duration: 0.7, repeat: Infinity, ease: 'linear' } : { duration: 0.3 }}
+                className="flex h-16 w-16 items-center justify-center rounded-[2rem] border border-coral-glow-500/25 bg-coral-glow-500/10 text-coral-glow-400 shadow-inner md:h-20 md:w-20"
+              >
+                <svg className="h-8 w-8 md:h-10 md:w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </motion.div>
+
+              <div className="w-full space-y-4">
+                <label className="block text-[9px] font-black uppercase tracking-[0.35em] text-turquoise-500">Search Scope Configuration</label>
+                <div className="relative group/select">
+                  <select
+                    value={selectedSectionId}
+                    onChange={(e) => setSelectedSectionId(e.target.value)}
+                    className="w-full cursor-pointer appearance-none rounded-[1.8rem] border border-turquoise-800 bg-neon-ice-950 px-8 py-4 text-sm font-bold tracking-normal text-light-gold-100 transition-all hover:border-turquoise-600 focus:outline-none focus:ring-2 focus:ring-coral-glow-500/30 md:py-5"
+                  >
+                    {sectionsData.map(s => (
+                      <option key={s.id} value={s.id}>{s.title}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-turquoise-500">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </div>
+                </div>
+                {currentSectionData && (
+                  <div className="flex items-center justify-between px-6">
+                    <div className="flex items-center gap-2">
+                      <div className="h-1 w-1 rounded-full bg-coral-glow-500" />
+                      <span className="text-[9px] font-black uppercase tracking-normal text-turquoise-400">{currentSectionData.solved}/{currentSectionData.total} Solved</span>
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-coral-glow-400">{Math.round((currentSectionData.solved / currentSectionData.total) * 100)}%</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
+                <button
+                  onClick={() => pickRandom('section')}
+                  disabled={isPickingRandom}
+                  className="flex items-center justify-center gap-3 rounded-[1.8rem] bg-coral-glow-500 px-10 py-5 text-[10px] font-black uppercase tracking-[0.25em] text-white shadow-xl shadow-coral-glow-500/20 transition-all hover:bg-coral-glow-400 active:scale-95 disabled:opacity-70"
+                >
+                  <span>{isPickingRandom ? 'Picking...' : 'Spin Section'}</span>
+                  <svg className={`h-4 w-4 ${isPickingRandom ? 'animate-spin' : 'transition-transform group-hover/spin:rotate-45'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7" /></svg>
+                </button>
+                <button
+                  onClick={() => pickRandom('global')}
+                  disabled={isPickingRandom}
+                  className="flex items-center justify-center gap-3 rounded-[1.8rem] bg-turquoise-700 px-10 py-5 text-[10px] font-black uppercase tracking-[0.25em] text-white transition-all hover:bg-turquoise-600 active:scale-95 disabled:opacity-70"
+                >
+                  <span>{isPickingRandom ? 'Picking...' : 'Global Spin'}</span>
+                  <svg className={`h-4 w-4 ${isPickingRandom ? 'animate-spin' : 'transition-transform duration-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className={`${themeMode} min-h-screen font-sans selection:bg-indigo-500/30 ${theme.app}`}>
+    <div className={`${themeMode} min-h-screen font-sans selection:bg-coral-glow-500/30 ${theme.app}`}>
       <main className="flex min-h-screen flex-col overflow-hidden">
         <AppHeader
           title={headerTitle}
@@ -1913,89 +2008,19 @@ const App: React.FC = () => {
           onToggleTheme={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
         />
 
-        <div className="flex-1 overflow-y-auto p-8 md:p-14 custom-scrollbar">
-           {isProfile ? (
-             hasActiveQuestionSelection ? renderQuestionGrid(true) : renderCompanyPicker()
-           ) : isSyllabus ? (
-             hasActiveQuestionSelection ? renderQuestionGrid(false) : renderPatternPicker()
-           ) : (
-             <div className="h-full flex flex-col items-center pt-10 md:pt-16 px-4">
-                
-                <div className="w-full max-w-2xl space-y-8 md:space-y-12">
-                  {/* Category Tracker Bar */}
-                  <div className="flex justify-center gap-2 overflow-x-auto no-scrollbar py-2">
-                    {sectionStats.map(stat => (
-                      <button 
-                        key={stat.id}
-                        onClick={() => setSelectedSectionId(stat.id)}
-                        className={`flex-none cursor-pointer px-4 py-2.5 rounded-2xl border transition-all active:scale-95 ${stat.id === selectedSectionId ? 'bg-indigo-500/10 border-indigo-500/40 shadow-xl shadow-indigo-500/5' : 'bg-slate-900/40 border-slate-800/40 opacity-40 hover:opacity-100'}`}
-                      >
-                         <div className="flex items-center gap-3">
-                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider truncate max-w-[100px]">{stat.title}</span>
-                            <span className="text-[10px] font-black font-mono text-indigo-400">{Math.round((stat.solved / stat.total) * 100)}%</span>
-                         </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Compact Control Center */}
-                  <div className="group relative p-8 md:p-14 rounded-[3.5rem] bg-slate-900/40 border border-slate-800/60 shadow-2xl overflow-hidden backdrop-blur-md">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 opacity-50" />
-                    
-                    <div className="flex flex-col items-center text-center space-y-8 md:space-y-10">
-                        <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-500/10 rounded-[2rem] flex items-center justify-center border border-indigo-500/20 text-indigo-400 shadow-inner group-hover:rotate-12 transition-transform">
-                          <svg className="w-8 h-8 md:w-10 md:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </div>
-
-                        <div className="w-full space-y-4">
-                          <label className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-600 block">Search Scope Configuration</label>
-                          <div className="relative group/select">
-                            <select 
-                              value={selectedSectionId}
-                              onChange={(e) => setSelectedSectionId(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-slate-100 py-4 md:py-5 px-8 rounded-[1.8rem] appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all cursor-pointer font-bold text-sm tracking-tight hover:border-slate-700"
-                            >
-                                {sectionsData.map(s => (
-                                  <option key={s.id} value={s.id}>{s.title}</option>
-                                ))}
-                            </select>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-slate-600">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                            </div>
-                          </div>
-                          {currentSectionData && (
-                            <div className="flex justify-between items-center px-6">
-                               <div className="flex items-center gap-2">
-                                  <div className="w-1 h-1 rounded-full bg-indigo-500" />
-                                  <span className="text-[9px] font-black uppercase text-slate-500 tracking-[0.2em]">{currentSectionData.solved}/{currentSectionData.total} Solved</span>
-                               </div>
-                               <span className="text-[9px] font-black uppercase text-indigo-400 tracking-widest">{Math.round((currentSectionData.solved/currentSectionData.total)*100)}%</span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-                          <button 
-                            onClick={() => pickRandom('section')}
-                            className="py-5 px-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.3em] shadow-xl shadow-indigo-600/20 transition-all active:scale-95 flex items-center justify-center gap-3 group/spin"
-                          >
-                             <span>Spin Section</span>
-                             <svg className="w-4 h-4 group-hover/spin:rotate-45 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7" /></svg>
-                          </button>
-                          <button 
-                            onClick={() => pickRandom('global')}
-                            className="py-5 px-10 bg-slate-800 hover:bg-slate-700 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.3em] transition-all active:scale-95 flex items-center justify-center gap-3 group/spin"
-                          >
-                             <span>Global Spin</span>
-                             <svg className="w-4 h-4 group-hover/spin:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
-                          </button>
-                        </div>
-                    </div>
-                  </div>
-                </div>
-
-             </div>
-           )}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 md:p-10 xl:p-12 custom-scrollbar">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={routeKey}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="min-h-full"
+            >
+              {renderRouteContent()}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
 
@@ -2037,7 +2062,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[105] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl">
           <div className="w-full max-w-lg rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-8">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-white tracking-tight">Add New Question</h3>
+              <h3 className="text-xl font-black text-white tracking-normal">Add New Question</h3>
               <button onClick={() => setShowAddQuestionModal(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
             <form onSubmit={handleClassifyQuestion} className="space-y-4">
@@ -2046,9 +2071,9 @@ const App: React.FC = () => {
                 value={questionIdInput}
                 onChange={(e) => setQuestionIdInput(e.target.value)}
                 placeholder="e.g. 76"
-                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-coral-glow-500/40"
               />
-              <button type="submit" disabled={isClassifying} className="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
+              <button type="submit" disabled={isClassifying} className="w-full py-3 rounded-2xl bg-coral-glow-600 hover:bg-coral-glow-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
                 {isClassifying ? 'Classifying...' : 'Get AI Suggestion'}
               </button>
             </form>
@@ -2069,7 +2094,7 @@ const App: React.FC = () => {
                     ))}
                   </select>
                 </div>
-                <button onClick={handleSaveNewQuestion} disabled={isSavingQuestion} className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
+                <button onClick={handleSaveNewQuestion} disabled={isSavingQuestion} className="w-full py-3 rounded-2xl bg-moss-green-600 hover:bg-moss-green-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
                   {isSavingQuestion ? 'Saving...' : 'Confirm & Save'}
                 </button>
               </div>
@@ -2082,9 +2107,9 @@ const App: React.FC = () => {
       {showWelcome && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-slate-950/98 backdrop-blur-3xl animate-in fade-in duration-500">
            <div className="bg-[#0f172a] border border-slate-800/80 rounded-[3.5rem] w-full max-w-md p-14 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-indigo-500" />
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-moss-green-500 to-coral-glow-500" />
               <div className="text-center mb-12">
-                 <h3 className="text-4xl font-black text-white mb-4 tracking-tighter leading-none">DSA Login</h3>
+                 <h3 className="text-4xl font-black text-white mb-4 tracking-normal leading-none">DSA Login</h3>
                  <p className="text-sm text-slate-500 leading-relaxed font-medium">Sign in with your username and password to sync progress across devices.</p>
               </div>
               <div className="mb-8 grid grid-cols-3 gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-1">
@@ -2097,7 +2122,7 @@ const App: React.FC = () => {
                     key={mode}
                     type="button"
                     onClick={() => { setAuthMode(mode); setAuthError(''); }}
-                    className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-[0.2em] ${authMode === mode ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-[0.2em] ${authMode === mode ? 'bg-coral-glow-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
                   >
                     {label}
                   </button>
@@ -2106,7 +2131,7 @@ const App: React.FC = () => {
 
               {authMode === 'admin' ? (
                 <form onSubmit={handleAdminLogin} className="space-y-6">
-                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
+                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-moss-green-500/50">
                     <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Admin Key</label>
                     <input
                       autoFocus
@@ -2115,21 +2140,21 @@ const App: React.FC = () => {
 	                      value={adminKey}
 	                      onFocus={warmDatabaseOnce}
 	                      onChange={(e) => setAdminKey(e.target.value)}
-                      className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800"
+                      className="w-full bg-transparent border-none text-moss-green-400 focus:ring-0 p-0 placeholder:text-slate-800"
                     />
                   </div>
-                  {authError && <p className="text-center text-xs font-bold text-rose-400">{authError}</p>}
-                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-indigo-600/20 transition-all active:scale-95">
+                  {authError && <p className="text-center text-xs font-bold text-coral-glow-400">{authError}</p>}
+                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-coral-glow-600 hover:bg-coral-glow-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-coral-glow-600/20 transition-all active:scale-95">
                     {isAuthBusy ? 'Checking...' : 'Unlock Admin'}
                   </button>
-                  {adminMessage && <p className="text-center text-xs font-bold text-amber-300">{adminMessage}</p>}
+                  {adminMessage && <p className="text-center text-xs font-bold text-light-gold-300">{adminMessage}</p>}
                   {isAdminUnlocked && (
                     <div className="grid gap-3">
                       <button
                         type="button"
                         onClick={handleEnsurePerformanceIndexes}
                         disabled={isAdminBusy}
-                        className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300 disabled:opacity-60"
+                        className="w-full rounded-2xl border border-moss-green-500/30 bg-moss-green-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-moss-green-300 disabled:opacity-60"
                       >
                         {isAdminBusy ? 'Preparing...' : 'Prepare DB Indexes'}
                       </button>
@@ -2137,7 +2162,7 @@ const App: React.FC = () => {
                         type="button"
                         onClick={handleSyncDatabases}
                         disabled={isAdminBusy}
-                        className="w-full rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300 disabled:opacity-60"
+                        className="w-full rounded-2xl border border-light-gold-500/30 bg-light-gold-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-light-gold-300 disabled:opacity-60"
                       >
                         {isAdminBusy ? 'Syncing...' : 'Sync Active DB To Backup'}
                       </button>
@@ -2150,7 +2175,7 @@ const App: React.FC = () => {
                           value={adminSearchTerm}
                           onChange={(e) => setAdminSearchTerm(e.target.value)}
                           placeholder="Search users..."
-                          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-coral-glow-500/40"
                         />
                       </div>
                       {filteredAdminUsers.map((user) => (
@@ -2163,7 +2188,7 @@ const App: React.FC = () => {
                             type="button"
                             onClick={() => toggleAdminUser(user)}
                             disabled={isAdminBusy}
-                            className={`shrink-0 rounded-xl px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60 ${user.disabledAt ? 'bg-emerald-600' : 'bg-rose-600'}`}
+                            className={`shrink-0 rounded-xl px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60 ${user.disabledAt ? 'bg-moss-green-600' : 'bg-coral-glow-600'}`}
                           >
                             {user.disabledAt ? 'Enable' : 'Disable'}
                           </button>
@@ -2175,20 +2200,20 @@ const App: React.FC = () => {
                             value={adminResetHandle}
                             onChange={(e) => setAdminResetHandle(e.target.value)}
                             placeholder="username"
-                            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-coral-glow-500/40"
                           />
                           <input
                             value={adminResetPassword}
                             onChange={(e) => setAdminResetPassword(e.target.value)}
                             type="password"
                             placeholder="new password (4-10 chars)"
-                            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-coral-glow-500/40"
                           />
                           <button
                             type="button"
                             onClick={handleAdminResetPassword}
                             disabled={isAdminBusy}
-                            className="rounded-xl bg-emerald-600 px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60"
+                            className="rounded-xl bg-moss-green-600 px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60"
                           >
                             Reset Password
                           </button>
@@ -2199,19 +2224,19 @@ const App: React.FC = () => {
                 </form>
               ) : (
                 <form onSubmit={setupHandle} className="space-y-6">
-                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
+                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-moss-green-500/50">
                     <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Username</label>
                     <div className="flex items-center gap-3 text-xl font-mono">
-                      <span className="text-emerald-500/40">@</span>
-	                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onFocus={warmDatabaseOnce} onChange={(e) => setAuthUsername(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
+                      <span className="text-moss-green-500/40">@</span>
+	                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onFocus={warmDatabaseOnce} onChange={(e) => setAuthUsername(e.target.value)} className="w-full bg-transparent border-none text-moss-green-400 focus:ring-0 p-0 placeholder:text-slate-800" />
                     </div>
                   </div>
-                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-emerald-500/50">
+                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-moss-green-500/50">
                     <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Password</label>
-	                    <input type="password" placeholder="4-10 characters" value={authPassword} onFocus={warmDatabaseOnce} onChange={(e) => setAuthPassword(e.target.value)} className="w-full bg-transparent border-none text-emerald-400 focus:ring-0 p-0 placeholder:text-slate-800" />
+	                    <input type="password" placeholder="4-10 characters" value={authPassword} onFocus={warmDatabaseOnce} onChange={(e) => setAuthPassword(e.target.value)} className="w-full bg-transparent border-none text-moss-green-400 focus:ring-0 p-0 placeholder:text-slate-800" />
                   </div>
-                  {authError && <p className="text-center text-xs font-bold text-rose-400">{authError}</p>}
-                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-indigo-600/20 transition-all active:scale-95">
+                  {authError && <p className="text-center text-xs font-bold text-coral-glow-400">{authError}</p>}
+                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-coral-glow-600 hover:bg-coral-glow-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-coral-glow-600/20 transition-all active:scale-95">
                     {isAuthBusy ? 'Working...' : authMode === 'signup' ? 'Create Account' : 'Login'}
                   </button>
               </form>
@@ -2220,44 +2245,63 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Target Focus Overlay (The Random Pick Result) - TRANSPARENT GLASS CARD */}
-      {randomPick && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-8 bg-slate-950/40 backdrop-blur-2xl animate-in zoom-in-95 duration-300">
-           <div className="bg-[#0f172a]/60 border border-emerald-500/30 rounded-[3rem] p-10 max-w-md w-full text-center relative overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.1)]">
-              <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500" />
-              
-              <div className="w-16 h-16 bg-emerald-500/20 rounded-[1.8rem] flex items-center justify-center mx-auto mb-8 text-emerald-400 border border-emerald-500/20">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+      {/* Target Focus Overlay (The Random Pick Result) */}
+      <AnimatePresence>
+        {randomPick && (
+          <motion.div
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-neon-ice-950/55 p-8 backdrop-blur-2xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 18 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              className="relative w-full max-w-md overflow-hidden rounded-[3rem] border border-turquoise-500/30 bg-turquoise-950/82 p-10 text-center shadow-[0_0_50px_rgba(0,255,247,0.12)]"
+            >
+              <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-coral-glow-500 via-light-gold-500 to-neon-ice-500" />
+
+              <motion.div
+                initial={{ rotate: -10, scale: 0.85 }}
+                animate={{ rotate: 0, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 18, delay: 0.05 }}
+                className="mx-auto mb-8 flex h-16 w-16 items-center justify-center rounded-[1.8rem] border border-coral-glow-500/25 bg-coral-glow-500/15 text-coral-glow-400"
+              >
+                <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              </motion.div>
+
+              <p className="mb-3 text-[9px] font-black uppercase tracking-[0.35em] text-neon-ice-400">Objective Acquired</p>
+              <h3 className="mb-6 text-2xl font-black leading-snug tracking-normal text-light-gold-50">{randomPick.title}</h3>
+
+              <div className="mb-10 flex items-center justify-center gap-3">
+                <DifficultyBadge diff={randomPick.difficulty} />
+                <span className="rounded-xl border border-turquoise-800 bg-neon-ice-950/80 px-3 py-1.5 font-mono text-[10px] font-black text-turquoise-200">LC #{randomPick.id}</span>
               </div>
-              
-              <p className="text-[9px] font-black text-emerald-500 uppercase tracking-[0.4em] mb-3">Objective Acquired</p>
-              <h3 className="text-2xl font-black text-white mb-6 tracking-tight leading-snug">{randomPick.title}</h3>
-              
-              <div className="flex justify-center items-center gap-3 mb-10">
-                 <DifficultyBadge diff={randomPick.difficulty} />
-                 <span className="text-[10px] font-black text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-800 font-mono">LC #{randomPick.id}</span>
-              </div>
-              
+
               <div className="flex flex-col gap-3">
-                 <a 
-                   href={randomPick.link} 
-                   target="_blank" 
-                   rel="noreferrer" 
-                   onClick={() => setRandomPick(null)} 
-                   className="py-5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
-                 >
-                   Launch LeetCode
-                 </a>
-                 <button 
-                   onClick={() => setRandomPick(null)} 
-                   className="py-4 text-slate-500 hover:text-slate-300 font-black text-[9px] uppercase tracking-widest transition-colors"
-                 >
-                   Dismiss
-                 </button>
+                <a
+                  href={randomPick.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setRandomPick(null)}
+                  className="rounded-[1.8rem] bg-coral-glow-500 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-coral-glow-500/20 transition-all hover:bg-coral-glow-400 active:scale-95"
+                >
+                  Launch LeetCode
+                </a>
+                <button
+                  onClick={() => setRandomPick(null)}
+                  className="py-4 text-[9px] font-black uppercase tracking-widest text-turquoise-300 transition-colors hover:text-neon-ice-300"
+                >
+                  Dismiss
+                </button>
               </div>
-           </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

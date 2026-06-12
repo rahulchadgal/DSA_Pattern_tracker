@@ -3,11 +3,11 @@ import { cn } from '../lib/utils';
 
 export const GlobalStatBadge: React.FC<{ diff: string; solved: number; total: number }> = ({ diff, solved, total }) => {
   const styles = {
-    Easy: 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5',
-    Medium: 'text-amber-400 border-amber-500/20 bg-amber-500/5',
-    Hard: 'text-rose-400 border-rose-500/20 bg-rose-500/5'
+    Easy: 'text-moss-green-400 border-moss-green-500/25 bg-moss-green-500/10',
+    Medium: 'text-light-gold-400 border-light-gold-500/25 bg-light-gold-500/10',
+    Hard: 'text-coral-glow-400 border-coral-glow-500/25 bg-coral-glow-500/10'
   };
-  const colorClass = styles[diff as keyof typeof styles] || 'text-slate-400 border-slate-800 bg-slate-900';
+  const colorClass = styles[diff as keyof typeof styles] || 'text-turquoise-300 border-turquoise-800 bg-turquoise-950';
 
   return (
     <div className={cn('flex items-center gap-2 rounded-xl border px-3 py-1.5 transition-all duration-300', colorClass)}>
@@ -22,9 +22,9 @@ export const GlobalStatBadge: React.FC<{ diff: string; solved: number; total: nu
 
 export const DifficultyBadge: React.FC<{ diff: string }> = ({ diff }) => {
   const styles = {
-    Easy: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    Medium: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    Hard: 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+    Easy: 'bg-moss-green-500/10 text-moss-green-400 border-moss-green-500/25',
+    Medium: 'bg-light-gold-500/10 text-light-gold-400 border-light-gold-500/25',
+    Hard: 'bg-coral-glow-500/10 text-coral-glow-400 border-coral-glow-500/25'
   };
 
   return (
@@ -38,8 +38,8 @@ export const WakeBanner: React.FC<{ visible: boolean }> = ({ visible }) => {
   if (!visible) return null;
 
   return (
-    <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-300">
-      <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+    <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-light-gold-500/30 bg-light-gold-500/10 px-3 py-2 text-light-gold-300">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-light-gold-400" />
       <span className="text-[10px] font-black uppercase tracking-[0.15em]">Waking backend... retrying automatically</span>
     </div>
   );

@@ -36,7 +36,7 @@ export const QuestionSearchModal: React.FC<QuestionSearchModalProps> = ({
         <div className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Question Lookup</p>
-            <h3 className={`mt-2 text-2xl font-black tracking-tight ${theme.text}`}>{selectedSearchQuestion.question.title}</h3>
+            <h3 className={`mt-2 text-2xl font-black tracking-normal ${theme.text}`}>{selectedSearchQuestion.question.title}</h3>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="font-mono text-xs font-black text-slate-500">LC #{selectedSearchQuestion.question.id}</span>
               <DifficultyBadge diff={selectedSearchQuestion.question.difficulty} />
@@ -44,7 +44,7 @@ export const QuestionSearchModal: React.FC<QuestionSearchModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className={`shrink-0 rounded-xl border px-3 py-2 text-sm font-black ${theme.panelStrong} ${theme.subtle} hover:text-indigo-400`}
+            className={`shrink-0 rounded-xl border px-3 py-2 text-sm font-black ${theme.panelStrong} ${theme.subtle} hover:text-coral-glow-400`}
             title="Close question lookup"
           >
             X
@@ -56,21 +56,21 @@ export const QuestionSearchModal: React.FC<QuestionSearchModalProps> = ({
             href={selectedSearchQuestion.question.link}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20"
+            className="inline-flex items-center gap-2 rounded-xl border border-coral-glow-500/30 bg-coral-glow-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-coral-glow-400 hover:bg-coral-glow-500/20"
           >
             Open LeetCode
           </a>
           <button
             type="button"
             onClick={() => onOpenOfficialSolution(selectedSearchQuestion.question)}
-            className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-500/20"
+            className="inline-flex items-center gap-2 rounded-xl border border-coral-glow-500/30 bg-coral-glow-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-coral-glow-400 hover:bg-coral-glow-500/20"
           >
             Official Solution
           </button>
           <button
             type="button"
             onClick={() => onOpenSolutionEditor(selectedSearchQuestion.question)}
-            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[10px] font-black uppercase tracking-widest ${hasSolution ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500' : themeMode === 'light' ? 'border-slate-300 bg-slate-50 text-slate-500 hover:text-indigo-500' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-indigo-300'}`}
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[10px] font-black uppercase tracking-widest ${hasSolution ? 'border-moss-green-500/30 bg-moss-green-500/10 text-moss-green-500' : themeMode === 'light' ? 'border-slate-300 bg-slate-50 text-slate-500 hover:text-coral-glow-500' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-coral-glow-300'}`}
           >
             {hasSolution ? 'Edit Note' : 'Add Note'}
           </button>
@@ -79,7 +79,7 @@ export const QuestionSearchModal: React.FC<QuestionSearchModalProps> = ({
         <div className={`rounded-2xl border p-5 ${theme.panelStrong}`}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <h4 className={`text-sm font-black uppercase tracking-[0.2em] ${theme.text}`}>Asked By Companies</h4>
-            <span className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">
+            <span className="rounded-xl border border-moss-green-500/25 bg-moss-green-500/10 px-2.5 py-1 text-[10px] font-black text-moss-green-500">
               {selectedSearchQuestion.companies.length}
             </span>
           </div>
@@ -96,7 +96,7 @@ export const QuestionSearchModal: React.FC<QuestionSearchModalProps> = ({
                     <p className={`min-w-0 truncate text-sm font-black ${theme.text}`} title={mention.company}>{mention.company}</p>
                     <div className="flex shrink-0 flex-wrap justify-end gap-1">
                       {mention.buckets.map((bucket) => (
-                        <span key={bucket} className={`rounded-lg px-2 py-0.5 text-[9px] font-black uppercase ${bucket === 'all' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                        <span key={bucket} className={`rounded-lg px-2 py-0.5 text-[9px] font-black uppercase ${bucket === 'all' ? 'bg-coral-glow-500/10 text-coral-glow-400' : 'bg-moss-green-500/10 text-moss-green-500'}`}>
                           {companyTimeFilters.find(([value]) => value === bucket)?.[1] || bucket}
                         </span>
                       ))}

@@ -30,7 +30,7 @@ export const SolutionNoteModal: React.FC<SolutionNoteModalProps> = ({
       <div className="mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-6 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-8">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-xl font-black tracking-tight text-white">Solution Notes</h3>
+            <h3 className="text-xl font-black tracking-normal text-white">Solution Notes</h3>
             <p className="mt-1 text-xs text-slate-400">
               LC #{question.id} • {question.title}
             </p>
@@ -65,7 +65,7 @@ export const SolutionNoteModal: React.FC<SolutionNoteModalProps> = ({
             </button>
             <button
               onClick={onSave}
-              className="rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-black uppercase tracking-[0.15em] text-white hover:bg-emerald-500"
+              className="rounded-2xl bg-moss-green-600 px-5 py-2.5 text-xs font-black uppercase tracking-[0.15em] text-white hover:bg-moss-green-500"
             >
               Save Note
             </button>
