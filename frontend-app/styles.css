@@ -4,48 +4,49 @@
 
 @layer base {
   :root {
+    --app-header-height: 68px;
     --radius: 0.75rem;
-    --background: 222.2 84% 4.9%;
+    --background: 222 67% 10%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 222 46% 14%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 222 46% 14%;
     --popover-foreground: 210 40% 98%;
-    --primary: 238 83% 60%;
+    --primary: 272 91% 65%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 258 90% 66%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --muted: 222 32% 20%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 272 91% 65%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 91% 71%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 238 83% 60%;
+    --border: 0 0% 100% / 0.12;
+    --input: 0 0% 100% / 0.12;
+    --ring: 272 91% 65%;
   }
 
   .light {
-    --background: 210 40% 96.1%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 238 83% 60%;
+    --background: 222 67% 10%;
+    --foreground: 210 40% 98%;
+    --card: 222 46% 14%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 46% 14%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 272 91% 65%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
+    --secondary: 258 90% 66%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 222 32% 20%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 272 91% 65%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 91% 71%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 238 83% 60%;
+    --border: 0 0% 100% / 0.12;
+    --input: 0 0% 100% / 0.12;
+    --ring: 272 91% 65%;
   }
 
   * {
@@ -53,14 +54,113 @@
   }
 
   body {
-    background-color: hsl(var(--background));
+    background:
+      radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.15), transparent 35%),
+      radial-gradient(circle at 85% 70%, rgba(168, 85, 247, 0.20), transparent 45%),
+      radial-gradient(circle at top left, rgba(192, 132, 252, 0.16), transparent 42%),
+      radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.18), transparent 40%),
+      linear-gradient(135deg, #081229 0%, #111c3f 40%, #1c2258 100%);
+    background-attachment: fixed;
     color: hsl(var(--foreground));
     font-family: Inter, ui-sans-serif, system-ui, sans-serif;
     -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    width: 100%;
+    overflow-x: hidden;
   }
 }
 
 @layer utilities {
+  .gradient-bg {
+    background:
+      radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.15), transparent 35%),
+      radial-gradient(circle at 85% 70%, rgba(168, 85, 247, 0.20), transparent 45%),
+      radial-gradient(circle at top left, rgba(192, 132, 252, 0.16), transparent 42%),
+      radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.18), transparent 40%),
+      linear-gradient(135deg, #081229 0%, #111c3f 40%, #1c2258 100%);
+    background-attachment: fixed;
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(24px);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.20);
+  }
+
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(24px);
+  }
+
+  .glass-input {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #f8fafc;
+    backdrop-filter: blur(24px);
+  }
+
+  .glass-input:focus,
+  .glass-input:focus-within {
+    border-color: #a855f7;
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.15);
+    outline: none;
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 25px rgba(168, 85, 247, 0.25);
+  }
+
+  .page-shell {
+    position: relative;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .search-filled-glass {
+    background: rgba(15, 23, 52, 0.88);
+    border: 1px solid rgba(203, 213, 225, 0.28);
+    color: #f8fafc;
+    backdrop-filter: blur(24px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 30px rgba(2, 6, 23, 0.22);
+  }
+
+  .search-filled-glass:focus-within {
+    border-color: rgba(168, 85, 247, 0.95);
+    box-shadow:
+      0 0 0 3px rgba(168, 85, 247, 0.24),
+      0 18px 42px rgba(2, 6, 23, 0.32),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .search-results-glass {
+    background: rgba(15, 23, 52, 0.94);
+    border: 1px solid rgba(203, 213, 225, 0.22);
+    backdrop-filter: blur(28px);
+    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
+  }
+
+  .hover-lift {
+    transition: all 250ms ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  }
+
+  .progress-glow > div {
+    background: linear-gradient(90deg, #8b5cf6, #c084fc);
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+  }
+
   .mono {
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   }
@@ -73,18 +173,18 @@
 
   .custom-scrollbar::-webkit-scrollbar-track,
   ::-webkit-scrollbar-track {
-    background: #1e293b;
+    background: #081229;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb,
   ::-webkit-scrollbar-thumb {
-    background: #475569;
+    background: rgba(168, 85, 247, 0.45);
     border-radius: 4px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover,
   ::-webkit-scrollbar-thumb:hover {
-    background: #64748b;
+    background: #a855f7;
   }
 
   .no-scrollbar::-webkit-scrollbar {

@@ -29,8 +29,8 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
 
   return (
     <div className="relative w-full max-w-2xl xl:flex-1">
-      <div className={`flex h-12 items-center gap-3 rounded-2xl border px-4 shadow-inner transition-all focus-within:ring-2 focus-within:ring-indigo-500/30 ${theme.input}`}>
-        <Search className="h-4 w-4 shrink-0 text-slate-500" />
+      <div className="search-filled-glass flex h-11 items-center gap-2.5 rounded-xl px-4 transition-all">
+        <Search className="h-4 w-4 shrink-0 text-[#CBD5E1]" />
         <input
           value={query}
           onChange={(event) => {
@@ -39,7 +39,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
           }}
           onFocus={() => onOpenChange(true)}
           placeholder="Search LC ID or question name..."
-          className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none placeholder:text-slate-500"
+          className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#F8FAFC] outline-none placeholder:text-[#CBD5E1] md:text-sm"
         />
         {query && (
           <button
@@ -48,16 +48,22 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
               onQueryChange('');
               onOpenChange(false);
             }}
-            className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-400"
+            className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-[#CBD5E1] hover:text-white"
             title="Clear question search"
           >
             Clear
           </button>
         )}
+        {!query && (
+          <span className="hidden shrink-0 items-center gap-1 rounded-lg bg-white/10 px-2 py-1 font-mono text-[11px] font-bold text-[#CBD5E1] sm:inline-flex">
+            <span>⌘</span>
+            <span>K</span>
+          </span>
+        )}
       </div>
 
       {showResults && (
-        <div className={`absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[80] max-h-[420px] overflow-y-auto rounded-2xl border p-2 shadow-2xl ${themeMode === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-950'}`}>
+        <div className="search-results-glass custom-scrollbar absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[80] max-h-[min(420px,calc(100dvh-96px))] overflow-y-auto rounded-2xl p-2">
           {results.length === 0 ? (
             <div className={`p-4 text-sm font-bold ${theme.subtle}`}>No matching questions found.</div>
           ) : (
@@ -70,18 +76,18 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
                   key={result.question.id}
                   type="button"
                   onClick={() => onOpenQuestion(result)}
-                  className={`w-full rounded-xl p-3 text-left transition-all ${themeMode === 'light' ? 'hover:bg-slate-100' : 'hover:bg-slate-900'}`}
+                  className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] p-3 text-left transition-all hover:border-purple-400/30 hover:bg-white/[0.10]"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className={`truncate text-sm font-black ${theme.text}`}>{result.question.title}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-[10px] font-black text-slate-500">LC #{result.question.id}</span>
+                        <span className="font-mono text-[10px] font-black text-[#94A3B8]">LC #{result.question.id}</span>
                         <DifficultyBadge diff={result.question.difficulty} />
                       </div>
                     </div>
                     {companyCount > 0 && (
-                      <span className="shrink-0 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-500">
+                      <span className="shrink-0 rounded-xl border border-green-500/25 bg-green-500/10 px-2.5 py-1 text-[10px] font-black text-green-400">
                         {companyCount} co
                       </span>
                     )}

@@ -93,9 +93,19 @@ export interface PerformanceIndexResponse {
   indexes: string[];
 }
 
+export interface DatabaseSyncResponse {
+  ok: boolean;
+  source: 'neon' | 'aiven';
+  target: 'neon' | 'aiven';
+  users: number;
+  questions: number;
+  progressRecords: number;
+}
+
 const DEFAULT_API_BASE_URL = '';
 const API_TIMEOUT_MS = 2500;
 const AUTH_API_TIMEOUT_MS = 9000;
+const ADMIN_SYNC_TIMEOUT_MS = 30000;
 const AUTH_SESSION_KEY = 'dsa-auth-session-v1';
 const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
 
@@ -205,6 +215,7 @@ export const backendApi = {
   disableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string }>('/api/admin', withJson({ handle, action: 'disable' }, true), AUTH_API_TIMEOUT_MS),
   enableAdminUser: (handle: string) => apiRequest<{ handle: string; disabledAt: string | null }>('/api/admin', withJson({ handle, action: 'enable' }, true), AUTH_API_TIMEOUT_MS),
   ensurePerformanceIndexes: () => apiRequest<PerformanceIndexResponse>('/api/admin', withJson({ action: 'ensure-indexes' }, true), AUTH_API_TIMEOUT_MS),
+  syncDatabases: () => apiRequest<DatabaseSyncResponse>('/api/admin', withJson({ action: 'sync-databases' }, true), ADMIN_SYNC_TIMEOUT_MS),
   getProgress: (_handle?: string) => apiRequest<ProgressRow[]>('/api/progress', { headers: authHeaders() }),
   getProgressMeta: () => apiRequest<ProgressMetaResponse>('/api/progress?meta=true', { headers: authHeaders() }),
   getSolutionNote: (leetcodeId: string) => apiRequest<SolutionNoteResponse>(`/api/progress?leetcodeId=${encodeURIComponent(leetcodeId)}&includeSolution=true`, { headers: authHeaders() }),

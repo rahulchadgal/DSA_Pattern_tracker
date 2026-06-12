@@ -24,6 +24,19 @@ module.exports = {
         sm: 'calc(var(--radius) - 4px)'
       },
       colors: {
+        brand: {
+          primary: '#A855F7',
+          secondary: '#8B5CF6',
+          success: '#4ADE80',
+          warning: '#FBBF24',
+          error: '#F87171',
+          text: '#F8FAFC',
+          secondaryText: '#CBD5E1',
+          mutedText: '#94A3B8',
+          bgStart: '#081229',
+          bgMiddle: '#111c3f',
+          bgEnd: '#1c2258'
+        },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

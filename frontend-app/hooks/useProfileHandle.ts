@@ -33,7 +33,7 @@ const resolveInitialHandle = () => {
 export const useProfileHandle = () => {
   const [initialHandle] = useState(resolveInitialHandle);
   const [handle, setHandle] = useState<string>(initialHandle);
-  const [showWelcome, setShowWelcome] = useState<boolean>(() => !initialHandle);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   const persistHandle = (value: string, token?: string) => {
     const normalized = value.trim().toLowerCase();
