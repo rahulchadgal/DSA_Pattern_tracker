@@ -45,8 +45,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   ];
 
   return (
-    <header className="sticky top-0 z-20 border-b border-white/10 bg-[#081229]/76 px-3 py-2.5 backdrop-blur-2xl sm:px-4 md:px-6 xl:px-8">
-      <div className="mx-auto flex min-h-[48px] w-full max-w-[1500px] items-center gap-2 md:gap-3">
+    <header className="fixed inset-x-0 top-0 z-30 h-[var(--app-header-height)] overflow-visible border-b border-white/10 bg-[#081229]/86 px-3 py-2.5 backdrop-blur-2xl sm:px-4 md:px-6 xl:px-8">
+      <div className="mx-auto flex h-full w-full max-w-[1500px] items-center gap-2 md:gap-3">
         <div className="flex min-w-0 shrink-0 items-center gap-2 md:gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-purple-400 to-violet-700 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)]">
             <Code2 className="h-4 w-4" />

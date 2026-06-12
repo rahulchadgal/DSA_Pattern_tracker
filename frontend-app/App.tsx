@@ -1995,7 +1995,7 @@ const App: React.FC = () => {
   return (
     <div className={`${themeMode} page-shell font-sans selection:bg-purple-500/30 ${theme.app}`}>
       <BackgroundDecorations />
-      <main className="relative z-10 flex min-h-screen flex-col overflow-hidden">
+      <main className="relative z-10 flex h-[100dvh] flex-col overflow-hidden">
         <AppHeader
           theme={theme}
           isBackendWaking={isBackendWaking}
@@ -2027,7 +2027,7 @@ const App: React.FC = () => {
           }}
         />
 
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 md:p-10 xl:p-12 custom-scrollbar">
+        <div className="mt-[var(--app-header-height)] h-[calc(100dvh-var(--app-header-height))] overflow-y-auto overflow-x-hidden p-5 sm:p-6 md:p-10 xl:p-12 custom-scrollbar">
           <AnimatePresence mode="wait">
             <motion.div
               key={routeKey}
