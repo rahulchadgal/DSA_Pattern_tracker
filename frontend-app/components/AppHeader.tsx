@@ -1,12 +1,11 @@
 import React from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { Code2, Moon, Sun } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { AppThemeClasses, ThemeMode } from './appTypes';
 import { GlobalStatBadge, WakeBanner } from './appUi';
 import { Progress } from './ui/progress';
 
 interface AppHeaderProps {
-  title: string;
   theme: AppThemeClasses;
   themeMode: ThemeMode;
   isBackendWaking: boolean;
@@ -26,7 +25,6 @@ interface AppHeaderProps {
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
-  title,
   theme,
   themeMode,
   isBackendWaking,
@@ -51,44 +49,46 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   ];
 
   return (
-    <header className={`sticky top-0 z-20 border-b px-4 py-4 sm:px-6 md:px-10 xl:px-12 ${theme.header}`}>
-      <div className="mx-auto grid min-h-[148px] w-full max-w-[1450px] grid-cols-1 gap-5 lg:min-h-[126px] xl:min-h-[92px] xl:grid-cols-[minmax(260px,360px)_minmax(280px,1fr)_auto] xl:items-center">
-        <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center xl:grid-cols-1">
-          <div className="min-w-0">
-            <h2 title={title} className={`truncate text-xl font-black tracking-normal md:text-2xl ${theme.text}`}>{title}</h2>
-            <WakeBanner visible={isBackendWaking} />
+    <header className={`sticky top-0 z-20 border-b border-white/10 bg-[#081229]/70 px-4 py-5 backdrop-blur-2xl sm:px-6 md:px-8 xl:px-10`}>
+      <div className="mx-auto flex w-full max-w-[1500px] flex-wrap items-center gap-4 xl:flex-nowrap">
+        <div className="flex min-w-fit items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-400 to-violet-700 text-white shadow-[0_0_24px_rgba(168,85,247,0.38)]">
+            <Code2 className="h-5 w-5" />
           </div>
-          <div className={`grid h-[60px] w-full grid-cols-3 rounded-[20px] border p-1.5 shadow-inner sm:w-[348px] xl:w-full ${theme.panelStrong}`}>
+          <span className="hidden text-lg font-black tracking-normal text-[#F8FAFC] sm:block">DSA Pattern Tracker</span>
+          <WakeBanner visible={isBackendWaking} />
+        </div>
+
+        <nav className="order-3 flex h-[52px] w-full items-center gap-2 overflow-x-auto no-scrollbar sm:order-none sm:w-auto">
             {navItems.map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={item.onClick}
-                className={`relative h-full overflow-hidden rounded-xl px-2 text-[10px] font-black uppercase tracking-normal transition-colors ${item.active ? 'text-white' : `${theme.muted} hover:text-purple-400`}`}
+                className={`relative h-11 shrink-0 overflow-hidden rounded-lg px-5 text-sm font-bold tracking-normal transition-colors ${item.active ? 'text-white' : 'text-[#CBD5E1] hover:text-white'}`}
               >
                 {item.active && (
                   <motion.span
                     layoutId="app-header-active-tab"
-                    className="absolute inset-0 rounded-xl bg-purple-500/25 glow-purple"
+                    className="absolute inset-0 rounded-lg bg-purple-500/80 shadow-[0_0_24px_rgba(168,85,247,0.35)]"
                     transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                   />
                 )}
                 <span className="relative z-10 block truncate">{item.label}</span>
               </button>
             ))}
-          </div>
-        </div>
+        </nav>
 
-        <div className="min-w-0 xl:max-w-2xl">{search}</div>
+        <div className="min-w-[260px] flex-1 xl:max-w-[390px]">{search}</div>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_60px] items-center gap-5 lg:grid-cols-[auto_minmax(150px,170px)_minmax(170px,190px)_60px] xl:justify-end">
-          <div className="glass-panel hidden h-[60px] items-center gap-1.5 rounded-2xl p-1.5 lg:flex">
+        <div className="ml-auto grid flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] items-center gap-3 lg:flex lg:flex-none lg:gap-3">
+          <div className="hidden h-[60px] items-center gap-2 lg:flex">
             {(Object.entries(globalStats) as [string, { total: number; solved: number }][]).map(([diff, data]) => (
               <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
             ))}
           </div>
 
-          <div className={`h-[60px] rounded-2xl border px-4 py-2.5 ${theme.panelStrong}`}>
+          <div className={`h-[60px] min-w-40 rounded-xl border px-4 py-2.5 ${theme.panelStrong}`}>
             <div className="mb-2 flex items-center justify-between gap-3">
               <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme.muted}`}>Progress</span>
               <span className={`font-mono text-sm font-black ${theme.text}`}>{overallPercent}%</span>
@@ -99,7 +99,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <button
             type="button"
             onClick={onOpenAuth}
-            className={`h-[60px] rounded-2xl border px-3 py-2.5 text-left transition-all sm:px-4 ${theme.panelStrong} hover:border-purple-400/50`}
+            className={`h-[60px] min-w-40 rounded-xl border px-3 py-2.5 text-left transition-all sm:px-4 ${theme.panelStrong} hover:border-purple-400/50`}
             title={handle ? `Signed in as @${handle}` : 'Sign in to sync'}
           >
             <div className="flex items-center justify-between gap-3">
@@ -115,7 +115,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
           <button
             onClick={onToggleTheme}
-            className={`inline-flex h-[60px] w-[60px] items-center justify-center rounded-2xl border transition-all ${theme.panelStrong} ${theme.subtle} hover:text-purple-400`}
+            className={`inline-flex h-[56px] w-[56px] items-center justify-center rounded-xl border transition-all ${theme.panelStrong} ${theme.subtle} hover:text-purple-400 lg:h-[60px] lg:w-[60px]`}
             title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {themeMode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}

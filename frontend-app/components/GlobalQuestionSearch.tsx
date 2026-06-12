@@ -54,6 +54,12 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
             Clear
           </button>
         )}
+        {!query && (
+          <span className="hidden shrink-0 items-center gap-1 rounded-lg bg-white/10 px-2 py-1 font-mono text-[11px] font-bold text-[#CBD5E1] sm:inline-flex">
+            <span>⌘</span>
+            <span>K</span>
+          </span>
+        )}
       </div>
 
       {showResults && (

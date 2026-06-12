@@ -1748,13 +1748,15 @@ const App: React.FC = () => {
   );
 
   const renderPatternPicker = () => (
-    <div className="pb-32 space-y-8">
-      <div className={`rounded-3xl border p-7 md:p-9 ${theme.panel}`}>
+    <div className="pb-32 space-y-9">
+      <h1 className={`mx-auto max-w-[930px] text-3xl font-black tracking-normal md:text-4xl ${theme.text}`}>Syllabus</h1>
+      <div className={`mx-auto max-w-[930px] rounded-2xl border p-6 md:p-8 ${theme.panel}`}>
         <div className="flex flex-col gap-6 md:flex-row md:items-center">
-          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-[28px] border border-purple-400/25 bg-purple-500/15 text-purple-200 shadow-[0_0_40px_rgba(168,85,247,0.35)]">
-            <div className="absolute inset-3 rounded-2xl bg-purple-400/10 blur-lg" />
+          <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-400 to-violet-700 text-white shadow-[0_0_40px_rgba(168,85,247,0.38)] md:h-24 md:w-24">
+            <div className="absolute inset-0 rounded-2xl bg-white/10" />
             <svg className="relative h-11 w-11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 3h12M6 8h12M8 13h8M10 18h4M7 3v5l3 5v5h4v-5l3-5V3" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.75 5.75A2.75 2.75 0 017.5 3H20v14.5H7.5a2.75 2.75 0 00-2.75 2.75V5.75z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.75 20.25A2.75 2.75 0 017.5 17.5H20M8 7h8M8 10.5h6" />
             </svg>
           </div>
           <div className="min-w-0">
@@ -1764,12 +1766,14 @@ const App: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        {sectionsData.map((section) => {
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {sectionsData.map((section, sectionIndex) => {
           const stat = sectionStats.find((item) => item.id === section.id);
           const pct = stat && stat.total > 0 ? Math.round((stat.solved / stat.total) * 100) : 0;
           return (
-            <section key={section.id} className={`rounded-[20px] border p-8 ${theme.panel}`}>
+            <section key={section.id} className={`relative overflow-hidden rounded-[20px] border p-8 ${theme.panel}`}>
+              <div className={`pointer-events-none absolute inset-0 ${sectionIndex % 2 === 0 ? 'bg-gradient-to-br from-blue-500/10 via-transparent to-purple-500/10' : 'bg-gradient-to-br from-purple-500/15 via-transparent to-violet-400/10'}`} />
+              <div className="relative">
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <h4 className={`truncate text-lg font-black tracking-normal ${theme.text}`}>{section.title}</h4>
@@ -1785,22 +1789,32 @@ const App: React.FC = () => {
                   const doneCount = pattern.questions.filter((q) => completedMap[q.id]).length;
                   const total = pattern.questions.length;
                   const patternPct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+                  const percentClass = patternPct === 100 ? 'text-green-400' : patternPct >= 70 ? 'text-purple-300' : 'text-yellow-300';
                   return (
                     <button
                       key={pattern.id}
                       onClick={() => selectPattern(section, pattern)}
                       className="glass-panel hover-lift h-[92px] rounded-[20px] border p-5 text-left"
                     >
-                      <div className="flex h-full flex-col justify-between">
+                      <div className="flex h-full gap-3">
+                        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-purple-300">
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6.75 3.75h7.5L19.5 9v11.25H6.75V3.75z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.25 3.75V9h5.25" />
+                          </svg>
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col justify-between">
                         <span title={pattern.name} className={`line-clamp-2 text-sm font-black leading-tight ${theme.text}`}>{pattern.name}</span>
                         <div className="flex items-center justify-between">
                           <span className={`text-[9px] font-black uppercase tracking-widest ${theme.muted}`}>{total} Qs</span>
-                          <span className="text-[10px] font-black font-mono text-purple-400">{patternPct}%</span>
+                          <span className={`font-mono text-[10px] font-black ${percentClass}`}>{patternPct}%</span>
+                        </div>
                         </div>
                       </div>
                     </button>
                   );
                 })}
+              </div>
               </div>
             </section>
           );
@@ -1983,7 +1997,6 @@ const App: React.FC = () => {
       <BackgroundDecorations />
       <main className="relative z-10 flex min-h-screen flex-col overflow-hidden">
         <AppHeader
-          title={headerTitle}
           theme={theme}
           themeMode={themeMode}
           isBackendWaking={isBackendWaking}
@@ -2024,8 +2037,11 @@ const App: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="mx-auto min-h-full w-full max-w-[1450px]"
+              className="mx-auto min-h-full w-full max-w-[1184px]"
             >
+              {!(isSyllabus && !hasActiveQuestionSelection) && (
+                <h1 className={`mb-7 text-3xl font-black tracking-normal md:text-4xl ${theme.text}`}>{headerTitle}</h1>
+              )}
               {renderRouteContent()}
             </motion.div>
           </AnimatePresence>
