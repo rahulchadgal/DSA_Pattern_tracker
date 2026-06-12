@@ -22,6 +22,7 @@ const PROGRESS_CACHE_PREFIX = 'dsa-progress-cache-v1';
 const SOLUTION_CACHE_PREFIX = 'dsa-solution-notes-v1';
 const PENDING_PROGRESS_PREFIX = 'dsa-pending-progress-v1';
 const GRID_VIEW_KEY = 'dsa-grid-view-v1';
+const COMPANY_VIEW_KEY = 'dsa-company-view-v1';
 const LEGACY_CUSTOM_QUESTIONS_CACHE_KEY = 'dsa-custom-questions-v1';
 const CUSTOM_QUESTIONS_CACHE_PREFIX = 'dsa-custom-questions-v1';
 const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
@@ -84,6 +85,7 @@ const COMPANY_TIME_FILTERS: Array<[CompanyTimeFilter, string]> = [
   ['3m', '3 Months'],
   ['6m', '6 Months']
 ];
+const DIFFICULTY_LEVELS: DifficultyLevel[] = ['Easy', 'Medium', 'Hard'];
 
 const SYNC_STATUS_CONFIG = {
   'signed-out': { color: 'bg-slate-600', label: 'Sign in to sync' },
@@ -365,6 +367,10 @@ const App: React.FC = () => {
   const [gridView, setGridView] = useState<'list' | 'small' | 'big'>(() => {
     const saved = localStorage.getItem(GRID_VIEW_KEY);
     return saved === 'list' || saved === 'small' || saved === 'big' ? saved : 'list';
+  });
+  const [companyView, setCompanyView] = useState<'cards' | 'list'>(() => {
+    const saved = localStorage.getItem(COMPANY_VIEW_KEY);
+    return saved === 'list' ? 'list' : 'cards';
   });
   const [themeMode] = useState<ThemeMode>('dark');
   const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
@@ -1133,6 +1139,10 @@ const App: React.FC = () => {
   }, [gridView]);
 
   useEffect(() => {
+    localStorage.setItem(COMPANY_VIEW_KEY, companyView);
+  }, [companyView]);
+
+  useEffect(() => {
     localStorage.setItem(THEME_MODE_KEY, themeMode);
   }, [themeMode]);
 
@@ -1454,15 +1464,39 @@ const App: React.FC = () => {
           acc[bucket] = bucketSection?.patterns[0]?.questions.length || 0;
           return acc;
         }, { all: 0, '30d': 0, '3m': 0, '6m': 0 });
-        const solved = section.patterns[0]?.questions.filter((q) => completedMap[q.id]).length || 0;
+        const activeSection = companyTimeFilter === 'all'
+          ? section
+          : companyBucketSections[companyTimeFilter].find((item) => item.id === section.id);
+        const activeQuestions = activeSection?.patterns[0]?.questions || [];
+        const allQuestions = section.patterns[0]?.questions || [];
+        const solvedActive = activeQuestions.filter((q) => completedMap[q.id]).length;
+        const activeCount = activeQuestions.length;
+        const difficultyTotals = DIFFICULTY_LEVELS.reduce<Record<DifficultyLevel, number>>((acc, difficulty) => {
+          acc[difficulty] = activeQuestions.filter((question) => question.difficulty === difficulty).length;
+          return acc;
+        }, { Easy: 0, Medium: 0, Hard: 0 });
+        const difficultySolved = DIFFICULTY_LEVELS.reduce<Record<DifficultyLevel, number>>((acc, difficulty) => {
+          acc[difficulty] = activeQuestions.filter((question) => question.difficulty === difficulty && completedMap[question.id]).length;
+          return acc;
+        }, { Easy: 0, Medium: 0, Hard: 0 });
         return {
           section,
+          activeSection,
           pattern: section.patterns[0] || EMPTY_PATTERN,
+          activeQuestions,
+          allQuestions,
           bucketCounts,
-          solved
+          activeCount,
+          allCount: bucketCounts.all,
+          solvedActive,
+          remainingActive: Math.max(0, activeCount - solvedActive),
+          activePct: activeCount > 0 ? Math.round((solvedActive / activeCount) * 100) : 0,
+          difficultyTotals,
+          difficultySolved
         };
-      });
-  }, [companyBucketSections, companySearchTerm, completedMap]);
+      })
+      .filter((summary) => companyTimeFilter === 'all' || summary.activeCount > 0);
+  }, [companyBucketSections, companySearchTerm, companyTimeFilter, completedMap]);
 
   const companiesByQuestionId = useMemo(() => {
     const bucketOrder = COMPANY_TIME_FILTERS.map(([bucket]) => bucket);
@@ -1832,13 +1866,28 @@ const App: React.FC = () => {
             <h3 className={`mt-2 text-2xl font-black tracking-normal ${theme.text}`}>Select a company first</h3>
             <p className={`mt-2 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Time filters show availability, but questions open only after you enter a company.</p>
           </div>
-          <div className="w-full lg:w-80">
+          <div className="flex w-full flex-col gap-3 lg:w-80">
             <input
               value={companySearchTerm}
               onChange={(e) => setCompanySearchTerm(e.target.value)}
               placeholder="Search companies..."
               className={`w-full rounded-2xl border px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-green-500/30 ${theme.input}`}
             />
+            <div className={`flex w-full rounded-2xl border p-1 shadow-inner ${theme.panelStrong}`}>
+              {([
+                ['cards', 'Cards'],
+                ['list', 'List']
+              ] as const).map(([view, label]) => (
+                <button
+                  key={view}
+                  type="button"
+                  onClick={() => setCompanyView(view)}
+                  className={`flex-1 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${companyView === view ? 'bg-purple-500/25 text-white shadow-lg shadow-purple-600/20' : `${theme.muted} hover:text-purple-400`}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -1858,43 +1907,95 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {companySummaries.map(({ section, bucketCounts, solved }) => {
-          const activeCount = bucketCounts[companyTimeFilter];
-          const allCount = bucketCounts.all;
-          const pct = allCount > 0 ? Math.round((solved / allCount) * 100) : 0;
-          return (
+      {companySummaries.length === 0 ? (
+        <div className={`rounded-3xl border p-10 text-center ${theme.panel}`}>
+          <p className={`text-sm font-bold ${theme.subtle}`}>No companies found for this search and time range.</p>
+        </div>
+      ) : companyView === 'cards' ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {companySummaries.map(({ section, bucketCounts, activeCount, allCount, activePct }) => (
+              <button
+                key={section.id}
+                onClick={() => selectCompany(section)}
+                className="glass-panel hover-lift h-[156px] rounded-[20px] border p-5 text-left"
+              >
+                <div className="flex h-full flex-col justify-between">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 title={section.title} className={`truncate text-lg font-black tracking-normal ${theme.text}`}>{section.title}</h4>
+                      <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{activeCount} in {COMPANY_TIME_FILTERS.find(([bucket]) => bucket === companyTimeFilter)?.[1]}</p>
+                    </div>
+                    <span className="shrink-0 rounded-xl border border-green-500/25 bg-green-500/10 px-2.5 py-1 text-[10px] font-black text-green-400">{activePct}%</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {COMPANY_TIME_FILTERS.map(([bucket, label]) => {
+                      const height = allCount > 0 ? Math.max(8, Math.round((bucketCounts[bucket] / allCount) * 34)) : 8;
+                      return (
+                        <div key={bucket} title={`${label}: ${bucketCounts[bucket]}`} className="flex flex-col items-center gap-1">
+                          <div className="flex h-9 w-full items-end rounded-lg bg-white/10 px-1">
+                            <div className={`w-full rounded-md shadow-[0_0_10px_rgba(168,85,247,0.28)] ${bucket === companyTimeFilter ? 'bg-green-500' : 'bg-purple-500/70'}`} style={{ height }} />
+                          </div>
+                          <span className={`text-[8px] font-black uppercase ${theme.muted}`}>{bucket === 'all' ? 'All' : bucket}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </button>
+            ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {companySummaries.map(({ section, activeCount, solvedActive, remainingActive, activePct, difficultyTotals, difficultySolved }) => (
             <button
               key={section.id}
               onClick={() => selectCompany(section)}
-              className="glass-panel hover-lift h-[156px] rounded-[20px] border p-5 text-left"
+              className="glass-panel hover-lift w-full rounded-[20px] border p-4 text-left md:p-5"
             >
-              <div className="flex h-full flex-col justify-between">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-center">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-3">
                     <h4 title={section.title} className={`truncate text-lg font-black tracking-normal ${theme.text}`}>{section.title}</h4>
-                    <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{activeCount} in {COMPANY_TIME_FILTERS.find(([bucket]) => bucket === companyTimeFilter)?.[1]}</p>
+                    <span className="rounded-xl border border-green-500/25 bg-green-500/10 px-2.5 py-1 text-[10px] font-black text-green-400">{activePct}%</span>
                   </div>
-                  <span className="shrink-0 rounded-xl border border-green-500/25 bg-green-500/10 px-2.5 py-1 text-[10px] font-black text-green-400">{pct}%</span>
+                  <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>
+                    {activeCount} questions in {COMPANY_TIME_FILTERS.find(([bucket]) => bucket === companyTimeFilter)?.[1]}
+                  </p>
                 </div>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {COMPANY_TIME_FILTERS.map(([bucket, label]) => {
-                    const height = allCount > 0 ? Math.max(8, Math.round((bucketCounts[bucket] / allCount) * 34)) : 8;
+
+                <div className="grid grid-cols-3 gap-2 sm:w-[280px]">
+                  {[
+                    ['Done', solvedActive, 'text-green-400'],
+                    ['Left', remainingActive, 'text-yellow-300'],
+                    ['Total', activeCount, 'text-purple-300']
+                  ].map(([label, value, color]) => (
+                    <div key={label as string} className="rounded-2xl border border-white/[0.12] bg-white/[0.06] px-3 py-2">
+                      <span className={`block text-[8px] font-black uppercase tracking-widest ${theme.muted}`}>{label}</span>
+                      <span className={`mt-1 block font-mono text-sm font-black ${color}`}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-3 lg:w-[330px]">
+                  {DIFFICULTY_LEVELS.map((difficulty) => {
+                    const tone = difficulty === 'Easy'
+                      ? 'border-green-500/25 bg-green-500/10 text-green-300'
+                      : difficulty === 'Medium'
+                        ? 'border-yellow-500/25 bg-yellow-500/10 text-yellow-300'
+                        : 'border-purple-500/25 bg-purple-500/10 text-purple-300';
                     return (
-                      <div key={bucket} title={`${label}: ${bucketCounts[bucket]}`} className="flex flex-col items-center gap-1">
-                        <div className="flex h-9 w-full items-end rounded-lg bg-white/10 px-1">
-                          <div className={`w-full rounded-md shadow-[0_0_10px_rgba(168,85,247,0.28)] ${bucket === companyTimeFilter ? 'bg-green-500' : 'bg-purple-500/70'}`} style={{ height }} />
-                        </div>
-                        <span className={`text-[8px] font-black uppercase ${theme.muted}`}>{bucket === 'all' ? 'All' : bucket}</span>
+                      <div key={difficulty} className={`rounded-2xl border px-3 py-2 ${tone}`}>
+                        <span className="block text-[8px] font-black uppercase tracking-widest">{difficulty}</span>
+                        <span className="mt-1 block font-mono text-sm font-black">{difficultySolved[difficulty]}/{difficultyTotals[difficulty]}</span>
                       </div>
                     );
                   })}
                 </div>
               </div>
             </button>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
