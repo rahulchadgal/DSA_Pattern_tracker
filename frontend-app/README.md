@@ -9,16 +9,18 @@ Client (`frontend-app/.env`):
   - Set `http://localhost:8888` only if you want to call Spring backend directly in local.
 
 Serverless (`Vercel Project > Settings > Environment Variables`):
-- `DATABASE_URL` as the Neon pooled Postgres URL
-- `DB_URL` (optional compatibility) if you want to reuse JDBC-style value
-- `DB_USERNAME` and `DB_PASSWORD` when `DB_URL` does not already include credentials
+- `DB_PROVIDER=neon` or `DB_PROVIDER=aiven` to choose the active database
+- `NEON_DATABASE_URL` as the Neon pooled Postgres URL
+- `AIVEN_DATABASE_URL` as the Aiven Postgres URL
+- `DATABASE_URL` or `DB_URL` as optional backward-compatible fallback for the active database
+- `DB_USERNAME` and `DB_PASSWORD` when a JDBC-style `DB_URL` does not already include credentials
 - `ADMIN_ACCESS_KEY` for admin access
 - `CRON_SECRET` for the daily database keepalive cron
-- `PG_USE_POOL=true` only when `DATABASE_URL` points to a pooled/PgBouncer URL
+- `PG_USE_POOL=true` only when the active database URL points to a pooled/PgBouncer URL
 - `PG_POOL_MAX=1` serverless-safe pool size
 - `PG_CONNECTION_TIMEOUT_MS=5000` and `PG_IDLE_TIMEOUT_MS=1000` to give auth enough time while still releasing idle DB connections quickly
 
-For Neon production on Vercel, use the Neon pooled connection string for `DATABASE_URL`. Use the Neon direct connection string only for one-time migration commands such as `pg_restore`.
+For Neon production on Vercel, use the Neon pooled connection string for `NEON_DATABASE_URL`. Admin login now includes a manual `Sync Active DB To Backup` button that copies `DB_PROVIDER`'s database into the inactive provider.
 
 Example serverless env file is available at `frontend-app/.env.server.example`.
 

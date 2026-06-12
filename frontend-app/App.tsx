@@ -779,6 +779,28 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSyncDatabases = async () => {
+    setAdminMessage('');
+    setIsAdminBusy(true);
+    try {
+      const response = await backendApi.syncDatabases();
+      setAdminMessage(`Synced ${response.source} -> ${response.target}: ${response.users} users, ${response.questions} questions, ${response.progressRecords} progress rows.`);
+      await loadAdminUsers();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to sync databases.';
+      if (isAuthFailure(error)) {
+        backendApi.clearAdminSession();
+        setIsAdminUnlocked(false);
+        setAdminUsers([]);
+        setAdminMessage('Admin session expired. Enter the admin key again.');
+      } else {
+        setAdminMessage(message);
+      }
+    } finally {
+      setIsAdminBusy(false);
+    }
+  };
+
   const toggleAdminUser = async (row: AdminUserRow) => {
     setAdminMessage('');
     setIsAdminBusy(true);
@@ -2102,14 +2124,24 @@ const App: React.FC = () => {
                   </button>
                   {adminMessage && <p className="text-center text-xs font-bold text-amber-300">{adminMessage}</p>}
                   {isAdminUnlocked && (
-                    <button
-                      type="button"
-                      onClick={handleEnsurePerformanceIndexes}
-                      disabled={isAdminBusy}
-                      className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300 disabled:opacity-60"
-                    >
-                      {isAdminBusy ? 'Preparing...' : 'Prepare DB Indexes'}
-                    </button>
+                    <div className="grid gap-3">
+                      <button
+                        type="button"
+                        onClick={handleEnsurePerformanceIndexes}
+                        disabled={isAdminBusy}
+                        className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300 disabled:opacity-60"
+                      >
+                        {isAdminBusy ? 'Preparing...' : 'Prepare DB Indexes'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSyncDatabases}
+                        disabled={isAdminBusy}
+                        className="w-full rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300 disabled:opacity-60"
+                      >
+                        {isAdminBusy ? 'Syncing...' : 'Sync Active DB To Backup'}
+                      </button>
+                    </div>
                   )}
                   {adminUsers.length > 0 && (
                     <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70">
