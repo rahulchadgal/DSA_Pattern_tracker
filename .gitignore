@@ -27,3 +27,6 @@ dev/.env.aiven
 dev/.env.neon-migration
 dev/*.dump
 .vercel
+frontend-app/test-results/
+frontend-app/playwright-report/
+frontend-app/blob-report/

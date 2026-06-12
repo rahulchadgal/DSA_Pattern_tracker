@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@codemirror/lang-java": "^6.0.2",
@@ -26,6 +27,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/typography": "^0.5.20",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
