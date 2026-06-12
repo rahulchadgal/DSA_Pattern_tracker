@@ -10,7 +10,7 @@ export const GlobalStatBadge: React.FC<{ diff: string; solved: number; total: nu
   const colorClass = styles[diff as keyof typeof styles] || 'text-slate-300 border-white/[0.12] bg-white/[0.06]';
 
   return (
-    <div className={cn('flex h-[60px] min-w-[92px] items-center justify-center gap-2 rounded-xl border px-4 transition-all duration-300', colorClass)}>
+    <div className={cn('flex h-[60px] min-w-[84px] items-center justify-center gap-1.5 rounded-xl border px-3 transition-all duration-300', colorClass)}>
       <span className="text-sm font-black">{diff[0]}</span>
       <div className="flex items-baseline gap-0.5">
         <span className="font-mono text-sm font-black">{solved}</span>

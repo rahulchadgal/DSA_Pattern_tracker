@@ -49,23 +49,26 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   ];
 
   return (
-    <header className={`sticky top-0 z-20 border-b border-white/10 bg-[#081229]/70 px-4 py-5 backdrop-blur-2xl sm:px-6 md:px-8 xl:px-10`}>
-      <div className="mx-auto flex w-full max-w-[1500px] flex-wrap items-center gap-4 xl:flex-nowrap">
-        <div className="flex min-w-fit items-center gap-3">
+    <header className={`sticky top-0 z-20 border-b border-white/10 bg-[#081229]/70 px-4 py-4 backdrop-blur-2xl sm:px-6 md:px-8 xl:px-10`}>
+      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-400 to-violet-700 text-white shadow-[0_0_24px_rgba(168,85,247,0.38)]">
             <Code2 className="h-5 w-5" />
           </div>
-          <span className="hidden text-lg font-black tracking-normal text-[#F8FAFC] sm:block">DSA Pattern Tracker</span>
+          <span className="hidden truncate text-lg font-black tracking-normal text-[#F8FAFC] sm:block xl:max-w-[230px]">
+            DSA Pattern Tracker
+          </span>
           <WakeBanner visible={isBackendWaking} />
         </div>
 
-        <nav className="order-3 flex h-[52px] w-full items-center gap-2 overflow-x-auto no-scrollbar sm:order-none sm:w-auto">
+        <div className="grid w-full grid-cols-1 items-center gap-4 lg:grid-cols-[auto_minmax(260px,1fr)] 2xl:grid-cols-[auto_minmax(320px,370px)_auto] 2xl:gap-5">
+        <nav className="relative z-10 flex h-[52px] w-full items-center gap-2 overflow-x-auto no-scrollbar 2xl:w-auto">
             {navItems.map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={item.onClick}
-                className={`relative h-11 shrink-0 overflow-hidden rounded-lg px-5 text-sm font-bold tracking-normal transition-colors ${item.active ? 'text-white' : 'text-[#CBD5E1] hover:text-white'}`}
+                className={`relative h-11 min-w-[94px] shrink-0 overflow-hidden rounded-lg px-4 text-sm font-bold tracking-normal transition-colors sm:min-w-[108px] sm:px-5 2xl:min-w-[96px] ${item.active ? 'text-white' : 'text-[#CBD5E1] hover:text-white'}`}
               >
                 {item.active && (
                   <motion.span
@@ -79,16 +82,16 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             ))}
         </nav>
 
-        <div className="min-w-[260px] flex-1 xl:max-w-[390px]">{search}</div>
+        <div className="relative z-0 min-w-0 2xl:w-[370px]">{search}</div>
 
-        <div className="ml-auto grid flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] items-center gap-3 lg:flex lg:flex-none lg:gap-3">
-          <div className="hidden h-[60px] items-center gap-2 lg:flex">
+        <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] items-center gap-3 lg:col-span-2 lg:grid-cols-[auto_auto_56px] 2xl:col-span-1 2xl:ml-auto 2xl:w-auto 2xl:grid-cols-[auto_auto_auto_56px] 2xl:gap-2">
+          <div className="hidden h-[60px] items-center gap-2 2xl:flex">
             {(Object.entries(globalStats) as [string, { total: number; solved: number }][]).map(([diff, data]) => (
               <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
             ))}
           </div>
 
-          <div className={`h-[60px] min-w-40 rounded-xl border px-4 py-2.5 ${theme.panelStrong}`}>
+          <div className={`h-[60px] min-w-0 rounded-xl border px-4 py-2.5 lg:min-w-36 ${theme.panelStrong}`}>
             <div className="mb-2 flex items-center justify-between gap-3">
               <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme.muted}`}>Progress</span>
               <span className={`font-mono text-sm font-black ${theme.text}`}>{overallPercent}%</span>
@@ -99,7 +102,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <button
             type="button"
             onClick={onOpenAuth}
-            className={`h-[60px] min-w-40 rounded-xl border px-3 py-2.5 text-left transition-all sm:px-4 ${theme.panelStrong} hover:border-purple-400/50`}
+            className={`h-[60px] min-w-0 rounded-xl border px-3 py-2.5 text-left transition-all sm:px-4 lg:min-w-36 ${theme.panelStrong} hover:border-purple-400/50`}
             title={handle ? `Signed in as @${handle}` : 'Sign in to sync'}
           >
             <div className="flex items-center justify-between gap-3">
@@ -120,6 +123,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           >
             {themeMode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </button>
+        </div>
         </div>
       </div>
     </header>
