@@ -3,9 +3,10 @@ import CodeMirror from '@uiw/react-codemirror';
 import { java } from '@codemirror/lang-java';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorView } from '@codemirror/view';
+import type { ThemeMode } from './appTypes';
 
 interface JavaSolutionEditorProps {
-  themeMode: 'dark' | 'light';
+  themeMode: ThemeMode;
   value: string;
   onChange?: (value: string) => void;
   readOnly?: boolean;
@@ -69,7 +70,7 @@ const JavaSolutionEditor: React.FC<JavaSolutionEditorProps> = ({
       }}
       extensions={extensions}
       editable={!readOnly}
-      theme={themeMode === 'dark' ? oneDark : 'light'}
+      theme={oneDark}
       onChange={readOnly ? undefined : onChange}
     />
   );
