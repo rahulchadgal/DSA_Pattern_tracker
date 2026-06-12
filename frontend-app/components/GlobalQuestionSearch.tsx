@@ -29,7 +29,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
 
   return (
     <div className="relative w-full max-w-2xl xl:flex-1">
-      <div className={`flex h-12 items-center gap-3 rounded-2xl border px-4 shadow-inner transition-all focus-within:ring-2 focus-within:ring-coral-glow-500/30 ${theme.input}`}>
+      <div className={`flex h-12 items-center gap-3 rounded-2xl border px-4 shadow-inner transition-all focus-within:ring-2 focus-within:ring-purple-500/30 ${theme.input}`}>
         <Search className="h-4 w-4 shrink-0 text-slate-500" />
         <input
           value={query}
@@ -48,7 +48,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
               onQueryChange('');
               onOpenChange(false);
             }}
-            className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-coral-glow-400"
+            className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-purple-400"
             title="Clear question search"
           >
             Clear
@@ -57,7 +57,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
       </div>
 
       {showResults && (
-        <div className={`absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[80] max-h-[420px] overflow-y-auto rounded-2xl border p-2 shadow-2xl ${themeMode === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-950'}`}>
+        <div className="glass-card absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[80] max-h-[420px] overflow-y-auto rounded-2xl p-2">
           {results.length === 0 ? (
             <div className={`p-4 text-sm font-bold ${theme.subtle}`}>No matching questions found.</div>
           ) : (
@@ -70,7 +70,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
                   key={result.question.id}
                   type="button"
                   onClick={() => onOpenQuestion(result)}
-                  className={`w-full rounded-xl p-3 text-left transition-all ${themeMode === 'light' ? 'hover:bg-slate-100' : 'hover:bg-slate-900'}`}
+                  className="w-full rounded-xl p-3 text-left transition-all hover:bg-white/10"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -81,7 +81,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
                       </div>
                     </div>
                     {companyCount > 0 && (
-                      <span className="shrink-0 rounded-xl border border-moss-green-500/25 bg-moss-green-500/10 px-2.5 py-1 text-[10px] font-black text-moss-green-500">
+                      <span className="shrink-0 rounded-xl border border-green-500/25 bg-green-500/10 px-2.5 py-1 text-[10px] font-black text-green-400">
                         {companyCount} co
                       </span>
                     )}

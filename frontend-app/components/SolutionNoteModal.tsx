@@ -26,8 +26,8 @@ export const SolutionNoteModal: React.FC<SolutionNoteModalProps> = ({
   if (!question) return null;
 
   return (
-    <div className="fixed inset-0 z-[106] overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-xl md:p-6">
-      <div className="mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-6 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-8">
+    <div className="fixed inset-0 z-[106] overflow-y-auto bg-[#081229]/80 p-4 backdrop-blur-xl md:p-6">
+      <div className="glass-card mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2.5rem] p-6 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-8">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-xl font-black tracking-normal text-white">Solution Notes</h3>
@@ -38,8 +38,8 @@ export const SolutionNoteModal: React.FC<SolutionNoteModalProps> = ({
           <button onClick={onClose} className="text-slate-400 hover:text-white">X</button>
         </div>
 
-        <div className={`overflow-hidden rounded-2xl border ${themeMode === 'light' ? 'border-slate-300 bg-white' : 'border-slate-700 bg-slate-950'}`}>
-          <div className={`flex items-center justify-between border-b px-4 py-2 ${themeMode === 'light' ? 'border-slate-200 bg-slate-50 text-slate-500' : 'border-slate-800 bg-slate-900/80 text-slate-500'}`}>
+        <div className="glass-panel overflow-hidden rounded-2xl">
+          <div className="flex items-center justify-between border-b border-white/[0.12] bg-[#081229]/50 px-4 py-2 text-slate-400">
             <span className="text-[10px] font-black uppercase tracking-[0.2em]">Java Editor</span>
             <span className="font-mono text-[10px] font-bold">{value.length} chars</span>
           </div>
@@ -59,13 +59,13 @@ export const SolutionNoteModal: React.FC<SolutionNoteModalProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="rounded-2xl border border-slate-700 px-5 py-2.5 text-xs font-black uppercase tracking-[0.15em] text-slate-300"
+              className="rounded-2xl border border-white/[0.12] px-5 py-2.5 text-xs font-black uppercase tracking-[0.15em] text-slate-300"
             >
               Cancel
             </button>
             <button
               onClick={onSave}
-              className="rounded-2xl bg-moss-green-600 px-5 py-2.5 text-xs font-black uppercase tracking-[0.15em] text-white hover:bg-moss-green-500"
+              className="rounded-2xl bg-green-600 px-5 py-2.5 text-xs font-black uppercase tracking-[0.15em] text-white hover:bg-green-500"
             >
               Save Note
             </button>

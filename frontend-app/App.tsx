@@ -8,6 +8,7 @@ import { useAppRoute } from './hooks/useAppRoute';
 import { getOfficialSolution, OfficialSolutionEntry } from './lib/officialSolutions';
 import { Pattern, Question, Section } from './types';
 import { AppHeader } from './components/AppHeader';
+import { BackgroundDecorations } from './components/BackgroundDecorations';
 import { GlobalQuestionSearch } from './components/GlobalQuestionSearch';
 import { OfficialSolutionModal } from './components/OfficialSolutionModal';
 import { QuestionSearchModal } from './components/QuestionSearchModal';
@@ -86,11 +87,11 @@ const COMPANY_TIME_FILTERS: Array<[CompanyTimeFilter, string]> = [
 
 const SYNC_STATUS_CONFIG = {
   'signed-out': { color: 'bg-slate-600', label: 'Sign in to sync' },
-  idle: { color: 'bg-slate-500', label: 'Ready to sync' },
-  syncing: { color: 'bg-light-gold-400', label: 'Sync in progress' },
-  synced: { color: 'bg-moss-green-500', label: 'Synced' },
+  idle: { color: 'bg-white/40', label: 'Ready to sync' },
+  syncing: { color: 'bg-yellow-400', label: 'Sync in progress' },
+  synced: { color: 'bg-green-500', label: 'Synced' },
   paused: { color: 'bg-orange-500', label: 'Sync unavailable' },
-  error: { color: 'bg-coral-glow-500', label: 'Sync failed' }
+  error: { color: 'bg-purple-500/25', label: 'Sync failed' }
 } satisfies Record<SyncStatus, { color: string; label: string }>;
 
 const emptyCompanyBucketSections = (): CompanyBucketSections => ({
@@ -1617,15 +1618,15 @@ const App: React.FC = () => {
   };
 
   const theme: AppThemeClasses = {
-    app: themeMode === 'light' ? 'bg-light-gold-50 text-turquoise-950' : 'bg-neon-ice-950 text-light-gold-100',
-    shell: themeMode === 'light' ? 'bg-white border-light-gold-200' : 'bg-turquoise-950 border-turquoise-800/70',
-    header: themeMode === 'light' ? 'bg-light-gold-50/90 border-light-gold-200' : 'bg-neon-ice-950/88 border-turquoise-800/70',
-    panel: themeMode === 'light' ? 'bg-white border-light-gold-200 shadow-sm' : 'bg-turquoise-950/55 border-turquoise-800/80',
-    panelStrong: themeMode === 'light' ? 'bg-light-gold-50 border-light-gold-200' : 'bg-neon-ice-950 border-turquoise-800/80',
-    text: themeMode === 'light' ? 'text-turquoise-950' : 'text-light-gold-50',
-    muted: themeMode === 'light' ? 'text-light-gold-800' : 'text-turquoise-300',
-    subtle: themeMode === 'light' ? 'text-turquoise-800' : 'text-turquoise-200',
-    input: themeMode === 'light' ? 'bg-white border-light-gold-300 text-turquoise-950 placeholder:text-light-gold-700' : 'bg-neon-ice-950 border-turquoise-800 text-light-gold-100 placeholder:text-turquoise-700'
+    app: 'gradient-bg text-[#F8FAFC]',
+    shell: 'glass-card',
+    header: 'glass-panel border-white/10',
+    panel: 'glass-card',
+    panelStrong: 'glass-panel',
+    text: 'text-[#F8FAFC]',
+    muted: 'text-[#94A3B8]',
+    subtle: 'text-[#CBD5E1]',
+    input: 'glass-input placeholder:text-[#94A3B8]'
   };
 
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
@@ -1633,7 +1634,7 @@ const App: React.FC = () => {
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <button
           onClick={showCompanyFilters ? backToCompanyPicker : backToPatternPicker}
-          className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${theme.panelStrong} ${theme.subtle} hover:text-coral-glow-400`}
+          className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${theme.panelStrong} ${theme.subtle} hover:text-purple-400`}
         >
           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
           Back
@@ -1648,7 +1649,7 @@ const App: React.FC = () => {
             <button
               key={mode}
               onClick={() => setGridView(mode)}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-coral-glow-600 text-white shadow-lg shadow-coral-glow-600/20' : `${theme.muted} hover:text-coral-glow-400`}`}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-purple-500/25 text-white shadow-lg shadow-purple-600/20' : `${theme.muted} hover:text-purple-400`}`}
             >
               {label}
             </button>
@@ -1660,7 +1661,7 @@ const App: React.FC = () => {
               <button
                 key={value}
                 onClick={() => setCompanyTimeFilter(value)}
-                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-moss-green-600 text-white shadow-lg shadow-moss-green-600/20' : `${theme.muted} hover:text-moss-green-500`}`}
+                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${companyTimeFilter === value ? 'bg-green-600 text-white shadow-lg shadow-green-600/20' : `${theme.muted} hover:text-green-400`}`}
               >
                 {label}
               </button>
@@ -1679,20 +1680,16 @@ const App: React.FC = () => {
           const done = !!timestamp;
           const hasSolution = Boolean(solutionNotePresenceMap[q.id] || (solutionMap[q.id] && solutionMap[q.id].trim().length > 0));
           const neutralCardClass = showCompanyFilters
-            ? (done
-              ? themeMode === 'light' ? 'bg-moss-green-50 border-moss-green-200' : 'bg-slate-900/65 border-slate-700/60'
-              : themeMode === 'light' ? 'bg-white border-slate-200 hover:border-slate-300' : 'bg-slate-900/45 border-slate-700/60 hover:border-slate-600')
-            : (done
-              ? themeMode === 'light' ? 'bg-moss-green-50 border-moss-green-200 shadow-sm' : 'bg-moss-green-500/[0.03] border-moss-green-500/20 shadow-lg shadow-moss-green-500/5'
-              : themeMode === 'light' ? 'bg-white border-slate-200 hover:border-slate-300' : 'bg-slate-900/40 border-slate-800/80 hover:border-slate-600');
+            ? (done ? 'glass-card border-green-400/25' : 'glass-card hover:border-purple-400/40')
+            : (done ? 'glass-card border-green-400/25 shadow-lg shadow-green-500/5' : 'glass-card hover:border-purple-400/40');
           const isCompact = gridView === 'list';
           return (
-            <div key={q.id} className={`group relative border transition-all duration-300 ${isCompact ? 'min-h-[68px] rounded-2xl p-3' : gridView === 'small' ? 'h-[132px] p-4 rounded-2xl' : 'h-[174px] p-5 rounded-3xl sm:hover:-translate-y-0.5'} ${neutralCardClass}`}>
+            <div key={q.id} className={`group relative border transition-all duration-300 hover-lift ${isCompact ? 'min-h-[68px] rounded-[20px] p-3' : gridView === 'small' ? 'h-[132px] rounded-[20px] p-4' : 'h-[174px] rounded-[20px] p-5'} ${neutralCardClass}`}>
               <div className={`flex h-full ${isCompact ? 'items-center gap-3' : 'flex-col gap-3'}`}>
                 <div className={`flex min-w-0 flex-1 items-start ${isCompact ? 'gap-3' : 'gap-4'}`}>
                   <button
                     onClick={() => toggleQuestion(q)}
-                    className={`shrink-0 ${isCompact || gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-11 h-11 rounded-2xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-moss-green-500 border-transparent text-white' : themeMode === 'light' ? 'bg-slate-50 border-slate-300 text-slate-300 hover:border-slate-500' : 'bg-slate-950 border-slate-800 text-slate-800 hover:border-slate-500'}`}
+                    className={`shrink-0 ${isCompact || gridView === 'small' || isMobile ? 'w-9 h-9 rounded-xl' : 'w-11 h-11 rounded-2xl'} border-2 flex items-center justify-center transition-all duration-300 ${done ? 'bg-green-500 border-transparent text-white' : 'border-white/[0.12] bg-white/[0.06] text-[#94A3B8] hover:border-purple-400/50 hover:text-purple-200'}`}
                   >
                     <svg className={`${isCompact || gridView === 'small' || isMobile ? 'w-4 h-4' : 'w-6 h-6'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                   </button>
@@ -1702,21 +1699,21 @@ const App: React.FC = () => {
                       target="_blank"
                       rel="noreferrer"
                       title={q.title}
-                      className={`block min-w-0 overflow-hidden ${isCompact ? 'max-h-[38px] text-[13px]' : gridView === 'small' ? 'max-h-[56px] text-sm' : 'max-h-[72px] text-base'} font-bold leading-tight transition-all ${done ? 'text-slate-500 line-through opacity-70 italic' : themeMode === 'light' ? 'text-slate-900 group-hover:text-coral-glow-600' : 'text-slate-100 group-hover:text-coral-glow-400'}`}
+                      className={`block min-w-0 overflow-hidden ${isCompact ? 'max-h-[38px] text-[13px]' : gridView === 'small' ? 'max-h-[56px] text-sm' : 'max-h-[72px] text-base'} font-bold leading-tight transition-all ${done ? 'text-[#94A3B8] line-through opacity-70 italic' : 'text-[#F8FAFC] group-hover:text-purple-300'}`}
                     >
                       {q.title}
                     </a>
                     <div className={`mt-2 flex flex-wrap items-center gap-2 ${isCompact ? 'text-[9px]' : 'text-[10px]'}`}>
                       <span className="font-bold text-slate-500 font-mono tracking-normal">LC #{q.id}</span>
                       <DifficultyBadge diff={q.difficulty} />
-                      {done && isCompact && <span className="hidden sm:inline font-bold text-moss-green-500">{formatDate(timestamp)}</span>}
+                      {done && isCompact && <span className="hidden sm:inline font-bold text-green-400">{formatDate(timestamp)}</span>}
                     </div>
                   </div>
                 </div>
-                <div className={`shrink-0 flex items-center ${isCompact ? 'gap-1.5' : 'justify-between border-t border-slate-700/20 pt-2 gap-2'}`}>
+                <div className={`shrink-0 flex items-center ${isCompact ? 'gap-1.5' : 'justify-between border-t border-white/[0.12] pt-2 gap-2'}`}>
                   {!isCompact && done && (
                     <div className="min-w-0 flex-1">
-                      <span className="block text-[8px] font-black uppercase text-moss-green-500/50 tracking-[0.2em]">Updated</span>
+                      <span className="block text-[8px] font-black uppercase text-green-400/50 tracking-[0.2em]">Updated</span>
                       <span className="block truncate text-[10px] font-bold text-slate-500 font-mono italic">{formatDate(timestamp)}</span>
                     </div>
                   )}
@@ -1724,7 +1721,7 @@ const App: React.FC = () => {
                     <button
                       onClick={() => openOfficialSolution(q)}
                       title="View official English and Java solution"
-                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border border-coral-glow-500/30 bg-coral-glow-500/10 text-coral-glow-400 transition-all hover:border-coral-glow-400 hover:bg-coral-glow-500/20`}
+                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border border-purple-500/30 bg-purple-500/10 text-purple-400 transition-all hover:border-purple-400 hover:bg-purple-500/20`}
                     >
                       <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.75v10.5M8.25 9.75h7.5M5.25 4.5h13.5A1.5 1.5 0 0120.25 6v13.5l-3.75-2.25-4.5 2.25-4.5-2.25-3.75 2.25V6a1.5 1.5 0 011.5-1.5z" />
@@ -1733,7 +1730,7 @@ const App: React.FC = () => {
                     <button
                       onClick={() => openSolutionEditor(q)}
                       title={hasSolution ? 'Edit saved solution note' : 'Add solution note'}
-                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border transition-all ${hasSolution ? 'text-moss-green-500 border-moss-green-500/30 bg-moss-green-500/10' : themeMode === 'light' ? 'text-slate-500 border-slate-300 bg-slate-50 hover:text-coral-glow-500 hover:border-coral-glow-400' : 'text-slate-400 border-slate-700 bg-slate-900 hover:text-coral-glow-300 hover:border-coral-glow-500/40'}`}
+                      className={`${isCompact || gridView === 'small' || isMobile ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} inline-flex items-center justify-center border transition-all ${hasSolution ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-slate-300 border-white/[0.12] bg-white/[0.06] hover:text-purple-200 hover:border-purple-500/40'}`}
                     >
                       <svg className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h8M6 3h12a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z" />
@@ -1768,10 +1765,10 @@ const App: React.FC = () => {
                   <h4 className={`truncate text-lg font-black tracking-normal ${theme.text}`}>{section.title}</h4>
                   <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{stat?.solved || 0}/{stat?.total || 0} solved</p>
                 </div>
-                <span className="shrink-0 rounded-2xl border border-coral-glow-500/25 bg-coral-glow-500/10 px-3 py-1.5 text-[10px] font-black text-coral-glow-400">{pct}%</span>
+                <span className="shrink-0 rounded-2xl border border-purple-500/25 bg-purple-500/10 px-3 py-1.5 text-[10px] font-black text-purple-400">{pct}%</span>
               </div>
               <div className="h-1.5 w-full rounded-full bg-slate-800/20 overflow-hidden mb-4">
-                <div className="h-full bg-coral-glow-500 transition-all duration-700" style={{ width: `${pct}%` }} />
+                <div className="h-full bg-purple-500/25 transition-all duration-700" style={{ width: `${pct}%` }} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {section.patterns.map((pattern) => {
@@ -1782,13 +1779,13 @@ const App: React.FC = () => {
                     <button
                       key={pattern.id}
                       onClick={() => selectPattern(section, pattern)}
-                      className={`h-[76px] rounded-2xl border p-3 text-left transition-all hover:-translate-y-0.5 ${themeMode === 'light' ? 'border-slate-200 bg-slate-50 hover:border-coral-glow-300' : 'border-slate-800 bg-slate-950/45 hover:border-coral-glow-500/40'}`}
+                      className="glass-panel hover-lift h-[76px] rounded-[20px] border p-3 text-left"
                     >
                       <div className="flex h-full flex-col justify-between">
                         <span title={pattern.name} className={`line-clamp-2 text-sm font-black leading-tight ${theme.text}`}>{pattern.name}</span>
                         <div className="flex items-center justify-between">
                           <span className={`text-[9px] font-black uppercase tracking-widest ${theme.muted}`}>{total} Qs</span>
-                          <span className="text-[10px] font-black font-mono text-coral-glow-400">{patternPct}%</span>
+                          <span className="text-[10px] font-black font-mono text-purple-400">{patternPct}%</span>
                         </div>
                       </div>
                     </button>
@@ -1816,7 +1813,7 @@ const App: React.FC = () => {
               value={companySearchTerm}
               onChange={(e) => setCompanySearchTerm(e.target.value)}
               placeholder="Search companies..."
-              className={`w-full rounded-2xl border px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-moss-green-500/30 ${theme.input}`}
+              className={`w-full rounded-2xl border px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-green-500/30 ${theme.input}`}
             />
           </div>
         </div>
@@ -1827,7 +1824,7 @@ const App: React.FC = () => {
               <button
                 key={bucket}
                 onClick={() => setCompanyTimeFilter(bucket)}
-                className={`rounded-2xl border px-4 py-3 text-left transition-all ${companyTimeFilter === bucket ? 'border-moss-green-500/40 bg-moss-green-500/10 text-moss-green-500' : `${theme.panelStrong} ${theme.subtle}`}`}
+                className={`rounded-2xl border px-4 py-3 text-left transition-all ${companyTimeFilter === bucket ? 'border-green-500/40 bg-green-500/10 text-green-400' : `${theme.panelStrong} ${theme.subtle}`}`}
               >
                 <span className="block text-[10px] font-black uppercase tracking-widest">{label}</span>
                 <span className="mt-1 block text-lg font-black">{count}</span>
@@ -1846,7 +1843,7 @@ const App: React.FC = () => {
             <button
               key={section.id}
               onClick={() => selectCompany(section)}
-              className={`h-[132px] rounded-3xl border p-4 text-left transition-all hover:-translate-y-0.5 ${themeMode === 'light' ? 'border-slate-200 bg-white hover:border-moss-green-300 shadow-sm' : 'border-slate-800 bg-slate-900/45 hover:border-moss-green-500/40'}`}
+              className="glass-panel hover-lift h-[132px] rounded-[20px] border p-4 text-left"
             >
               <div className="flex h-full flex-col justify-between">
                 <div className="flex items-start justify-between gap-3">
@@ -1854,15 +1851,15 @@ const App: React.FC = () => {
                     <h4 title={section.title} className={`truncate text-lg font-black tracking-normal ${theme.text}`}>{section.title}</h4>
                     <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{activeCount} in {COMPANY_TIME_FILTERS.find(([bucket]) => bucket === companyTimeFilter)?.[1]}</p>
                   </div>
-                  <span className="shrink-0 rounded-xl border border-moss-green-500/25 bg-moss-green-500/10 px-2.5 py-1 text-[10px] font-black text-moss-green-500">{pct}%</span>
+                  <span className="shrink-0 rounded-xl border border-green-500/25 bg-green-500/10 px-2.5 py-1 text-[10px] font-black text-green-400">{pct}%</span>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
                   {COMPANY_TIME_FILTERS.map(([bucket, label]) => {
                     const height = allCount > 0 ? Math.max(8, Math.round((bucketCounts[bucket] / allCount) * 34)) : 8;
                     return (
                       <div key={bucket} title={`${label}: ${bucketCounts[bucket]}`} className="flex flex-col items-center gap-1">
-                        <div className="flex h-9 w-full items-end rounded-lg bg-slate-500/10 px-1">
-                          <div className={`w-full rounded-md ${bucket === companyTimeFilter ? 'bg-moss-green-500' : 'bg-coral-glow-500/70'}`} style={{ height }} />
+                        <div className="flex h-9 w-full items-end rounded-lg bg-white/10 px-1">
+                          <div className={`w-full rounded-md ${bucket === companyTimeFilter ? 'bg-green-500' : 'bg-purple-500/70'}`} style={{ height }} />
                         </div>
                         <span className={`text-[8px] font-black uppercase ${theme.muted}`}>{bucket === 'all' ? 'All' : bucket}</span>
                       </div>
@@ -1898,50 +1895,50 @@ const App: React.FC = () => {
               <button
                 key={stat.id}
                 onClick={() => setSelectedSectionId(stat.id)}
-                className={`flex-none cursor-pointer rounded-2xl border px-4 py-2.5 transition-all active:scale-95 ${stat.id === selectedSectionId ? 'border-coral-glow-500/40 bg-coral-glow-500/10 shadow-xl shadow-coral-glow-500/5' : 'border-turquoise-800/40 bg-turquoise-950/45 opacity-55 hover:opacity-100'}`}
+                className={`flex-none cursor-pointer rounded-2xl border px-4 py-2.5 transition-all active:scale-95 ${stat.id === selectedSectionId ? 'border-purple-500/40 bg-purple-500/10 shadow-xl shadow-purple-500/5' : 'border-white/[0.12] bg-white/[0.06] opacity-55 hover:opacity-100'}`}
               >
                 <div className="flex items-center gap-3">
-                  <span className="max-w-[100px] truncate text-[9px] font-black uppercase tracking-normal text-turquoise-300">{stat.title}</span>
-                  <span className="font-mono text-[10px] font-black text-coral-glow-400">{Math.round((stat.solved / stat.total) * 100)}%</span>
+                  <span className="max-w-[100px] truncate text-[9px] font-black uppercase tracking-normal text-slate-300">{stat.title}</span>
+                  <span className="font-mono text-[10px] font-black text-purple-400">{Math.round((stat.solved / stat.total) * 100)}%</span>
                 </div>
               </button>
             ))}
           </div>
 
-          <div className="group relative overflow-hidden rounded-[3.5rem] border border-turquoise-800/60 bg-turquoise-950/45 p-8 shadow-2xl backdrop-blur-md md:p-14">
-            <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-coral-glow-500 via-light-gold-500 to-neon-ice-500 opacity-70" />
+          <div className="glass-card group relative overflow-hidden rounded-[28px] p-8 md:p-14">
+            <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-violet-500 to-purple-400 opacity-90" />
             <div className="flex flex-col items-center space-y-8 text-center md:space-y-10">
               <motion.div
-                animate={isPickingRandom ? { rotate: 360, scale: [1, 1.08, 1] } : { rotate: 0, scale: 1 }}
-                transition={isPickingRandom ? { duration: 0.7, repeat: Infinity, ease: 'linear' } : { duration: 0.3 }}
-                className="flex h-16 w-16 items-center justify-center rounded-[2rem] border border-coral-glow-500/25 bg-coral-glow-500/10 text-coral-glow-400 shadow-inner md:h-20 md:w-20"
+                animate={isPickingRandom ? { scale: [1, 1.04, 1], opacity: [0.8, 1, 0.8] } : { scale: 1, opacity: 1 }}
+                transition={isPickingRandom ? { duration: 0.9, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
+                className="flex h-16 w-16 items-center justify-center rounded-[2rem] border border-purple-500/25 bg-purple-500/10 text-purple-400 shadow-inner md:h-20 md:w-20"
               >
                 <svg className="h-8 w-8 md:h-10 md:w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               </motion.div>
 
               <div className="w-full space-y-4">
-                <label className="block text-[9px] font-black uppercase tracking-[0.35em] text-turquoise-500">Search Scope Configuration</label>
+                <label className="block text-[9px] font-black uppercase tracking-[0.35em] text-slate-500">Search Scope Configuration</label>
                 <div className="relative group/select">
                   <select
                     value={selectedSectionId}
                     onChange={(e) => setSelectedSectionId(e.target.value)}
-                    className="w-full cursor-pointer appearance-none rounded-[1.8rem] border border-turquoise-800 bg-neon-ice-950 px-8 py-4 text-sm font-bold tracking-normal text-light-gold-100 transition-all hover:border-turquoise-600 focus:outline-none focus:ring-2 focus:ring-coral-glow-500/30 md:py-5"
+                    className="w-full cursor-pointer appearance-none rounded-[1.8rem] border border-white/[0.12] bg-white/[0.06] px-8 py-4 text-sm font-bold tracking-normal text-yellow-100 transition-all hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500/30 md:py-5"
                   >
                     {sectionsData.map(s => (
                       <option key={s.id} value={s.id}>{s.title}</option>
                     ))}
                   </select>
-                  <div className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-turquoise-500">
+                  <div className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-slate-500">
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                   </div>
                 </div>
                 {currentSectionData && (
                   <div className="flex items-center justify-between px-6">
                     <div className="flex items-center gap-2">
-                      <div className="h-1 w-1 rounded-full bg-coral-glow-500" />
-                      <span className="text-[9px] font-black uppercase tracking-normal text-turquoise-400">{currentSectionData.solved}/{currentSectionData.total} Solved</span>
+                      <div className="h-1 w-1 rounded-full bg-purple-500/25" />
+                      <span className="text-[9px] font-black uppercase tracking-normal text-slate-400">{currentSectionData.solved}/{currentSectionData.total} Solved</span>
                     </div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-coral-glow-400">{Math.round((currentSectionData.solved / currentSectionData.total) * 100)}%</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">{Math.round((currentSectionData.solved / currentSectionData.total) * 100)}%</span>
                   </div>
                 )}
               </div>
@@ -1950,18 +1947,18 @@ const App: React.FC = () => {
                 <button
                   onClick={() => pickRandom('section')}
                   disabled={isPickingRandom}
-                  className="flex items-center justify-center gap-3 rounded-[1.8rem] bg-coral-glow-500 px-10 py-5 text-[10px] font-black uppercase tracking-[0.25em] text-white shadow-xl shadow-coral-glow-500/20 transition-all hover:bg-coral-glow-400 active:scale-95 disabled:opacity-70"
+                  className="flex items-center justify-center gap-3 rounded-[1.8rem] bg-purple-500/25 px-10 py-5 text-[10px] font-black uppercase tracking-[0.25em] text-white shadow-xl shadow-purple-500/20 transition-all hover:bg-purple-400 active:scale-95 disabled:opacity-70"
                 >
                   <span>{isPickingRandom ? 'Picking...' : 'Spin Section'}</span>
-                  <svg className={`h-4 w-4 ${isPickingRandom ? 'animate-spin' : 'transition-transform group-hover/spin:rotate-45'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7" /></svg>
+                  <svg className="h-4 w-4 transition-transform group-hover/spin:rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7" /></svg>
                 </button>
                 <button
                   onClick={() => pickRandom('global')}
                   disabled={isPickingRandom}
-                  className="flex items-center justify-center gap-3 rounded-[1.8rem] bg-turquoise-700 px-10 py-5 text-[10px] font-black uppercase tracking-[0.25em] text-white transition-all hover:bg-turquoise-600 active:scale-95 disabled:opacity-70"
+                  className="flex items-center justify-center gap-3 rounded-[1.8rem] bg-slate-700 px-10 py-5 text-[10px] font-black uppercase tracking-[0.25em] text-white transition-all hover:bg-slate-600 active:scale-95 disabled:opacity-70"
                 >
                   <span>{isPickingRandom ? 'Picking...' : 'Global Spin'}</span>
-                  <svg className={`h-4 w-4 ${isPickingRandom ? 'animate-spin' : 'transition-transform duration-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                  <svg className="h-4 w-4 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
                 </button>
               </div>
             </div>
@@ -1972,8 +1969,9 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className={`${themeMode} min-h-screen font-sans selection:bg-coral-glow-500/30 ${theme.app}`}>
-      <main className="flex min-h-screen flex-col overflow-hidden">
+    <div className={`${themeMode} page-shell font-sans selection:bg-purple-500/30 ${theme.app}`}>
+      <BackgroundDecorations />
+      <main className="relative z-10 flex min-h-screen flex-col overflow-hidden">
         <AppHeader
           title={headerTitle}
           theme={theme}
@@ -2059,8 +2057,8 @@ const App: React.FC = () => {
 
 
       {showAddQuestionModal && (
-        <div className="fixed inset-0 z-[105] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl">
-          <div className="w-full max-w-lg rounded-[2.5rem] border border-slate-800 bg-[#0f172a] p-8">
+        <div className="fixed inset-0 z-[105] flex items-center justify-center p-6 bg-[#081229]/80 backdrop-blur-xl">
+          <div className="w-full max-w-lg rounded-[2.5rem] border border-white/[0.12] bg-white/[0.06] p-8">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-black text-white tracking-normal">Add New Question</h3>
               <button onClick={() => setShowAddQuestionModal(false)} className="text-slate-400 hover:text-white">✕</button>
@@ -2071,15 +2069,15 @@ const App: React.FC = () => {
                 value={questionIdInput}
                 onChange={(e) => setQuestionIdInput(e.target.value)}
                 placeholder="e.g. 76"
-                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-coral-glow-500/40"
+                className="w-full rounded-2xl border border-white/[0.12] bg-white/[0.06] px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
               />
-              <button type="submit" disabled={isClassifying} className="w-full py-3 rounded-2xl bg-coral-glow-600 hover:bg-coral-glow-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
+              <button type="submit" disabled={isClassifying} className="w-full py-3 rounded-2xl bg-purple-500/25 hover:bg-purple-500/25 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
                 {isClassifying ? 'Classifying...' : 'Get AI Suggestion'}
               </button>
             </form>
 
             {aiSuggestion && (
-              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+              <div className="mt-6 rounded-2xl border border-white/[0.12] bg-white/[0.06] p-4 space-y-3">
                 <p className="text-xs text-slate-300"><span className="text-slate-500">Title:</span> {aiSuggestion.title}</p>
                 <p className="text-xs text-slate-300"><span className="text-slate-500">Difficulty:</span> {aiSuggestion.difficulty}</p>
                 <div>
@@ -2087,14 +2085,14 @@ const App: React.FC = () => {
                   <select
                     value={manualCategory}
                     onChange={(e) => setManualCategory(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                    className="w-full rounded-xl border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-sm text-slate-100"
                   >
                     {CATEGORY_OPTIONS.map(category => (
                       <option key={category} value={category}>{category}</option>
                     ))}
                   </select>
                 </div>
-                <button onClick={handleSaveNewQuestion} disabled={isSavingQuestion} className="w-full py-3 rounded-2xl bg-moss-green-600 hover:bg-moss-green-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
+                <button onClick={handleSaveNewQuestion} disabled={isSavingQuestion} className="w-full py-3 rounded-2xl bg-green-600 hover:bg-green-500 disabled:opacity-60 text-xs font-black uppercase tracking-[0.2em] text-white">
                   {isSavingQuestion ? 'Saving...' : 'Confirm & Save'}
                 </button>
               </div>
@@ -2105,14 +2103,14 @@ const App: React.FC = () => {
 
       {/* Global Handle Setup Modal */}
       {showWelcome && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-slate-950/98 backdrop-blur-3xl animate-in fade-in duration-500">
-           <div className="bg-[#0f172a] border border-slate-800/80 rounded-[3.5rem] w-full max-w-md p-14 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-moss-green-500 to-coral-glow-500" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-[#081229]/92 backdrop-blur-3xl animate-in fade-in duration-500">
+           <div className="bg-white/[0.06] border border-white/[0.12] rounded-[3.5rem] w-full max-w-md p-14 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-purple-500" />
               <div className="text-center mb-12">
                  <h3 className="text-4xl font-black text-white mb-4 tracking-normal leading-none">DSA Login</h3>
                  <p className="text-sm text-slate-500 leading-relaxed font-medium">Sign in with your username and password to sync progress across devices.</p>
               </div>
-              <div className="mb-8 grid grid-cols-3 gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-1">
+              <div className="mb-8 grid grid-cols-3 gap-2 rounded-2xl border border-white/[0.12] bg-white/[0.06] p-1">
                 {([
                   ['login', 'Login'],
                   ['signup', 'Signup'],
@@ -2122,7 +2120,7 @@ const App: React.FC = () => {
                     key={mode}
                     type="button"
                     onClick={() => { setAuthMode(mode); setAuthError(''); }}
-                    className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-[0.2em] ${authMode === mode ? 'bg-coral-glow-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-[0.2em] ${authMode === mode ? 'bg-purple-500/25 text-white' : 'text-slate-500 hover:text-slate-300'}`}
                   >
                     {label}
                   </button>
@@ -2131,7 +2129,7 @@ const App: React.FC = () => {
 
               {authMode === 'admin' ? (
                 <form onSubmit={handleAdminLogin} className="space-y-6">
-                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-moss-green-500/50">
+                  <div className="bg-white/[0.06] p-6 rounded-[2rem] border border-white/[0.12] transition-all focus-within:border-purple-500/70">
                     <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Admin Key</label>
                     <input
                       autoFocus
@@ -2140,21 +2138,21 @@ const App: React.FC = () => {
 	                      value={adminKey}
 	                      onFocus={warmDatabaseOnce}
 	                      onChange={(e) => setAdminKey(e.target.value)}
-                      className="w-full bg-transparent border-none text-moss-green-400 focus:ring-0 p-0 placeholder:text-slate-800"
+                      className="w-full border-none bg-transparent p-0 text-purple-200 placeholder:text-slate-500 focus:ring-0"
                     />
                   </div>
-                  {authError && <p className="text-center text-xs font-bold text-coral-glow-400">{authError}</p>}
-                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-coral-glow-600 hover:bg-coral-glow-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-coral-glow-600/20 transition-all active:scale-95">
+                  {authError && <p className="text-center text-xs font-bold text-purple-400">{authError}</p>}
+                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-purple-500/25 hover:bg-purple-500/25 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-purple-600/20 transition-all active:scale-95">
                     {isAuthBusy ? 'Checking...' : 'Unlock Admin'}
                   </button>
-                  {adminMessage && <p className="text-center text-xs font-bold text-light-gold-300">{adminMessage}</p>}
+                  {adminMessage && <p className="text-center text-xs font-bold text-yellow-300">{adminMessage}</p>}
                   {isAdminUnlocked && (
                     <div className="grid gap-3">
                       <button
                         type="button"
                         onClick={handleEnsurePerformanceIndexes}
                         disabled={isAdminBusy}
-                        className="w-full rounded-2xl border border-moss-green-500/30 bg-moss-green-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-moss-green-300 disabled:opacity-60"
+                        className="w-full rounded-2xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-green-300 disabled:opacity-60"
                       >
                         {isAdminBusy ? 'Preparing...' : 'Prepare DB Indexes'}
                       </button>
@@ -2162,24 +2160,24 @@ const App: React.FC = () => {
                         type="button"
                         onClick={handleSyncDatabases}
                         disabled={isAdminBusy}
-                        className="w-full rounded-2xl border border-light-gold-500/30 bg-light-gold-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-light-gold-300 disabled:opacity-60"
+                        className="w-full rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-yellow-300 disabled:opacity-60"
                       >
                         {isAdminBusy ? 'Syncing...' : 'Sync Active DB To Backup'}
                       </button>
                     </div>
                   )}
                   {adminUsers.length > 0 && (
-                    <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/70">
-                      <div className="sticky top-0 border-b border-slate-800 bg-slate-950 p-3">
+                    <div className="max-h-72 overflow-y-auto rounded-2xl border border-white/[0.12] bg-white/[0.06]">
+                      <div className="sticky top-0 border-b border-white/[0.12] bg-white/[0.06] p-3">
                         <input
                           value={adminSearchTerm}
                           onChange={(e) => setAdminSearchTerm(e.target.value)}
                           placeholder="Search users..."
-                          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-coral-glow-500/40"
+                          className="glass-input w-full rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                         />
                       </div>
                       {filteredAdminUsers.map((user) => (
-                        <div key={user.handle} className="flex items-center justify-between gap-3 border-b border-slate-800 p-3 last:border-b-0">
+                        <div key={user.handle} className="flex items-center justify-between gap-3 border-b border-white/[0.12] p-3 last:border-b-0">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-black text-slate-100">@{user.handle}</div>
                             <div className="text-[10px] font-bold text-slate-500">{user.completedCount}/{user.progressCount} done {user.disabledAt ? '- disabled' : '- active'}</div>
@@ -2188,32 +2186,32 @@ const App: React.FC = () => {
                             type="button"
                             onClick={() => toggleAdminUser(user)}
                             disabled={isAdminBusy}
-                            className={`shrink-0 rounded-xl px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60 ${user.disabledAt ? 'bg-moss-green-600' : 'bg-coral-glow-600'}`}
+                            className={`shrink-0 rounded-xl px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60 ${user.disabledAt ? 'bg-green-600' : 'bg-purple-500/25'}`}
                           >
                             {user.disabledAt ? 'Enable' : 'Disable'}
                           </button>
                         </div>
                       ))}
-                      <div className="border-t border-slate-800 p-3">
+                      <div className="border-t border-white/[0.12] p-3">
                         <div className="grid gap-2">
                           <input
                             value={adminResetHandle}
                             onChange={(e) => setAdminResetHandle(e.target.value)}
                             placeholder="username"
-                            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-coral-glow-500/40"
+                            className="glass-input rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                           />
                           <input
                             value={adminResetPassword}
                             onChange={(e) => setAdminResetPassword(e.target.value)}
                             type="password"
                             placeholder="new password (4-10 chars)"
-                            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-coral-glow-500/40"
+                            className="glass-input rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                           />
                           <button
                             type="button"
                             onClick={handleAdminResetPassword}
                             disabled={isAdminBusy}
-                            className="rounded-xl bg-moss-green-600 px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60"
+                            className="rounded-xl bg-green-600 px-3 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white disabled:opacity-60"
                           >
                             Reset Password
                           </button>
@@ -2224,19 +2222,19 @@ const App: React.FC = () => {
                 </form>
               ) : (
                 <form onSubmit={setupHandle} className="space-y-6">
-                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-moss-green-500/50">
+                  <div className="bg-white/[0.06] p-6 rounded-[2rem] border border-white/[0.12] transition-all focus-within:border-purple-500/70">
                     <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Username</label>
                     <div className="flex items-center gap-3 text-xl font-mono">
-                      <span className="text-moss-green-500/40">@</span>
-	                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onFocus={warmDatabaseOnce} onChange={(e) => setAuthUsername(e.target.value)} className="w-full bg-transparent border-none text-moss-green-400 focus:ring-0 p-0 placeholder:text-slate-800" />
+                      <span className="text-purple-400/40">@</span>
+	                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onFocus={warmDatabaseOnce} onChange={(e) => setAuthUsername(e.target.value)} className="w-full border-none bg-transparent p-0 text-purple-200 placeholder:text-slate-500 focus:ring-0" />
                     </div>
                   </div>
-                  <div className="bg-slate-950 p-6 rounded-[2rem] border border-slate-800 transition-all focus-within:border-moss-green-500/50">
+                  <div className="bg-white/[0.06] p-6 rounded-[2rem] border border-white/[0.12] transition-all focus-within:border-purple-500/70">
                     <label className="block text-[10px] font-black uppercase text-slate-600 tracking-[0.3em] mb-4 text-center">Password</label>
-	                    <input type="password" placeholder="4-10 characters" value={authPassword} onFocus={warmDatabaseOnce} onChange={(e) => setAuthPassword(e.target.value)} className="w-full bg-transparent border-none text-moss-green-400 focus:ring-0 p-0 placeholder:text-slate-800" />
+	                    <input type="password" placeholder="4-10 characters" value={authPassword} onFocus={warmDatabaseOnce} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border-none bg-transparent p-0 text-purple-200 placeholder:text-slate-500 focus:ring-0" />
                   </div>
-                  {authError && <p className="text-center text-xs font-bold text-coral-glow-400">{authError}</p>}
-                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-coral-glow-600 hover:bg-coral-glow-500 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-coral-glow-600/20 transition-all active:scale-95">
+                  {authError && <p className="text-center text-xs font-bold text-purple-400">{authError}</p>}
+                  <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-purple-500/25 hover:bg-purple-500/25 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-purple-600/20 transition-all active:scale-95">
                     {isAuthBusy ? 'Working...' : authMode === 'signup' ? 'Create Account' : 'Login'}
                   </button>
               </form>
@@ -2249,7 +2247,7 @@ const App: React.FC = () => {
       <AnimatePresence>
         {randomPick && (
           <motion.div
-            className="fixed inset-0 z-[110] flex items-center justify-center bg-neon-ice-950/55 p-8 backdrop-blur-2xl"
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-[#081229]/80 p-8 backdrop-blur-2xl"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2260,25 +2258,25 @@ const App: React.FC = () => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
               transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-              className="relative w-full max-w-md overflow-hidden rounded-[3rem] border border-turquoise-500/30 bg-turquoise-950/82 p-10 text-center shadow-[0_0_50px_rgba(0,255,247,0.12)]"
+              className="glass-card relative w-full max-w-md overflow-hidden rounded-[3rem] p-10 text-center glow-purple"
             >
-              <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-coral-glow-500 via-light-gold-500 to-neon-ice-500" />
+              <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-violet-500 to-purple-400" />
 
               <motion.div
                 initial={{ rotate: -10, scale: 0.85 }}
                 animate={{ rotate: 0, scale: 1 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 18, delay: 0.05 }}
-                className="mx-auto mb-8 flex h-16 w-16 items-center justify-center rounded-[1.8rem] border border-coral-glow-500/25 bg-coral-glow-500/15 text-coral-glow-400"
+                className="mx-auto mb-8 flex h-16 w-16 items-center justify-center rounded-[1.8rem] border border-purple-500/25 bg-purple-500/15 text-purple-400"
               >
                 <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               </motion.div>
 
-              <p className="mb-3 text-[9px] font-black uppercase tracking-[0.35em] text-neon-ice-400">Objective Acquired</p>
-              <h3 className="mb-6 text-2xl font-black leading-snug tracking-normal text-light-gold-50">{randomPick.title}</h3>
+              <p className="mb-3 text-[9px] font-black uppercase tracking-[0.35em] text-slate-400">Objective Acquired</p>
+              <h3 className="mb-6 text-2xl font-black leading-snug tracking-normal text-yellow-50">{randomPick.title}</h3>
 
               <div className="mb-10 flex items-center justify-center gap-3">
                 <DifficultyBadge diff={randomPick.difficulty} />
-                <span className="rounded-xl border border-turquoise-800 bg-neon-ice-950/80 px-3 py-1.5 font-mono text-[10px] font-black text-turquoise-200">LC #{randomPick.id}</span>
+                <span className="rounded-xl border border-white/[0.12] bg-[#081229]/80 px-3 py-1.5 font-mono text-[10px] font-black text-slate-200">LC #{randomPick.id}</span>
               </div>
 
               <div className="flex flex-col gap-3">
@@ -2287,13 +2285,13 @@ const App: React.FC = () => {
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => setRandomPick(null)}
-                  className="rounded-[1.8rem] bg-coral-glow-500 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-coral-glow-500/20 transition-all hover:bg-coral-glow-400 active:scale-95"
+                  className="rounded-[1.8rem] bg-purple-500/25 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-purple-500/20 transition-all hover:bg-purple-400 active:scale-95"
                 >
                   Launch LeetCode
                 </a>
                 <button
                   onClick={() => setRandomPick(null)}
-                  className="py-4 text-[9px] font-black uppercase tracking-widest text-turquoise-300 transition-colors hover:text-neon-ice-300"
+                  className="py-4 text-[9px] font-black uppercase tracking-widest text-slate-300 transition-colors hover:text-slate-300"
                 >
                   Dismiss
                 </button>
