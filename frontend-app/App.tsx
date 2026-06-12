@@ -366,7 +366,7 @@ const App: React.FC = () => {
     const saved = localStorage.getItem(GRID_VIEW_KEY);
     return saved === 'list' || saved === 'small' || saved === 'big' ? saved : 'list';
   });
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => localStorage.getItem(THEME_MODE_KEY) === 'light' ? 'light' : 'dark');
+  const [themeMode] = useState<ThemeMode>('dark');
   const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
   const [questionIdInput, setQuestionIdInput] = useState('');
   const [aiSuggestion, setAiSuggestion] = useState<LcMetadata | null>(null);
@@ -1998,7 +1998,6 @@ const App: React.FC = () => {
       <main className="relative z-10 flex min-h-screen flex-col overflow-hidden">
         <AppHeader
           theme={theme}
-          themeMode={themeMode}
           isBackendWaking={isBackendWaking}
           isSyllabus={isSyllabus}
           isProfile={isProfile}
@@ -2026,7 +2025,6 @@ const App: React.FC = () => {
             setAuthMode('login');
             setShowWelcome(true);
           }}
-          onToggleTheme={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
         />
 
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 md:p-10 xl:p-12 custom-scrollbar">

@@ -1,4 +1,5 @@
 import React, { lazy, Suspense } from 'react';
+import { X } from 'lucide-react';
 import type { OfficialSolutionEntry } from '../lib/officialSolutions';
 import type { Question } from '../types';
 import type { ThemeMode } from './appTypes';
@@ -30,20 +31,26 @@ export const OfficialSolutionModal: React.FC<OfficialSolutionModalProps> = ({
   if (!question) return null;
 
   return (
-    <div className="fixed inset-0 z-[106] overflow-y-auto bg-[#081229]/80 p-4 backdrop-blur-xl md:p-6">
-      <div className="glass-card mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2.5rem] p-6 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-8">
+    <div className="fixed inset-0 z-[106] overflow-y-auto bg-[#081229]/82 p-4 backdrop-blur-2xl md:p-6">
+      <div className="glass-card mx-auto my-4 flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1400px)] flex-col rounded-[2rem] p-5 md:my-6 md:min-h-[calc(100vh-3rem)] md:p-7">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-xl font-black tracking-normal text-white">Official Solution</h3>
-            <p className="mt-1 text-xs text-slate-400">
+            <h3 className="text-xl font-black tracking-normal text-[#F8FAFC]">Official Solution</h3>
+            <p className="mt-1 text-xs font-medium text-[#94A3B8]">
               LC #{question.id} • {question.title}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">X</button>
+          <button
+            onClick={onClose}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.06] text-[#CBD5E1] transition-all hover:border-purple-400/40 hover:text-white"
+            aria-label="Close official solution"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         {status === 'loading' && (
-          <div className="flex flex-1 items-center justify-center rounded-2xl border border-white/[0.12] bg-white/[0.06] p-8 text-sm font-bold text-slate-400">
+          <div className="glass-panel flex flex-1 items-center justify-center rounded-2xl p-8 text-sm font-bold text-[#CBD5E1]">
             Loading official solution...
           </div>
         )}
@@ -71,19 +78,19 @@ export const OfficialSolutionModal: React.FC<OfficialSolutionModalProps> = ({
               ))}
             </div>
 
-            <div className="flex flex-wrap gap-2 rounded-2xl border border-white/[0.12] bg-white/[0.06] p-2">
-              <button
-                type="button"
-                onClick={() => onViewChange('question')}
-                className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${view === 'question' ? 'bg-purple-500/25 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                Question
-              </button>
+          <div className="glass-panel flex flex-wrap gap-2 rounded-2xl p-2">
+            <button
+              type="button"
+              onClick={() => onViewChange('question')}
+              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${view === 'question' ? 'bg-purple-500/30 text-white glow-purple' : 'text-[#94A3B8] hover:text-[#CBD5E1]'}`}
+            >
+              Question
+            </button>
               {hasMeaningfulHint(solution) && (
                 <button
                   type="button"
                   onClick={() => onViewChange('hint')}
-                  className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${view === 'hint' ? 'bg-yellow-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                  className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${view === 'hint' ? 'bg-purple-500/30 text-white glow-purple' : 'text-[#94A3B8] hover:text-[#CBD5E1]'}`}
                 >
                   Show Hint
                 </button>
@@ -91,7 +98,7 @@ export const OfficialSolutionModal: React.FC<OfficialSolutionModalProps> = ({
               <button
                 type="button"
                 onClick={() => onViewChange('solution')}
-                className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${view === 'solution' ? 'bg-green-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${view === 'solution' ? 'bg-purple-500/30 text-white glow-purple' : 'text-[#94A3B8] hover:text-[#CBD5E1]'}`}
               >
                 Show Solution
               </button>
@@ -121,7 +128,7 @@ export const OfficialSolutionModal: React.FC<OfficialSolutionModalProps> = ({
                 <>
                   <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-green-300">Java Solution</h4>
                   {solution.hasJava ? (
-                    <div className="overflow-hidden rounded-2xl border border-white/[0.12] bg-[#081229]/80">
+                    <div className="glass-panel overflow-hidden rounded-2xl">
                       <Suspense fallback={<div className="flex h-[58vh] items-center justify-center font-mono text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Loading Java viewer...</div>}>
                         <JavaSolutionEditor
                           themeMode={themeMode}

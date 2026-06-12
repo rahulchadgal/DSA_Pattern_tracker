@@ -29,7 +29,7 @@ const JavaSolutionEditor: React.FC<JavaSolutionEditorProps> = ({
         height,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
         fontSize: '13px',
-        backgroundColor: themeMode === 'light' ? '#ffffff' : '#020617'
+        backgroundColor: 'rgba(8, 18, 41, 0.72)'
       },
       '.cm-scroller': {
         minHeight: height,
@@ -42,8 +42,15 @@ const JavaSolutionEditor: React.FC<JavaSolutionEditorProps> = ({
         caretColor: readOnly ? 'transparent' : 'auto'
       },
       '.cm-gutters': {
-        backgroundColor: themeMode === 'light' ? '#f8fafc' : '#0f172a',
-        borderRightColor: themeMode === 'light' ? '#e2e8f0' : '#334155'
+        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        borderRightColor: 'rgba(255, 255, 255, 0.12)',
+        color: '#94A3B8'
+      },
+      '.cm-activeLineGutter': {
+        backgroundColor: 'rgba(168, 85, 247, 0.14)'
+      },
+      '.cm-activeLine': {
+        backgroundColor: readOnly ? 'transparent' : 'rgba(168, 85, 247, 0.08)'
       }
     })
   ], [height, readOnly, themeMode]);

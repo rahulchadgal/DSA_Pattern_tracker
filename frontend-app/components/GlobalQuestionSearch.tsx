@@ -29,7 +29,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
 
   return (
     <div className="relative w-full max-w-2xl xl:flex-1">
-      <div className={`flex h-[60px] items-center gap-3 rounded-2xl border px-5 shadow-inner transition-all focus-within:ring-2 focus-within:ring-purple-500/30 ${theme.input}`}>
+      <div className={`flex h-11 items-center gap-2.5 rounded-xl border px-4 shadow-inner transition-all focus-within:ring-2 focus-within:ring-purple-500/30 ${theme.input}`}>
         <Search className="h-4 w-4 shrink-0 text-[#94A3B8]" />
         <input
           value={query}
@@ -39,7 +39,7 @@ export const GlobalQuestionSearch: React.FC<GlobalQuestionSearchProps> = ({
           }}
           onFocus={() => onOpenChange(true)}
           placeholder="Search LC ID or question name..."
-          className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[#F8FAFC] outline-none placeholder:text-[#94A3B8]"
+          className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#F8FAFC] outline-none placeholder:text-[#94A3B8] md:text-sm"
         />
         {query && (
           <button
