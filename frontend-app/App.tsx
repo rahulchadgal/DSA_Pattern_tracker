@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Sparkles, Terminal } from 'lucide-react';
 import { AdminUserRow, backendApi, CompanyQuestionRow, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
 import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
@@ -185,6 +186,12 @@ const readPendingProgressMap = (raw: string | null): Record<string, PendingProgr
   } catch {
     return {};
   }
+};
+
+const readThemeMode = (): ThemeMode => {
+  if (typeof localStorage === 'undefined') return 'neo-glass';
+  const saved = localStorage.getItem(THEME_MODE_KEY);
+  return saved === 'old-school-classic' || saved === 'neo-glass' ? saved : 'neo-glass';
 };
 
 const readUserMapCache = (prefix: string, userHandle: string, legacyKey?: string): Record<string, string> => {
@@ -372,7 +379,7 @@ const App: React.FC = () => {
     const saved = localStorage.getItem(COMPANY_VIEW_KEY);
     return saved === 'list' ? 'list' : 'cards';
   });
-  const [themeMode] = useState<ThemeMode>('dark');
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => readThemeMode());
   const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
   const [questionIdInput, setQuestionIdInput] = useState('');
   const [aiSuggestion, setAiSuggestion] = useState<LcMetadata | null>(null);
@@ -1651,16 +1658,43 @@ const App: React.FC = () => {
     setSelectedPattern(EMPTY_PATTERN);
   };
 
-  const theme: AppThemeClasses = {
-    app: 'gradient-bg text-[#F8FAFC]',
-    shell: 'glass-card',
-    header: 'glass-panel border-white/10',
-    panel: 'glass-card',
-    panelStrong: 'glass-panel',
-    text: 'text-[#F8FAFC]',
-    muted: 'text-[#94A3B8]',
-    subtle: 'text-[#CBD5E1]',
-    input: 'glass-input placeholder:text-[#94A3B8]'
+  const isOldSchool = themeMode === 'old-school-classic';
+  const theme: AppThemeClasses = isOldSchool
+    ? {
+        app: 'theme-old-school-classic old-school-bg text-[#d5ded8]',
+        shell: 'glass-card',
+        header: 'old-school-header border-[#aabdb0]/15 bg-[#071012]/90 backdrop-blur-md',
+        logo: 'border border-[#aabdb0]/14 bg-[#162520]/70 text-[#b8d9bf] shadow-none',
+        brand: 'text-[#e2e9e4]',
+        title: 'text-[#e2e9e4]',
+        panel: 'glass-card',
+        panelStrong: 'glass-panel',
+        activeControl: 'border border-[#b8cdbd]/5 bg-white/[0.035] text-[#e2e9e4] shadow-[inset_0_-2px_0_rgba(142,201,155,0.92)]',
+        iconTile: 'border border-[#a7cdb0]/20 bg-[#8bbe97]/16 text-[#d1ead4] shadow-none',
+        text: 'text-[#e2e9e4]',
+        muted: 'text-[#8f9d93]',
+        subtle: 'text-[#bec9c1]',
+        input: 'glass-input placeholder:text-[#7d8d83]'
+      }
+    : {
+        app: 'theme-neo-glass gradient-bg text-[#F8FAFC]',
+        shell: 'glass-card',
+        header: 'border-white/10 bg-[#081229]/86 backdrop-blur-2xl',
+        logo: 'bg-gradient-to-br from-purple-400 to-violet-700 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)]',
+        brand: 'text-[#F8FAFC]',
+        title: 'text-[#F8FAFC]',
+        panel: 'glass-card',
+        panelStrong: 'glass-panel',
+        activeControl: 'bg-purple-500/25 text-white shadow-lg shadow-purple-600/20',
+        iconTile: 'bg-gradient-to-br from-purple-400 to-violet-700 text-white shadow-[0_0_40px_rgba(168,85,247,0.38)]',
+        text: 'text-[#F8FAFC]',
+        muted: 'text-[#94A3B8]',
+        subtle: 'text-[#CBD5E1]',
+        input: 'glass-input placeholder:text-[#94A3B8]'
+      };
+
+  const toggleThemeMode = () => {
+    setThemeMode((current) => current === 'old-school-classic' ? 'neo-glass' : 'old-school-classic');
   };
 
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
@@ -1683,7 +1717,7 @@ const App: React.FC = () => {
             <button
               key={mode}
               onClick={() => setGridView(mode)}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? 'bg-purple-500/25 text-white shadow-lg shadow-purple-600/20' : `${theme.muted} hover:text-purple-400`}`}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${gridView === mode ? theme.activeControl : `${theme.muted} hover:text-purple-400`}`}
             >
               {label}
             </button>
@@ -1783,10 +1817,10 @@ const App: React.FC = () => {
 
   const renderPatternPicker = () => (
     <div className="pb-32 space-y-9">
-      <h1 className={`mx-auto max-w-[930px] text-3xl font-black tracking-normal md:text-4xl ${theme.text}`}>Syllabus</h1>
+      <h1 className={`mx-auto max-w-[930px] text-3xl font-black tracking-normal md:text-4xl ${theme.title}`}>Syllabus</h1>
       <div className={`mx-auto max-w-[930px] rounded-2xl border p-6 md:p-8 ${theme.panel}`}>
         <div className="flex flex-col gap-6 md:flex-row md:items-center">
-          <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-400 to-violet-700 text-white shadow-[0_0_40px_rgba(168,85,247,0.38)] md:h-24 md:w-24">
+          <div className={`relative flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl md:h-24 md:w-24 ${theme.iconTile}`}>
             <div className="absolute inset-0 rounded-2xl bg-white/10" />
             <svg className="relative h-11 w-11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.75 5.75A2.75 2.75 0 017.5 3H20v14.5H7.5a2.75 2.75 0 00-2.75 2.75V5.75z" />
@@ -1795,7 +1829,7 @@ const App: React.FC = () => {
           </div>
           <div className="min-w-0">
             <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Choose Pattern</p>
-            <h3 className={`mt-2 text-2xl font-black tracking-normal md:text-3xl ${theme.text}`}>Pick a syllabus pattern to start</h3>
+            <h3 className={`mt-2 text-2xl font-black tracking-normal md:text-3xl ${theme.title}`}>Pick a syllabus pattern to start</h3>
             <p className={`mt-3 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Questions stay hidden until you choose a pattern. Your last progress and notes remain linked by LeetCode ID.</p>
           </div>
         </div>
@@ -1810,7 +1844,7 @@ const App: React.FC = () => {
               <div className="relative">
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <h4 className={`truncate text-lg font-black tracking-normal ${theme.text}`}>{section.title}</h4>
+                  <h4 className={`truncate text-lg font-black tracking-normal ${theme.title}`}>{section.title}</h4>
                   <p className={`mt-1 text-[10px] font-black uppercase tracking-widest ${theme.muted}`}>{stat?.solved || 0}/{stat?.total || 0} solved</p>
                 </div>
                 <span className="shrink-0 rounded-2xl border border-purple-500/25 bg-purple-500/10 px-3 py-1.5 text-[10px] font-black text-purple-400">{pct}%</span>
@@ -1838,7 +1872,7 @@ const App: React.FC = () => {
                           </svg>
                         </div>
                         <div className="flex min-w-0 flex-1 flex-col justify-between">
-                        <span title={pattern.name} className={`line-clamp-2 text-sm font-black leading-tight ${theme.text}`}>{pattern.name}</span>
+                          <span title={pattern.name} className={`line-clamp-2 text-sm font-black leading-tight ${theme.title}`}>{pattern.name}</span>
                         <div className="flex items-center justify-between">
                           <span className={`text-[9px] font-black uppercase tracking-widest ${theme.muted}`}>{total} Qs</span>
                           <span className={`font-mono text-[10px] font-black ${percentClass}`}>{patternPct}%</span>
@@ -1863,7 +1897,7 @@ const App: React.FC = () => {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${theme.muted}`}>Company Bank</p>
-            <h3 className={`mt-2 text-2xl font-black tracking-normal ${theme.text}`}>Select a company first</h3>
+            <h3 className={`mt-2 text-2xl font-black tracking-normal ${theme.title}`}>Select a company first</h3>
             <p className={`mt-2 max-w-2xl text-sm font-medium leading-6 ${theme.subtle}`}>Time filters show availability, but questions open only after you enter a company.</p>
           </div>
           <div className="flex w-full flex-col gap-3 lg:w-80">
@@ -1882,7 +1916,7 @@ const App: React.FC = () => {
                   key={view}
                   type="button"
                   onClick={() => setCompanyView(view)}
-                  className={`flex-1 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${companyView === view ? 'bg-purple-500/25 text-white shadow-lg shadow-purple-600/20' : `${theme.muted} hover:text-purple-400`}`}
+                  className={`flex-1 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${companyView === view ? theme.activeControl : `${theme.muted} hover:text-purple-400`}`}
                 >
                   {label}
                 </button>
@@ -2128,7 +2162,7 @@ const App: React.FC = () => {
           }}
         />
 
-        <div className="mt-[var(--app-header-height)] h-[calc(100dvh-var(--app-header-height))] overflow-y-auto overflow-x-hidden p-5 sm:p-6 md:p-10 xl:p-12 custom-scrollbar">
+        <div className={`mt-[var(--app-header-height)] h-[calc(100dvh-var(--app-header-height))] overflow-y-auto overflow-x-hidden p-5 sm:p-6 md:p-10 xl:p-12 custom-scrollbar ${isOldSchool ? 'old-school-content-scroll' : ''}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={routeKey}
@@ -2136,16 +2170,26 @@ const App: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="mx-auto min-h-full w-full max-w-[1184px]"
+              className={`mx-auto min-h-full w-full max-w-[1184px] ${isOldSchool ? 'old-school-route' : ''}`}
             >
               {!(isSyllabus && !hasActiveQuestionSelection) && (
-                <h1 className={`mb-7 text-3xl font-black tracking-normal md:text-4xl ${theme.text}`}>{headerTitle}</h1>
+                <h1 className={`mb-7 text-3xl font-black tracking-normal md:text-4xl ${theme.title}`}>{headerTitle}</h1>
               )}
               {renderRouteContent()}
             </motion.div>
           </AnimatePresence>
         </div>
       </main>
+
+      <button
+        type="button"
+        onClick={toggleThemeMode}
+        className={`fixed bottom-4 left-4 z-[130] inline-flex h-11 w-11 items-center justify-center rounded-xl border transition-all hover:-translate-y-0.5 sm:bottom-5 sm:left-5 ${theme.panelStrong} ${theme.subtle} hover:text-white`}
+        title={isOldSchool ? 'Switch to AI Slop UI' : 'Switch to Old School Classic'}
+        aria-label={isOldSchool ? 'Switch to AI Slop UI' : 'Switch to Old School Classic'}
+      >
+        {isOldSchool ? <Sparkles className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
+      </button>
 
       <QuestionSearchModal
         selectedSearchQuestion={selectedSearchQuestion}

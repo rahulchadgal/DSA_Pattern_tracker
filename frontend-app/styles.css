@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -87,6 +89,17 @@
     background-attachment: fixed;
   }
 
+  .old-school-bg {
+    background:
+      linear-gradient(90deg, rgba(114, 166, 129, 0.06), transparent 23%, rgba(114, 166, 129, 0.055) 48%, transparent 72%, rgba(114, 166, 129, 0.045)),
+      radial-gradient(ellipse at 18% 35%, rgba(126, 178, 139, 0.085), transparent 38%),
+      radial-gradient(ellipse at 54% 18%, rgba(104, 157, 145, 0.055), transparent 36%),
+      radial-gradient(ellipse at 86% 45%, rgba(126, 178, 139, 0.07), transparent 40%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.012), transparent 30%),
+      linear-gradient(135deg, #071116 0%, #0a1519 47%, #0e171a 100%);
+    background-attachment: fixed;
+  }
+
   .glass-card {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.16);
@@ -163,6 +176,312 @@
 
   .mono {
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+
+  .theme-old-school-classic {
+    color: #d5ded8;
+    font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --radius: 0.55rem;
+    --border: 151 16% 58% / 0.12;
+    --input: 151 16% 58% / 0.16;
+    --ring: 142 27% 62%;
+  }
+
+  @media (min-width: 1024px) {
+    .theme-old-school-classic .old-school-content-scroll {
+      padding-top: 44px;
+      padding-bottom: 28px;
+    }
+
+    .theme-old-school-classic .old-school-route {
+      max-width: 1176px;
+      position: relative;
+      left: -22px;
+    }
+
+    .theme-old-school-classic .old-school-route .max-w-\[930px\] {
+      max-width: 1016px;
+    }
+
+    .theme-old-school-classic .old-school-route .space-y-9 > h1 + div {
+      margin-top: 0.9rem;
+    }
+
+    .theme-old-school-classic .old-school-route .space-y-9 > div + div {
+      margin-top: 2.65rem;
+    }
+
+    .theme-old-school-classic .old-school-route section.glass-card {
+      padding: 1.5rem;
+    }
+
+    .theme-old-school-classic .old-school-route .glass-panel.h-\[92px\] {
+      height: 88px;
+      padding: 1.15rem;
+    }
+  }
+
+  .theme-old-school-classic .font-sans {
+    font-family: inherit;
+  }
+
+  .theme-old-school-classic .font-mono,
+  .theme-old-school-classic .mono,
+  .theme-old-school-classic code,
+  .theme-old-school-classic pre,
+  .theme-old-school-classic input,
+  .theme-old-school-classic select {
+    font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+
+  .theme-old-school-classic .theme-serif,
+  .theme-old-school-classic h1,
+  .theme-old-school-classic h3,
+  .theme-old-school-classic h4 {
+    font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  .theme-old-school-classic .font-black {
+    font-weight: 500;
+  }
+
+  .theme-old-school-classic .font-bold {
+    font-weight: 400;
+  }
+
+  .theme-old-school-classic .font-mono.font-black,
+  .theme-old-school-classic .font-mono.font-bold {
+    font-weight: 600;
+  }
+
+  .theme-old-school-classic .glass-card {
+    background: rgba(12, 23, 28, 0.52);
+    border-color: rgba(176, 197, 187, 0.115);
+    backdrop-filter: blur(18px);
+    box-shadow:
+      0 18px 50px rgba(0, 0, 0, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  }
+
+  .theme-old-school-classic .glass-panel {
+    background: rgba(12, 23, 28, 0.42);
+    border-color: rgba(176, 197, 187, 0.105);
+    backdrop-filter: blur(14px);
+    box-shadow:
+      0 10px 28px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.032);
+  }
+
+  .theme-old-school-classic .glass-input {
+    background: rgba(10, 20, 24, 0.62);
+    border-color: rgba(176, 197, 187, 0.16);
+    color: #dce5de;
+    backdrop-filter: blur(9px);
+  }
+
+  .theme-old-school-classic .glass-input:focus,
+  .theme-old-school-classic .glass-input:focus-within {
+    border-color: rgba(134, 191, 154, 0.68);
+    box-shadow: 0 0 0 3px rgba(134, 191, 154, 0.10);
+  }
+
+  .theme-old-school-classic .search-filled-glass {
+    background: rgba(10, 20, 24, 0.66);
+    border-color: rgba(176, 197, 187, 0.16);
+    color: #dce5de;
+    backdrop-filter: blur(12px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .theme-old-school-classic .search-filled-glass:focus-within {
+    border-color: rgba(134, 191, 154, 0.70);
+    box-shadow: 0 0 0 3px rgba(134, 191, 154, 0.10);
+  }
+
+  .theme-old-school-classic .search-results-glass {
+    background: rgba(10, 20, 24, 0.86);
+    border-color: rgba(176, 197, 187, 0.14);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.26);
+  }
+
+  .theme-old-school-classic .bg-\[\#081229\]\/80,
+  .theme-old-school-classic .bg-\[\#081229\]\/82,
+  .theme-old-school-classic .bg-\[\#081229\]\/92 {
+    background-color: rgba(7, 16, 18, 0.88);
+  }
+
+  .theme-old-school-classic .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
+  }
+
+  .theme-old-school-classic .progress-glow > div,
+  .theme-old-school-classic .bg-gradient-to-r {
+    background: linear-gradient(90deg, #78a987, #9ed2a7 64%, #73a484);
+    box-shadow: 0 0 10px rgba(129, 201, 143, 0.26);
+  }
+
+  .theme-old-school-classic .glass-card .glass-panel {
+    background: rgba(11, 22, 26, 0.44);
+    border-color: rgba(176, 197, 187, 0.12);
+    box-shadow:
+      0 8px 22px rgba(0, 0, 0, 0.10),
+      inset 0 1px 0 rgba(255, 255, 255, 0.026);
+  }
+
+  .theme-old-school-classic .glass-card > .bg-gradient-to-br {
+    opacity: 0.46;
+  }
+
+  .theme-old-school-classic .text-\[\#edf2ed\],
+  .theme-old-school-classic .text-\[\#F8FAFC\],
+  .theme-old-school-classic .text-white {
+    color: #e3e9e4;
+  }
+
+  .theme-old-school-classic .text-\[\#b8c5bd\],
+  .theme-old-school-classic .text-\[\#CBD5E1\],
+  .theme-old-school-classic .text-slate-200,
+  .theme-old-school-classic .text-slate-300 {
+    color: #bec9c1;
+  }
+
+  .theme-old-school-classic .text-\[\#87988d\],
+  .theme-old-school-classic .text-\[\#94A3B8\],
+  .theme-old-school-classic .text-slate-400,
+  .theme-old-school-classic .text-slate-500 {
+    color: #8f9d93;
+  }
+
+  .theme-old-school-classic .bg-white\/10 {
+    background-color: rgba(219, 235, 224, 0.075);
+  }
+
+  .theme-old-school-classic .bg-white\/\[0\.06\],
+  .theme-old-school-classic .bg-white\/\[0\.04\] {
+    background-color: rgba(219, 235, 224, 0.055);
+  }
+
+  .theme-old-school-classic .border-white\/\[0\.12\],
+  .theme-old-school-classic .border-white\/\[0\.10\],
+  .theme-old-school-classic .border-white\/\[0\.08\] {
+    border-color: rgba(204, 218, 208, 0.10);
+  }
+
+  .theme-old-school-classic .shadow-green-500\/5,
+  .theme-old-school-classic .shadow-lg,
+  .theme-old-school-classic .shadow-xl,
+  .theme-old-school-classic .shadow-2xl {
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.16);
+  }
+
+  .theme-old-school-classic .glow-purple,
+  .theme-old-school-classic .shadow-purple-500\/20,
+  .theme-old-school-classic .shadow-purple-600\/20,
+  .theme-old-school-classic .shadow-\[0_0_24px_rgba\(168\,85\,247\,0\.25\)\],
+  .theme-old-school-classic .shadow-\[0_0_40px_rgba\(168\,85\,247\,0\.38\)\] {
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.26);
+  }
+
+  .theme-old-school-classic .text-purple-200\/\[0\.16\],
+  .theme-old-school-classic .text-purple-200\/\[0\.17\],
+  .theme-old-school-classic .text-purple-200\/\[0\.18\],
+  .theme-old-school-classic .text-purple-200\/\[0\.20\] {
+    color: rgba(190, 207, 196, 0.16);
+  }
+
+  .theme-old-school-classic .border-purple-200\/\[0\.14\],
+  .theme-old-school-classic .border-purple-200\/\[0\.18\] {
+    border-color: rgba(190, 207, 196, 0.16);
+  }
+
+  .theme-old-school-classic .bg-indigo-500\/10,
+  .theme-old-school-classic .bg-purple-500\/12,
+  .theme-old-school-classic .bg-violet-400\/10 {
+    background-color: rgba(134, 191, 154, 0.045);
+  }
+
+  .theme-old-school-classic .text-purple-400,
+  .theme-old-school-classic .text-purple-300 {
+    color: #9abfa4;
+  }
+
+  .theme-old-school-classic .hover\:text-purple-400:hover,
+  .theme-old-school-classic .hover\:text-purple-300:hover,
+  .theme-old-school-classic .hover\:text-purple-200:hover {
+    color: #b4d1bb;
+  }
+
+  .theme-old-school-classic .border-purple-500\/25,
+  .theme-old-school-classic .border-purple-500\/30,
+  .theme-old-school-classic .border-purple-500\/40 {
+    border-color: rgba(154, 191, 164, 0.26);
+  }
+
+  .theme-old-school-classic .hover\:border-purple-400\/30:hover,
+  .theme-old-school-classic .hover\:border-purple-400\/40:hover,
+  .theme-old-school-classic .hover\:border-purple-400\/50:hover,
+  .theme-old-school-classic .hover\:border-purple-500\/40:hover {
+    border-color: rgba(180, 209, 187, 0.42);
+  }
+
+  .theme-old-school-classic .bg-purple-500\/10,
+  .theme-old-school-classic .bg-purple-500\/15,
+  .theme-old-school-classic .bg-purple-500\/20,
+  .theme-old-school-classic .bg-purple-500\/25,
+  .theme-old-school-classic .bg-purple-500\/30,
+  .theme-old-school-classic .bg-purple-500\/80 {
+    background-color: rgba(126, 166, 137, 0.15);
+  }
+
+  .theme-old-school-classic .hover\:bg-purple-400:hover,
+  .theme-old-school-classic .hover\:bg-purple-500\/20:hover,
+  .theme-old-school-classic .hover\:bg-purple-500\/25:hover {
+    background-color: rgba(141, 181, 151, 0.24);
+  }
+
+  .theme-old-school-classic .bg-gradient-to-br {
+    background-image:
+      linear-gradient(135deg, rgba(132, 169, 142, 0.18), rgba(69, 92, 91, 0.12)),
+      linear-gradient(0deg, rgba(255, 255, 255, 0.018), transparent);
+    box-shadow: none;
+  }
+
+  .theme-old-school-classic .rounded-\[3\.5rem\],
+  .theme-old-school-classic .rounded-\[3rem\],
+  .theme-old-school-classic .rounded-\[2\.5rem\],
+  .theme-old-school-classic .rounded-\[2rem\],
+  .theme-old-school-classic .rounded-\[1\.8rem\] {
+    border-radius: 1rem;
+  }
+
+  .theme-old-school-classic .rounded-3xl,
+  .theme-old-school-classic .rounded-\[28px\],
+  .theme-old-school-classic .rounded-\[20px\],
+  .theme-old-school-classic .rounded-2xl {
+    border-radius: 0.85rem;
+  }
+
+  .theme-old-school-classic ::selection {
+    background: rgba(134, 191, 154, 0.22);
+  }
+
+  .theme-old-school-classic .custom-scrollbar::-webkit-scrollbar-track,
+  .theme-old-school-classic ::-webkit-scrollbar-track {
+    background: #071012;
+  }
+
+  .theme-old-school-classic .custom-scrollbar::-webkit-scrollbar-thumb,
+  .theme-old-school-classic ::-webkit-scrollbar-thumb {
+    background: rgba(134, 191, 154, 0.34);
+  }
+
+  .theme-old-school-classic .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+  .theme-old-school-classic ::-webkit-scrollbar-thumb:hover {
+    background: rgba(158, 204, 171, 0.52);
   }
 
   .custom-scrollbar::-webkit-scrollbar,

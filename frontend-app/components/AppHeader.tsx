@@ -45,30 +45,30 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   ];
 
   return (
-    <header className="fixed inset-x-0 top-0 z-30 h-[var(--app-header-height)] overflow-visible border-b border-white/10 bg-[#081229]/86 px-3 py-2.5 backdrop-blur-2xl sm:px-4 md:px-6 xl:px-8">
-      <div className="mx-auto flex h-full w-full max-w-[1500px] items-center gap-2 md:gap-3">
-        <div className="flex min-w-0 shrink-0 items-center gap-2 md:gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-purple-400 to-violet-700 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)]">
+    <header className={`fixed inset-x-0 top-0 z-30 h-[var(--app-header-height)] overflow-visible border-b px-3 py-2.5 sm:px-4 md:px-6 xl:px-8 ${theme.header}`}>
+      <div className="app-header-inner mx-auto flex h-full w-full max-w-[1500px] items-center gap-2 md:gap-3">
+        <div className="app-header-brand flex min-w-0 shrink-0 items-center gap-2 md:gap-3">
+          <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${theme.logo}`}>
             <Code2 className="h-4 w-4" />
           </div>
-          <span className="hidden truncate text-sm font-black tracking-normal text-[#F8FAFC] lg:block xl:text-base">
+          <span className={`hidden truncate text-sm font-black tracking-normal lg:block xl:text-base ${theme.brand}`}>
             DSA Pattern Tracker
           </span>
           <WakeBanner visible={isBackendWaking} />
         </div>
 
-        <nav className="relative z-10 flex h-11 shrink-0 items-center gap-1 sm:gap-1.5">
+        <nav className="app-header-nav relative z-10 flex h-11 shrink-0 items-center gap-1 sm:gap-1.5">
             {navItems.map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={item.onClick}
-                className={`relative h-9 shrink-0 overflow-hidden rounded-lg px-2.5 text-[11px] font-bold tracking-normal transition-colors sm:px-3.5 sm:text-xs md:px-4 ${item.active ? 'text-white' : 'text-[#CBD5E1] hover:text-white'}`}
+                className={`relative h-9 shrink-0 overflow-hidden rounded-lg px-2.5 text-[11px] font-bold tracking-normal transition-colors sm:px-3.5 sm:text-xs md:px-4 ${item.active ? theme.text : `${theme.subtle} hover:text-white`}`}
               >
                 {item.active && (
                   <motion.span
                     layoutId="app-header-active-tab"
-                    className="absolute inset-0 rounded-lg bg-purple-500/80 shadow-[0_0_24px_rgba(168,85,247,0.35)]"
+                    className={`absolute inset-0 rounded-lg ${theme.activeControl}`}
                     transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                   />
                 )}
@@ -77,9 +77,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             ))}
         </nav>
 
-        <div className="relative z-0 hidden min-w-0 flex-1 sm:block">{search}</div>
+        <div className="app-header-search relative z-0 hidden min-w-0 flex-1 sm:block">{search}</div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="app-header-actions ml-auto flex shrink-0 items-center gap-2">
           <div className="hidden h-11 items-center gap-2 lg:flex">
             {(Object.entries(globalStats) as [string, { total: number; solved: number }][]).map(([diff, data]) => (
               <GlobalStatBadge key={diff} diff={diff} solved={data.solved} total={data.total} />
