@@ -64,6 +64,12 @@ interface PendingProgressRow {
   metadata?: QuestionProgressMetadata;
 }
 
+interface SyllabusReturnState {
+  scrollTop: number | null;
+  sectionId: string;
+  patternId: string;
+}
+
 type CompanyBucketSections = Record<CompanyTimeFilter, Section[]>;
 
 const CATEGORY_OPTIONS = [
@@ -401,6 +407,8 @@ const App: React.FC = () => {
   const customSyncPromiseRef = useRef<Promise<void> | null>(null);
   const progressSyncHandleRef = useRef('');
   const customSyncHandleRef = useRef('');
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
+  const syllabusReturnRef = useRef<SyllabusReturnState | null>(null);
   const warmupPromiseRef = useRef<Promise<void> | null>(null);
   const loadedLocalHandleRef = useRef('');
   const activeHandleRef = useRef(normalizeHandle(handle));
@@ -1635,7 +1643,34 @@ const App: React.FC = () => {
     goRoulette();
   };
 
+  const restoreSyllabusPickerScroll = () => {
+    const returnState = syllabusReturnRef.current;
+    if (!returnState) return;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const scroller = mainScrollRef.current;
+        if (!scroller) return;
+
+        if (returnState.scrollTop !== null) {
+          scroller.scrollTo({ top: returnState.scrollTop, behavior: 'auto' });
+        } else {
+          const target = Array.from(scroller.querySelectorAll<HTMLElement>('[data-pattern-id]'))
+            .find((element) => element.dataset.sectionId === returnState.sectionId && element.dataset.patternId === returnState.patternId);
+          target?.scrollIntoView({ block: 'center' });
+        }
+
+        syllabusReturnRef.current = null;
+      });
+    });
+  };
+
   const selectPattern = (section: Section, pattern: Pattern) => {
+    syllabusReturnRef.current = {
+      scrollTop: mainScrollRef.current?.scrollTop ?? null,
+      sectionId: section.id,
+      patternId: pattern.id
+    };
     setSelectedSectionId(section.id);
     setSelectedPattern(pattern);
     goSyllabus();
@@ -1651,6 +1686,7 @@ const App: React.FC = () => {
   const backToPatternPicker = () => {
     setSelectedSectionId('');
     setSelectedPattern(EMPTY_PATTERN);
+    restoreSyllabusPickerScroll();
   };
 
   const backToCompanyPicker = () => {
@@ -1862,6 +1898,8 @@ const App: React.FC = () => {
                     <button
                       key={pattern.id}
                       onClick={() => selectPattern(section, pattern)}
+                      data-section-id={section.id}
+                      data-pattern-id={pattern.id}
                       className="glass-panel hover-lift h-[92px] rounded-[20px] border p-5 text-left"
                     >
                       <div className="flex h-full gap-3">
@@ -2162,7 +2200,7 @@ const App: React.FC = () => {
           }}
         />
 
-        <div className={`mt-[var(--app-header-height)] h-[calc(100dvh-var(--app-header-height))] overflow-y-auto overflow-x-hidden p-5 sm:p-6 md:p-10 xl:p-12 custom-scrollbar ${isOldSchool ? 'old-school-content-scroll' : ''}`}>
+        <div ref={mainScrollRef} className={`mt-[var(--app-header-height)] h-[calc(100dvh-var(--app-header-height))] overflow-y-auto overflow-x-hidden p-5 sm:p-6 md:p-10 xl:p-12 custom-scrollbar ${isOldSchool ? 'old-school-content-scroll' : ''}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={routeKey}
