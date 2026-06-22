@@ -463,6 +463,7 @@ const App: React.FC = () => {
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const syllabusReturnRef = useRef<SyllabusReturnState | null>(null);
   const loadedLocalHandleRef = useRef('');
+  const initialRemoteLoadHandleRef = useRef('');
   const activeHandleRef = useRef(normalizeHandle(handle));
   const tabIdRef = useRef(createTabId());
   const lastProgressRefreshAtRef = useRef(0);
@@ -504,6 +505,7 @@ const App: React.FC = () => {
     }
     pendingProgressRef.current = {};
     loadedLocalHandleRef.current = '';
+    initialRemoteLoadHandleRef.current = '';
     progressSyncHandleRef.current = '';
     progressFlushHandleRef.current = '';
     customSyncHandleRef.current = '';
@@ -1057,6 +1059,7 @@ const App: React.FC = () => {
     setSolutionNotePresenceMap({});
     pendingProgressRef.current = {};
     loadedLocalHandleRef.current = '';
+    initialRemoteLoadHandleRef.current = '';
     progressSyncHandleRef.current = '';
     progressFlushHandleRef.current = '';
     customSyncHandleRef.current = '';
@@ -1286,9 +1289,12 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (handle) {
-      if (loadedLocalHandleRef.current !== normalizeHandle(handle)) {
+      const normalizedHandle = normalizeHandle(handle);
+      if (loadedLocalHandleRef.current !== normalizedHandle) {
         loadUserLocalState(handle);
       }
+      if (initialRemoteLoadHandleRef.current === normalizedHandle) return;
+      initialRemoteLoadHandleRef.current = normalizedHandle;
       pullRelationalProgress(handle)
         .then(() => {
           if (Object.keys(pendingProgressRef.current).length > 0) {
@@ -1299,6 +1305,7 @@ const App: React.FC = () => {
       return;
     }
     loadedLocalHandleRef.current = '';
+    initialRemoteLoadHandleRef.current = '';
     pendingProgressRef.current = {};
     progressSyncHandleRef.current = '';
     progressFlushHandleRef.current = '';
