@@ -1,29 +1,30 @@
-# DSA Pattern Tracker Monorepo
+# DSA Pattern Tracker
 
-This repository is organized so each major component can be opened directly in its preferred IDE.
+A React + Vite app for tracking DSA pattern practice, LeetCode progress, company-tagged questions, and personal solution notes.
 
-## Folder layout
+The production app is deployed as a Vercel frontend with serverless API routes in `frontend-app/api`. The older Spring Boot backend remains in `backend-api/` for reference and local backend work, but the live app does not require it.
 
-- `frontend-app/` - React + Vite UI
-- `backend-api/` - Spring Boot 4 API
-- `tooling/shared-core/` - shared Java library for IDE plugins
-- `tooling/eclipse-plugin/` - STS/Eclipse PDE plugin
-- `tooling/intellij-plugin/` - IntelliJ SDK plugin bridge/reference
+## What It Does
 
-## Open in IDE
+- Tracks solved questions across the DSA syllabus.
+- Supports company question browsing with `All`, `30 Days`, `3 Months`, and `6 Months` filters.
+- Includes global question search by LeetCode ID or title.
+- Saves personal solution notes and lazy-loads note content when needed.
+- Shows official solution/hint/code content from generated static assets.
+- Supports two visual modes:
+  - Neo Glass
+  - Old School Classic
+- Requires login for progress, notes, and custom question changes.
+- Uses local-first progress updates with debounced batch sync to reduce Vercel function invocations.
 
-- IntelliJ IDEA:
-  - Open `frontend-app/` for frontend work, or
-  - Open `backend-api/` for backend work, or
-  - Open `tooling/` for shared/plugin Java code
-- STS/Eclipse:
-  - Import existing Maven project from `backend-api/`
-  - Import existing projects from `tooling/eclipse-plugin` and `tooling/shared-core`
-  - Use PDE target platform for Eclipse plugin dependencies
+## Repository Layout
 
-## Run locally
+- `frontend-app/` - React app, Vercel serverless API routes, static generated data.
+- `backend-api/` - Spring Boot API retained for backend/reference workflows.
+- `dev/` - database migration and generated-data helper scripts.
+- `tooling/` - shared/plugin reference code.
 
-Frontend:
+## Run Locally
 
 ```bash
 cd frontend-app
@@ -31,81 +32,95 @@ npm install
 npm run dev
 ```
 
-Set env first (see `frontend-app/.env.example`):
-- `VITE_API_BASE_URL`
+By default the frontend calls same-origin `/api/*` routes. For local experiments with a separate backend, set `VITE_API_BASE_URL` in `frontend-app/.env`.
 
-Backend:
-
-```bash
-cd backend-api
-mvn spring-boot:run
-```
-
-Set env first (choose Spring active profile `local` or `prod` in IDE/Run config):
-- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
-- `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`
-- `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`, `GOOGLE_APPLICATION_CREDENTIALS` (for future large object storage)
-
-Initialize Postgres schema before first backend run:
+Build:
 
 ```bash
-# one-time: copy/edit credentials file
-cp dev/.env.aiven.example dev/.env.aiven
-# then run init
-./dev/init-aiven-schema.sh
+cd frontend-app
+npm run build
 ```
 
-Seed question catalog from `frontend-app/constants.tsx`:
+## Vercel Deployment
+
+The Vercel project should use:
+
+- Framework: `vite`
+- Root directory: `frontend-app`
+- Production branch: `main`
+- Domain setup:
+  - `www.rahulchadgal.in`
+  - `rahulchadgal.in` redirecting to `www.rahulchadgal.in`
+
+Required Vercel environment variables:
+
+- `DB_PROVIDER`
+- `NEON_DATABASE_URL`
+- `AIVEN_DATABASE_URL`
+- `DATABASE_URL` or `DB_URL` as optional fallback
+- `AUTH_TOKEN_SECRET`
+- `ADMIN_ACCESS_KEY`
+- `CRON_SECRET`
+- `PG_USE_POOL`
+- `PG_POOL_MAX`
+- `PG_CONNECTION_TIMEOUT_MS`
+- `PG_IDLE_TIMEOUT_MS`
+
+Use pooled database URLs for serverless production where appropriate. Keep real env values in Vercel only; do not commit them.
+
+## API Routes
+
+Serverless routes live under `frontend-app/api`:
+
+- `GET /api/progress`
+- `POST /api/progress`
+- `GET /api/v2/questions`
+- `POST /api/v2/questions`
+- `GET/POST /api/auth`
+- `GET/POST /api/admin`
+- `GET /api/health/db`
+- `GET /api/cron/keep-db-awake`
+
+Progress writes support both single-row saves and batch saves through `POST /api/progress`.
+
+## Sync Model
+
+The app is local-first:
+
+- UI updates immediately.
+- Progress changes are stored in local pending cache.
+- Pending changes flush after a short debounce as a batch.
+- No continuous background polling is used.
+- On focus/visibility regain, the app only refreshes after a long stale window.
+- Multiple tabs coordinate through a lightweight localStorage lock.
+
+This is intentional to keep Vercel function invocations low.
+
+## Generated Static Data
+
+Company-bank data and official LeetCode solution data are static frontend assets:
+
+- `frontend-app/public/generated/company-questions.json`
+- `frontend-app/public/generated/leetcode-solutions.json`
+
+Refresh them with:
 
 ```bash
-./dev/seed-aiven-questions.sh
+node dev/generate-static-leetcode-data.mjs
 ```
 
-Migrate production data from Aiven to Neon:
+The generator expects sibling checkouts for the source LeetCode repos as documented inside the script.
+
+## Database Migration Helpers
+
+Migration scripts live in `dev/`, including Aiven-to-Neon helpers. Use the example env files as templates and keep real credentials out of Git.
 
 ```bash
 cp dev/.env.neon-migration.example dev/.env.neon-migration
-# Fill Aiven source URL plus Neon direct and pooled URLs.
 ./dev/migrate-aiven-to-neon.sh all
 ```
 
-Use the Neon direct URL for `pg_restore`, and use the Neon pooled URL as Vercel `DATABASE_URL` with `PG_USE_POOL=true`.
+## Notes
 
-Sync company question bank using protected API (no request params):
-
-```bash
-curl -X POST "http://localhost:3000/api/company/sync" \
-  -H "x-company-sync-secret: <COMPANY_SYNC_SECRET>"
-```
-
-Check sync status:
-
-```bash
-curl "http://localhost:3000/api/company/sync/status"
-```
-
-Required server env:
-- `COMPANY_SYNC_SECRET`
-
-Optional sync env:
-- `COMPANY_BANK_REPO_URL`
-- `COMPANY_BANK_REPO_BRANCH`
-- `COMPANY_BANK_REPO_CACHE_DIR`
-- `COMPANY_SYNC_COOLDOWN_MS`
-
-Recommended for managed DB environments:
-- set `HIBERNATE_DDL_AUTO=validate` after schema is initialized.
-
-Shared core build:
-
-```bash
-cd tooling
-mvn -pl shared-core -am clean install
-```
-
-Or use root helper scripts:
-
-```bash
-./dev/run-frontend.sh
-./dev/build-shared-core.sh
-```
+- `vercel-export-*/` folders are ignored because they can contain migration metadata and env values.
+- `backend-api/UIredisgn.md` is intentionally untracked unless explicitly committed later.

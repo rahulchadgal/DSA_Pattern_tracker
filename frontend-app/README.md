@@ -1,106 +1,132 @@
+# Frontend App
 
-# 🚀 Deployment Guide: DSA Pattern Tracker
+React + Vite frontend for DSA Pattern Tracker. This folder also owns the Vercel serverless API routes used by production.
 
-## Environment setup
+## App Features
 
-Client (`frontend-app/.env`):
-- `VITE_API_BASE_URL` (optional)
-  - Leave empty to use same-origin `/api/*` (Vercel serverless functions).
-  - Set `http://localhost:8888` only if you want to call Spring backend directly in local.
+- Syllabus pattern tracker with progress percentages.
+- Company-bank browser with search and time filters.
+- Global question search across syllabus and company data.
+- Roulette mode for random unsolved question selection.
+- Personal solution notes with lazy loading.
+- Official solution modal with question, hint, and Java solution views.
+- Dual UI themes:
+  - Neo Glass
+  - Old School Classic
+- Login-required progress, notes, and custom question workflows.
+- Local-first sync with debounced batch progress writes.
 
-Serverless (`Vercel Project > Settings > Environment Variables`):
-- `DB_PROVIDER=neon` or `DB_PROVIDER=aiven` to choose the active database
-- `NEON_DATABASE_URL` as the Neon pooled Postgres URL
-- `AIVEN_DATABASE_URL` as the Aiven Postgres URL
-- `DATABASE_URL` or `DB_URL` as optional backward-compatible fallback for the active database
-- `DB_USERNAME` and `DB_PASSWORD` when a JDBC-style `DB_URL` does not already include credentials
-- `ADMIN_ACCESS_KEY` for admin access
-- `CRON_SECRET` for the daily database keepalive cron
-- `PG_USE_POOL=true` only when the active database URL points to a pooled/PgBouncer URL
-- `PG_POOL_MAX=1` serverless-safe pool size
-- `PG_CONNECTION_TIMEOUT_MS=5000` and `PG_IDLE_TIMEOUT_MS=1000` to give auth enough time while still releasing idle DB connections quickly
-
-For Neon production on Vercel, use the Neon pooled connection string for `NEON_DATABASE_URL`. Admin login now includes a manual `Sync Active DB To Backup` button that copies `DB_PROVIDER`'s database into the inactive provider.
-
-Example serverless env file is available at `frontend-app/.env.server.example`.
-
-To get your app live on your **GoDaddy Domain** for free:
-
-## Step 1: Push to GitHub
-1. Create a new repository on [GitHub](https://github.com).
-2. Upload these files to the repository.
-
-## Step 2: Connect to Vercel (Free Hosting)
-1. Go to [Vercel.com](https://vercel.com) and sign up with GitHub.
-2. Click **"Add New"** > **"Project"**.
-3. Import your GitHub repository.
-4. Click **"Deploy"**. Your app is now live on a `.vercel.app` URL!
-
-## Step 3: Link your GoDaddy Domain
-1. In your Vercel Project dashboard, go to **Settings** > **Domains**.
-2. Type your GoDaddy domain (e.g., `www.yourname.com`) and click **Add**.
-3. Vercel will show you two DNS records (usually an **A record** and a **CNAME record**).
-4. Log into **GoDaddy** > **My Products** > **DNS Management** for your domain.
-5. **Update the records:**
-   - Change the `A` record `@` to point to the IP Vercel gave you.
-   - Change the `CNAME` record `www` to point to `cname.vercel-dns.com`.
-6. Wait 5-10 minutes. Your DSA tracker is now live on your personal site!
-
----
-
-### Why this setup?
-- **Fast:** Vercel uses a Global Edge Network (much faster than GoDaddy's servers).
-- **SSL Included:** You get a free Padlock (HTTPS) automatically.
-- **Auto-Update:** Whenever you change your code on GitHub, your website updates automatically.
-- **Zero Cost:** The hosting is free forever as long as you aren't getting millions of hits.
-
-## API routes now hosted in frontend deployment
-This app now includes Vercel serverless functions:
-- `GET /api/v2/questions`
-- `POST /api/v2/questions`
-- `GET /api/progress`
-- `POST /api/progress`
-- `GET /api/cron/keep-db-awake` (scheduled by Vercel Cron)
-- `GET/POST /api/auth`
-- `GET/POST /api/admin`
-- `POST /api/admin` with action `ensure-indexes` to run the admin-protected performance indexes once after database maintenance
-
-`backend-api/` is kept in the repo as-is, but frontend production can run independently via these serverless routes.
-
-## Vercel Cron Keepalive
-`frontend-app/vercel.json` registers one daily cron job at `0 3 * * *` UTC. It calls `/api/cron/keep-db-awake`, which runs `SELECT 1` against Postgres so the database receives a request every day.
-
-When `CRON_SECRET` is set in Vercel, Vercel automatically sends it as `Authorization: Bearer <CRON_SECRET>` for cron invocations.
-
-## Aiven To Neon Migration
-Use the helper script to move the full current Aiven `public` schema and data into Neon:
+## Local Development
 
 ```bash
-cp dev/.env.neon-migration.example dev/.env.neon-migration
-# Fill AIVEN_DATABASE_URL, NEON_DIRECT_DATABASE_URL, and NEON_POOLED_DATABASE_URL.
-./dev/migrate-aiven-to-neon.sh all
+npm install
+npm run dev
 ```
 
-The restore uses `NEON_DIRECT_DATABASE_URL`; Vercel production should use `NEON_POOLED_DATABASE_URL` with `PG_USE_POOL=true`.
-
-## Company Bank Filter
-Company-bank questions are rendered in the `Companies` route with:
-- company search
-- time filters (`All`, `30 Days`, `3 Months`, `6 Months`)
-- same question cards as Syllabus
-
-Filtering uses the generated static company question bank in `public/generated/company-questions.json`; database sync for company-bank data is handled outside Vercel serverless APIs.
-
-## Generated LeetCode Data
-Official solution content and company-bank data are static frontend assets so the 1 GB database can stay focused on users, progress, custom questions, and personal notes.
-
-Refresh generated data after updating the sibling source repos:
+The app defaults to same-origin `/api/*` calls, which matches Vercel. For a custom API base, create `frontend-app/.env`:
 
 ```bash
-cd /Users/rahulchadgal/WorkSpace/DSA_Pattern_tracker
+VITE_API_BASE_URL=
+```
+
+Build:
+
+```bash
+npm run build
+```
+
+## Vercel Settings
+
+Use these project settings:
+
+- Framework: `vite`
+- Root directory: `frontend-app`
+- Production branch: `main`
+- Cron file: `frontend-app/vercel.json`
+
+Domains:
+
+- `www.rahulchadgal.in`
+- `rahulchadgal.in` redirects to `www.rahulchadgal.in`
+
+## Environment Variables
+
+Set these in Vercel Project Settings:
+
+- `DB_PROVIDER`
+- `NEON_DATABASE_URL`
+- `AIVEN_DATABASE_URL`
+- `DATABASE_URL` or `DB_URL` as optional fallback
+- `AUTH_TOKEN_SECRET`
+- `ADMIN_ACCESS_KEY`
+- `CRON_SECRET`
+- `PG_USE_POOL`
+- `PG_POOL_MAX`
+- `PG_CONNECTION_TIMEOUT_MS`
+- `PG_IDLE_TIMEOUT_MS`
+
+Recommended serverless pool defaults:
+
+```bash
+PG_USE_POOL=true
+PG_POOL_MAX=1
+PG_CONNECTION_TIMEOUT_MS=5000
+PG_IDLE_TIMEOUT_MS=1000
+```
+
+Use Vercel's dashboard for real values. Do not commit secrets.
+
+## Serverless API Routes
+
+Routes are in `frontend-app/api`:
+
+- `GET /api/progress` - load progress rows.
+- `POST /api/progress` - save one progress row or `{ items: [...] }` batch.
+- `GET /api/v2/questions` - load custom questions.
+- `POST /api/v2/questions` - save custom questions.
+- `GET/POST /api/auth` - login/signup/session operations.
+- `GET/POST /api/admin` - admin users, indexes, database sync.
+- `GET /api/cron/keep-db-awake` - Vercel cron keepalive.
+- `GET /api/health/db` - DB health check.
+
+## Sync Behavior
+
+The frontend avoids continuous polling:
+
+- Progress changes update local UI immediately.
+- Pending changes are cached in localStorage.
+- Writes are batched after a short debounce.
+- Multiple tabs use a localStorage lock to avoid duplicate flushes.
+- Remote progress loads once per signed-in handle, then only on stale focus or manual retry.
+
+This keeps Vercel function invocation usage low.
+
+## Static Generated Data
+
+Generated assets are served from `public/generated`:
+
+- `company-questions.json`
+- `leetcode-solutions.json`
+
+Refresh after updating the sibling source repos:
+
+```bash
+cd ..
 node dev/generate-static-leetcode-data.mjs
 ```
 
-The generator expects these sibling checkouts by default:
-- `/Users/rahulchadgal/WorkSpace/leetcode`
-- `/Users/rahulchadgal/WorkSpace/leetcode-companywise-interview-questions`
+## Testing
+
+Production build check:
+
+```bash
+npm run build
+```
+
+Playwright tests/config are present for browser checks:
+
+```bash
+npx playwright test
+```
+
+Run Playwright only when local browser dependencies are available.
