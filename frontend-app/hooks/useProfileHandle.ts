@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 export const PROFILE_KEY = 'dsa-handle-v4';
 export const AUTH_SESSION_KEY = 'dsa-auth-session-v1';
@@ -35,7 +35,7 @@ export const useProfileHandle = () => {
   const [handle, setHandle] = useState<string>(initialHandle);
   const [showWelcome, setShowWelcome] = useState(false);
 
-  const persistHandle = (value: string, token?: string) => {
+  const persistHandle = useCallback((value: string, token?: string) => {
     const normalized = value.trim().toLowerCase();
     setHandle(normalized);
     localStorage.setItem(PROFILE_KEY, normalized);
@@ -44,14 +44,14 @@ export const useProfileHandle = () => {
     }
     setShowWelcome(false);
     return normalized;
-  };
+  }, []);
 
-  const clearHandle = () => {
+  const clearHandle = useCallback(() => {
     setHandle('');
     localStorage.removeItem(PROFILE_KEY);
     localStorage.removeItem(AUTH_SESSION_KEY);
     setShowWelcome(true);
-  };
+  }, []);
 
   return {
     handle,
