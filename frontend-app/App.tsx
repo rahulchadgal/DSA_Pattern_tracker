@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sparkles, Terminal } from 'lucide-react';
-import { AdminUserRow, backendApi, CompanyQuestionRow, QuestionV2Row, subscribeBackendWakeStatus } from './lib/backendApi';
+import { backendApi, subscribeBackendWakeStatus } from './lib/backendApi';
+import type { AdminUserRow, CompanyQuestionRow, ProgressRow, ProgressUpsertPayload, QuestionV2Row } from './lib/backendApi';
 import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
@@ -29,7 +30,11 @@ const CUSTOM_QUESTIONS_CACHE_PREFIX = 'dsa-custom-questions-v1';
 const ADMIN_SESSION_KEY = 'dsa-admin-session-v1';
 const THEME_MODE_KEY = 'dsa-theme-mode-v1';
 const DB_SYNC_COOLDOWN_MS = 60_000;
-const REMOTE_PROGRESS_POLL_MS = 90_000;
+const PROGRESS_FLUSH_DEBOUNCE_MS = 5_000;
+const PROGRESS_SYNC_LOCK_PREFIX = 'dsa-progress-sync-lock-v1';
+const PROGRESS_SYNC_EVENT_KEY = 'dsa-progress-sync-event-v1';
+const PROGRESS_SYNC_LOCK_TTL_MS = 20_000;
+const STALE_PROGRESS_REFRESH_MS = 15 * 60_000;
 
 type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
 type AuthMode = 'login' | 'signup' | 'admin';
@@ -62,6 +67,12 @@ interface PendingProgressRow {
   solutionRichText?: string | null;
   updatedAt: string;
   metadata?: QuestionProgressMetadata;
+}
+
+interface SyllabusReturnState {
+  scrollTop: number | null;
+  sectionId: string;
+  patternId: string;
 }
 
 type CompanyBucketSections = Record<CompanyTimeFilter, Section[]>;
@@ -252,6 +263,51 @@ const writeUserPendingProgressCache = (userHandle: string, rows: Record<string, 
   localStorage.setItem(userCacheKey(PENDING_PROGRESS_PREFIX, normalizedHandle), JSON.stringify(rows));
 };
 
+const createTabId = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+const progressSyncLockKey = (userHandle: string) => userCacheKey(PROGRESS_SYNC_LOCK_PREFIX, userHandle);
+
+const tryAcquireProgressSyncLock = (userHandle: string, ownerId: string) => {
+  const key = progressSyncLockKey(userHandle);
+  const now = Date.now();
+  try {
+    const current = JSON.parse(localStorage.getItem(key) || '{}') as { ownerId?: string; expiresAt?: number };
+    if (current.ownerId && current.ownerId !== ownerId && Number(current.expiresAt || 0) > now) {
+      return false;
+    }
+    localStorage.setItem(key, JSON.stringify({ ownerId, expiresAt: now + PROGRESS_SYNC_LOCK_TTL_MS }));
+    return true;
+  } catch {
+    localStorage.setItem(key, JSON.stringify({ ownerId, expiresAt: now + PROGRESS_SYNC_LOCK_TTL_MS }));
+    return true;
+  }
+};
+
+const releaseProgressSyncLock = (userHandle: string, ownerId: string) => {
+  const key = progressSyncLockKey(userHandle);
+  try {
+    const current = JSON.parse(localStorage.getItem(key) || '{}') as { ownerId?: string };
+    if (!current.ownerId || current.ownerId === ownerId) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    localStorage.removeItem(key);
+  }
+};
+
+const publishProgressSyncEvent = (userHandle: string, items: Array<{ leetcodeId: string; updatedAt: string }>) => {
+  localStorage.setItem(PROGRESS_SYNC_EVENT_KEY, JSON.stringify({
+    handle: normalizeHandle(userHandle),
+    items,
+    emittedAt: Date.now()
+  }));
+};
+
 const cloneSections = (sections: Section[]): Section[] => JSON.parse(JSON.stringify(sections));
 const getInitialSections = (): Section[] => cloneSections(DSA_DATA);
 
@@ -398,12 +454,18 @@ const App: React.FC = () => {
   const loadedEditorQuestionRef = useRef('');
   const pendingProgressRef = useRef<Record<string, PendingProgressRow>>({});
   const progressSyncPromiseRef = useRef<Promise<void> | null>(null);
+  const progressFlushPromiseRef = useRef<Promise<void> | null>(null);
+  const progressFlushTimerRef = useRef<number | undefined>(undefined);
+  const progressFlushHandleRef = useRef('');
   const customSyncPromiseRef = useRef<Promise<void> | null>(null);
   const progressSyncHandleRef = useRef('');
   const customSyncHandleRef = useRef('');
-  const warmupPromiseRef = useRef<Promise<void> | null>(null);
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
+  const syllabusReturnRef = useRef<SyllabusReturnState | null>(null);
   const loadedLocalHandleRef = useRef('');
   const activeHandleRef = useRef(normalizeHandle(handle));
+  const tabIdRef = useRef(createTabId());
+  const lastProgressRefreshAtRef = useRef(0);
   const lastServerProgressMetaRef = useRef<{ latestUpdatedAt: string | null; rowCount: number; completedCount: number } | null>(null);
   const routeModeRef = useRef(isProfile ? 'companies' : isRoulette ? 'roulette' : 'main');
   const lastDbSyncFailureAtRef = useRef(0);
@@ -436,9 +498,14 @@ const App: React.FC = () => {
     setAuthPassword('');
     setAuthError(message);
     setSyncStatus('signed-out');
+    if (progressFlushTimerRef.current) {
+      window.clearTimeout(progressFlushTimerRef.current);
+      progressFlushTimerRef.current = undefined;
+    }
     pendingProgressRef.current = {};
     loadedLocalHandleRef.current = '';
     progressSyncHandleRef.current = '';
+    progressFlushHandleRef.current = '';
     customSyncHandleRef.current = '';
     lastServerProgressMetaRef.current = null;
     setCompletedMap({});
@@ -450,23 +517,15 @@ const App: React.FC = () => {
     activeHandleRef.current = normalizeHandle(handle);
   }, [handle]);
 
+  useEffect(() => {
+    if (handle && backendApi.hasAuthSession()) return;
+    setAuthMode('login');
+    setShowWelcome(true);
+  }, [handle, setShowWelcome]);
+
   const markDbSyncUnavailable = useCallback(() => {
     lastDbSyncFailureAtRef.current = Date.now();
     setSyncStatus('paused');
-  }, []);
-
-  const warmDatabaseOnce = useCallback(() => {
-    if (warmupPromiseRef.current) return warmupPromiseRef.current;
-    const warmupPromise = backendApi.warmDatabase()
-      .then(() => undefined)
-      .catch(() => undefined)
-      .finally(() => {
-        if (warmupPromiseRef.current === warmupPromise) {
-          warmupPromiseRef.current = null;
-        }
-      });
-    warmupPromiseRef.current = warmupPromise;
-    return warmupPromise;
   }, []);
 
   const pullBaseQuestions = useCallback(async () => {
@@ -491,7 +550,7 @@ const App: React.FC = () => {
     const cachedSolutions = readUserSolutionCache(normalizedHandle);
     Object.entries(pendingProgressRef.current).forEach(([leetcodeId, pending]) => {
       if (pending.completed) {
-        cachedCompleted[leetcodeId] = cachedCompleted[leetcodeId] || pending.updatedAt;
+        cachedCompleted[leetcodeId] = pending.updatedAt;
       } else {
         delete cachedCompleted[leetcodeId];
       }
@@ -507,6 +566,197 @@ const App: React.FC = () => {
     applyCustomRowsToSections(readUserCustomQuestionCache(normalizedHandle));
     loadedLocalHandleRef.current = normalizedHandle;
   }, [applyCustomRowsToSections]);
+
+  const buildPendingProgressPayloads = (pendingRows: Record<string, PendingProgressRow>): ProgressUpsertPayload[] => {
+    return Object.entries(pendingRows).map(([leetcodeId, pending]) => ({
+      handle: activeHandleRef.current,
+      leetcodeId,
+      completed: pending.completed,
+      ...(Object.prototype.hasOwnProperty.call(pending, 'solutionText') ? { solutionText: pending.solutionText ?? null } : {}),
+      title: pending.metadata?.title,
+      difficulty: pending.metadata?.difficulty,
+      link: pending.metadata?.link,
+      mainPattern: pending.metadata?.mainPattern,
+      subPattern: pending.metadata?.subPattern,
+      metadataJson: pending.metadata?.metadataJson ?? null
+    }));
+  };
+
+  const mergePendingProgressIntoState = useCallback((normalizedHandle: string, pendingRows: Record<string, PendingProgressRow>) => {
+    setCompletedMap(prev => {
+      const next = { ...prev };
+      Object.entries(pendingRows).forEach(([leetcodeId, pending]) => {
+        if (pending.completed) {
+          next[leetcodeId] = pending.updatedAt;
+        } else {
+          delete next[leetcodeId];
+        }
+      });
+      writeUserMapCache(PROGRESS_CACHE_PREFIX, normalizedHandle, next);
+      return next;
+    });
+
+    setSolutionMap(prev => {
+      const next = { ...prev };
+      Object.entries(pendingRows).forEach(([leetcodeId, pending]) => {
+        if (!Object.prototype.hasOwnProperty.call(pending, 'solutionText')) return;
+        if (pending.solutionText && pending.solutionText.trim().length > 0) {
+          next[leetcodeId] = pending.solutionText;
+        } else {
+          delete next[leetcodeId];
+        }
+      });
+      writeUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, next);
+      return next;
+    });
+
+    setSolutionNotePresenceMap(prev => {
+      const next = { ...prev };
+      Object.entries(pendingRows).forEach(([leetcodeId, pending]) => {
+        if (!Object.prototype.hasOwnProperty.call(pending, 'solutionText')) return;
+        if (pending.solutionText && pending.solutionText.trim().length > 0) {
+          next[leetcodeId] = true;
+        } else {
+          delete next[leetcodeId];
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  const applySavedProgressRows = useCallback((normalizedHandle: string, rows: ProgressRow[], skipPendingIds = new Set<string>()) => {
+    if (rows.length === 0) return;
+
+    setCompletedMap(prev => {
+      const next = { ...prev };
+      rows.forEach((row) => {
+        const leetcodeId = normalizeQuestionId(row.leetcodeId);
+        if (skipPendingIds.has(leetcodeId)) return;
+        if (row.completed) {
+          next[leetcodeId] = row.updatedAt;
+        } else {
+          delete next[leetcodeId];
+        }
+      });
+      writeUserMapCache(PROGRESS_CACHE_PREFIX, normalizedHandle, next);
+      return next;
+    });
+
+    setSolutionMap(prev => {
+      const next = { ...prev };
+      rows.forEach((row) => {
+        const leetcodeId = normalizeQuestionId(row.leetcodeId);
+        if (skipPendingIds.has(leetcodeId)) return;
+        const rowSolutionText = row.solutionText || (row.solutionRichText ? normalizeSolutionText(row.solutionRichText) : '');
+        if (rowSolutionText && rowSolutionText.trim().length > 0) {
+          next[leetcodeId] = rowSolutionText;
+        } else if (Object.prototype.hasOwnProperty.call(row, 'solutionText') || Object.prototype.hasOwnProperty.call(row, 'solutionRichText')) {
+          delete next[leetcodeId];
+        }
+      });
+      writeUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, next);
+      return next;
+    });
+
+    setSolutionNotePresenceMap(prev => {
+      const next = { ...prev };
+      rows.forEach((row) => {
+        const leetcodeId = normalizeQuestionId(row.leetcodeId);
+        if (skipPendingIds.has(leetcodeId)) return;
+        if (row.hasSolutionNote) {
+          next[leetcodeId] = true;
+        } else if (Object.prototype.hasOwnProperty.call(row, 'solutionText') || Object.prototype.hasOwnProperty.call(row, 'solutionRichText')) {
+          delete next[leetcodeId];
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  const flushPendingProgress = useCallback((userHandle: string) => {
+    const normalizedHandle = normalizeHandle(userHandle);
+    if (!normalizedHandle || !backendApi.hasAuthSession()) {
+      setSyncStatus('signed-out');
+      return Promise.resolve();
+    }
+    if (progressFlushPromiseRef.current && progressFlushHandleRef.current === normalizedHandle) {
+      return progressFlushPromiseRef.current;
+    }
+    if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) {
+      setSyncStatus('paused');
+      return Promise.resolve();
+    }
+    const cachedPending = readUserPendingProgressCache(normalizedHandle);
+    pendingProgressRef.current = { ...cachedPending, ...pendingProgressRef.current };
+    const snapshot = { ...pendingProgressRef.current };
+    const payloads = buildPendingProgressPayloads(snapshot);
+    if (payloads.length === 0) {
+      setSyncStatus('synced');
+      return Promise.resolve();
+    }
+    if (!tryAcquireProgressSyncLock(normalizedHandle, tabIdRef.current)) {
+      setSyncStatus('paused');
+      return Promise.resolve();
+    }
+
+    let syncPromise: Promise<void> | null = null;
+    syncPromise = (async () => {
+      setSyncStatus('syncing');
+      try {
+        const savedRows = await backendApi.upsertProgressBatch(payloads);
+        const latestPending = {
+          ...readUserPendingProgressCache(normalizedHandle),
+          ...pendingProgressRef.current
+        };
+        const syncedItems: Array<{ leetcodeId: string; updatedAt: string }> = [];
+        savedRows.forEach((row) => {
+          const leetcodeId = normalizeQuestionId(row.leetcodeId);
+          const sent = snapshot[leetcodeId];
+          if (sent && latestPending[leetcodeId]?.updatedAt === sent.updatedAt) {
+            delete latestPending[leetcodeId];
+            syncedItems.push({ leetcodeId, updatedAt: sent.updatedAt });
+          }
+        });
+
+        pendingProgressRef.current = latestPending;
+        writeUserPendingProgressCache(normalizedHandle, latestPending);
+        applySavedProgressRows(normalizedHandle, savedRows, new Set(Object.keys(latestPending)));
+        if (syncedItems.length > 0) {
+          publishProgressSyncEvent(normalizedHandle, syncedItems);
+        }
+        setSyncStatus(Object.keys(latestPending).length === 0 ? 'synced' : 'paused');
+      } catch (error) {
+        if (isAuthFailure(error)) {
+          clearExpiredUserSession();
+          return;
+        }
+        lastDbSyncFailureAtRef.current = Date.now();
+        setSyncStatus('error');
+      } finally {
+        releaseProgressSyncLock(normalizedHandle, tabIdRef.current);
+        if (syncPromise && progressFlushPromiseRef.current === syncPromise) {
+          progressFlushPromiseRef.current = null;
+          progressFlushHandleRef.current = '';
+        }
+      }
+    })();
+
+    progressFlushPromiseRef.current = syncPromise;
+    progressFlushHandleRef.current = normalizedHandle;
+    return syncPromise;
+  }, [applySavedProgressRows, clearExpiredUserSession]);
+
+  const schedulePendingProgressFlush = useCallback((userHandle: string, delay = PROGRESS_FLUSH_DEBOUNCE_MS) => {
+    const normalizedHandle = normalizeHandle(userHandle);
+    if (!normalizedHandle || !backendApi.hasAuthSession()) return;
+    if (progressFlushTimerRef.current) {
+      window.clearTimeout(progressFlushTimerRef.current);
+    }
+    progressFlushTimerRef.current = window.setTimeout(() => {
+      progressFlushTimerRef.current = undefined;
+      flushPendingProgress(normalizedHandle);
+    }, delay);
+  }, [flushPendingProgress]);
 
   const pullRelationalProgress = useCallback((userHandle: string) => {
     const normalizedHandle = normalizeHandle(userHandle);
@@ -550,7 +800,7 @@ const App: React.FC = () => {
         });
         Object.entries(pendingProgressRef.current).forEach(([leetcodeId, pending]) => {
           if (pending.completed) {
-            completionMap[leetcodeId] = completionMap[leetcodeId] || new Date().toISOString();
+            completionMap[leetcodeId] = pending.updatedAt;
           } else {
             delete completionMap[leetcodeId];
           }
@@ -575,6 +825,7 @@ const App: React.FC = () => {
         setSolutionNotePresenceMap(nextNotePresenceMap);
         writeUserMapCache(PROGRESS_CACHE_PREFIX, normalizedHandle, completionMap);
         writeUserMapCache(SOLUTION_CACHE_PREFIX, normalizedHandle, nextSolutionMap);
+        lastProgressRefreshAtRef.current = Date.now();
         lastServerProgressMetaRef.current = {
           latestUpdatedAt: rows.reduce<string | null>((latest, row) => {
             if (!row.updatedAt) return latest;
@@ -583,24 +834,6 @@ const App: React.FC = () => {
           rowCount: rows.length,
           completedCount: rows.filter(row => row.completed).length
         };
-
-        const pendingEntries = Object.entries(pendingProgressRef.current);
-        for (const [leetcodeId, pending] of pendingEntries) {
-          await backendApi.upsertProgress({
-            handle: normalizedHandle,
-            leetcodeId,
-            completed: pending.completed,
-            ...(Object.prototype.hasOwnProperty.call(pending, 'solutionText') ? { solutionText: pending.solutionText ?? null } : {}),
-            title: pending.metadata?.title,
-            difficulty: pending.metadata?.difficulty,
-            link: pending.metadata?.link,
-            mainPattern: pending.metadata?.mainPattern,
-            subPattern: pending.metadata?.subPattern,
-            metadataJson: pending.metadata?.metadataJson ?? null
-          });
-          delete pendingProgressRef.current[leetcodeId];
-          writeUserPendingProgressCache(normalizedHandle, pendingProgressRef.current);
-        }
 
         setSyncStatus(Object.keys(pendingProgressRef.current).length === 0 ? 'synced' : 'paused');
       } catch (error) {
@@ -640,39 +873,9 @@ const App: React.FC = () => {
       metadata
     };
     writeUserPendingProgressCache(normalizedHandle, pendingProgressRef.current);
+    mergePendingProgressIntoState(normalizedHandle, pendingProgressRef.current);
     setSyncStatus('syncing');
-    try {
-      const saved = await backendApi.upsertProgress({
-        handle: normalizedHandle,
-        leetcodeId,
-        completed: isChecked,
-        ...(solutionText !== undefined ? { solutionText: solutionText ?? null } : {}),
-        title: metadata?.title,
-        difficulty: metadata?.difficulty,
-        link: metadata?.link,
-        mainPattern: metadata?.mainPattern,
-        subPattern: metadata?.subPattern,
-        metadataJson: metadata?.metadataJson ?? null
-      });
-      if (saved.updatedAt) {
-        const previous = lastServerProgressMetaRef.current;
-        lastServerProgressMetaRef.current = {
-          latestUpdatedAt: !previous?.latestUpdatedAt || saved.updatedAt > previous.latestUpdatedAt ? saved.updatedAt : previous.latestUpdatedAt,
-          rowCount: previous?.rowCount || 0,
-          completedCount: previous?.completedCount || 0
-        };
-      }
-      delete pendingProgressRef.current[leetcodeId];
-      writeUserPendingProgressCache(normalizedHandle, pendingProgressRef.current);
-      setSyncStatus('synced');
-    } catch (e) {
-      if (isAuthFailure(e)) {
-        clearExpiredUserSession();
-        return;
-      }
-      lastDbSyncFailureAtRef.current = Date.now();
-      setSyncStatus('error');
-    }
+    schedulePendingProgressFlush(normalizedHandle);
   };
 
 
@@ -842,6 +1045,10 @@ const App: React.FC = () => {
   const logout = () => {
     backendApi.clearAuthSession();
     clearHandle();
+    if (progressFlushTimerRef.current) {
+      window.clearTimeout(progressFlushTimerRef.current);
+      progressFlushTimerRef.current = undefined;
+    }
     setAuthUsername('');
     setAuthPassword('');
     setSyncStatus('signed-out');
@@ -851,6 +1058,7 @@ const App: React.FC = () => {
     pendingProgressRef.current = {};
     loadedLocalHandleRef.current = '';
     progressSyncHandleRef.current = '';
+    progressFlushHandleRef.current = '';
     customSyncHandleRef.current = '';
     lastServerProgressMetaRef.current = null;
     setSectionsData(cloneSections(baseSectionsData));
@@ -905,7 +1113,7 @@ const App: React.FC = () => {
         writeUserCustomQuestionCache(normalizedHandle, normalizedRows);
         if (activeHandleRef.current === normalizedHandle) {
           applyCustomRowsToSections(normalizedRows);
-          setSyncStatus('synced');
+          setSyncStatus(Object.keys(pendingProgressRef.current).length === 0 ? 'synced' : 'paused');
         }
       } catch (error) {
         if (isAuthFailure(error)) {
@@ -976,6 +1184,7 @@ const App: React.FC = () => {
 
   const handleClassifyQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireSignedIn('Please log in before adding questions.')) return;
     if (!questionIdInput.trim()) return;
     setIsClassifying(true);
     const suggestion = await mockClassifyQuestion(questionIdInput);
@@ -985,6 +1194,7 @@ const App: React.FC = () => {
   };
 
   const handleSaveNewQuestion = async () => {
+    if (!requireSignedIn('Please log in before saving questions.')) return;
     if (!aiSuggestion || !handle) return;
     setIsSavingQuestion(true);
 
@@ -1058,12 +1268,6 @@ const App: React.FC = () => {
   }, [pullCompanyBucketMetadata]);
 
   useEffect(() => {
-    if (showWelcome) {
-      warmDatabaseOnce();
-    }
-  }, [showWelcome, warmDatabaseOnce]);
-
-  useEffect(() => {
     const nextRouteMode = isProfile ? 'companies' : isRoulette ? 'roulette' : 'main';
     if (routeModeRef.current === nextRouteMode) return;
     const previousRouteMode = routeModeRef.current;
@@ -1085,12 +1289,19 @@ const App: React.FC = () => {
       if (loadedLocalHandleRef.current !== normalizeHandle(handle)) {
         loadUserLocalState(handle);
       }
-      pullRelationalProgress(handle).then(() => pullCustomQuestions(handle));
+      pullRelationalProgress(handle)
+        .then(() => {
+          if (Object.keys(pendingProgressRef.current).length > 0) {
+            schedulePendingProgressFlush(handle, 0);
+          }
+        })
+        .then(() => pullCustomQuestions(handle));
       return;
     }
     loadedLocalHandleRef.current = '';
     pendingProgressRef.current = {};
     progressSyncHandleRef.current = '';
+    progressFlushHandleRef.current = '';
     customSyncHandleRef.current = '';
     lastServerProgressMetaRef.current = null;
     setCompletedMap({});
@@ -1098,30 +1309,25 @@ const App: React.FC = () => {
     setSolutionNotePresenceMap({});
     setSectionsData(cloneSections(baseSectionsData));
     setSyncStatus('signed-out');
-  }, [handle, loadUserLocalState, pullRelationalProgress, pullCustomQuestions, baseSectionsData]);
+  }, [handle, loadUserLocalState, pullRelationalProgress, pullCustomQuestions, baseSectionsData, schedulePendingProgressFlush]);
 
   useEffect(() => {
     if (!handle || !backendApi.hasAuthSession()) return;
     const normalizedHandle = normalizeHandle(handle);
 
-    const checkRemoteProgress = async () => {
+    const refreshIfStale = async () => {
       if (document.visibilityState !== 'visible') return;
-      if (progressSyncPromiseRef.current || Object.keys(pendingProgressRef.current).length > 0) return;
+      if (Date.now() - lastProgressRefreshAtRef.current < STALE_PROGRESS_REFRESH_MS) return;
+      if (progressSyncPromiseRef.current || progressFlushPromiseRef.current) return;
+      if (Object.keys(pendingProgressRef.current).length > 0) {
+        schedulePendingProgressFlush(normalizedHandle, 0);
+        return;
+      }
       if (Date.now() - lastDbSyncFailureAtRef.current < DB_SYNC_COOLDOWN_MS) return;
 
       try {
-        const meta = await backendApi.getProgressMeta();
         if (activeHandleRef.current !== normalizedHandle) return;
-        const previous = lastServerProgressMetaRef.current;
-        const changed = Boolean(previous && (
-          previous.latestUpdatedAt !== meta.latestUpdatedAt ||
-          previous.rowCount !== meta.rowCount ||
-          previous.completedCount !== meta.completedCount
-        ));
-        lastServerProgressMetaRef.current = meta;
-        if (changed) {
-          await pullRelationalProgress(normalizedHandle);
-        }
+        await pullRelationalProgress(normalizedHandle);
       } catch (error) {
         if (isAuthFailure(error)) {
           clearExpiredUserSession();
@@ -1131,9 +1337,56 @@ const App: React.FC = () => {
       }
     };
 
-    const intervalId = window.setInterval(checkRemoteProgress, REMOTE_PROGRESS_POLL_MS);
-    return () => window.clearInterval(intervalId);
-  }, [handle, pullRelationalProgress, clearExpiredUserSession, markDbSyncUnavailable]);
+    document.addEventListener('visibilitychange', refreshIfStale);
+    window.addEventListener('focus', refreshIfStale);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfStale);
+      window.removeEventListener('focus', refreshIfStale);
+    };
+  }, [handle, pullRelationalProgress, clearExpiredUserSession, markDbSyncUnavailable, schedulePendingProgressFlush]);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== PROGRESS_SYNC_EVENT_KEY || !event.newValue || !handle) return;
+      let payload: { handle?: string; items?: Array<{ leetcodeId?: string; updatedAt?: string }> };
+      try {
+        payload = JSON.parse(event.newValue);
+      } catch {
+        return;
+      }
+      const normalizedHandle = normalizeHandle(handle);
+      if (payload.handle !== normalizedHandle || !Array.isArray(payload.items)) return;
+
+      const latestPending = {
+        ...readUserPendingProgressCache(normalizedHandle),
+        ...pendingProgressRef.current
+      };
+      let changed = false;
+      payload.items.forEach((item) => {
+        const leetcodeId = normalizeQuestionId(item.leetcodeId || '');
+        if (!leetcodeId || !item.updatedAt) return;
+        if (latestPending[leetcodeId]?.updatedAt === item.updatedAt) {
+          delete latestPending[leetcodeId];
+          changed = true;
+        }
+      });
+      if (!changed) return;
+      pendingProgressRef.current = latestPending;
+      writeUserPendingProgressCache(normalizedHandle, latestPending);
+      setSyncStatus(Object.keys(latestPending).length === 0 ? 'synced' : 'paused');
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [handle]);
+
+  useEffect(() => {
+    return () => {
+      if (progressFlushTimerRef.current) {
+        window.clearTimeout(progressFlushTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (handle && loadedLocalHandleRef.current === normalizeHandle(handle)) {
@@ -1257,7 +1510,17 @@ const App: React.FC = () => {
     };
   };
 
+  const requireSignedIn = (message = 'Please log in to save progress and notes.') => {
+    if (handle && backendApi.hasAuthSession()) return true;
+    setAuthMode('login');
+    setAuthError(message);
+    setShowWelcome(true);
+    setSyncStatus('signed-out');
+    return false;
+  };
+
   const toggleQuestion = (question: Question) => {
+    if (!requireSignedIn('Please log in before marking questions.')) return;
     const questionId = normalizeQuestionId(question.id);
     const isNowChecked = !completedMap[questionId];
     const timestamp = new Date().toISOString();
@@ -1279,6 +1542,7 @@ const App: React.FC = () => {
   };
 
   const openSolutionEditor = (question: Question) => {
+    if (!requireSignedIn('Please log in before editing solution notes.')) return;
     setEditingSolutionQuestion(question);
   };
 
@@ -1327,6 +1591,7 @@ const App: React.FC = () => {
 
   const saveSolutionNote = async () => {
     if (!editingSolutionQuestion) return;
+    if (!requireSignedIn('Please log in before saving solution notes.')) return;
 
     const questionId = normalizeQuestionId(editingSolutionQuestion.id);
     const nextText = solutionEditorValue.trim();
@@ -1635,7 +1900,34 @@ const App: React.FC = () => {
     goRoulette();
   };
 
+  const restoreSyllabusPickerScroll = () => {
+    const returnState = syllabusReturnRef.current;
+    if (!returnState) return;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const scroller = mainScrollRef.current;
+        if (!scroller) return;
+
+        if (returnState.scrollTop !== null) {
+          scroller.scrollTo({ top: returnState.scrollTop, behavior: 'auto' });
+        } else {
+          const target = Array.from(scroller.querySelectorAll<HTMLElement>('[data-pattern-id]'))
+            .find((element) => element.dataset.sectionId === returnState.sectionId && element.dataset.patternId === returnState.patternId);
+          target?.scrollIntoView({ block: 'center' });
+        }
+
+        syllabusReturnRef.current = null;
+      });
+    });
+  };
+
   const selectPattern = (section: Section, pattern: Pattern) => {
+    syllabusReturnRef.current = {
+      scrollTop: mainScrollRef.current?.scrollTop ?? null,
+      sectionId: section.id,
+      patternId: pattern.id
+    };
     setSelectedSectionId(section.id);
     setSelectedPattern(pattern);
     goSyllabus();
@@ -1651,6 +1943,7 @@ const App: React.FC = () => {
   const backToPatternPicker = () => {
     setSelectedSectionId('');
     setSelectedPattern(EMPTY_PATTERN);
+    restoreSyllabusPickerScroll();
   };
 
   const backToCompanyPicker = () => {
@@ -1695,6 +1988,27 @@ const App: React.FC = () => {
 
   const toggleThemeMode = () => {
     setThemeMode((current) => current === 'old-school-classic' ? 'neo-glass' : 'old-school-classic');
+  };
+
+  const handleSyncStatusClick = () => {
+    if (!handle || !backendApi.hasAuthSession()) {
+      setAuthMode('login');
+      setShowWelcome(true);
+      return;
+    }
+    const normalizedHandle = normalizeHandle(handle);
+    const pendingRows = {
+      ...readUserPendingProgressCache(normalizedHandle),
+      ...pendingProgressRef.current
+    };
+    const shouldRetrySync = Object.keys(pendingRows).length > 0 || syncStatus === 'error' || syncStatus === 'paused';
+    if (!shouldRetrySync) {
+      setAuthMode('login');
+      setShowWelcome(true);
+      return;
+    }
+    lastDbSyncFailureAtRef.current = 0;
+    flushPendingProgress(handle);
   };
 
   const renderQuestionGrid = (showCompanyFilters: boolean) => (
@@ -1862,6 +2176,8 @@ const App: React.FC = () => {
                     <button
                       key={pattern.id}
                       onClick={() => selectPattern(section, pattern)}
+                      data-section-id={section.id}
+                      data-pattern-id={pattern.id}
                       className="glass-panel hover-lift h-[92px] rounded-[20px] border p-5 text-left"
                     >
                       <div className="flex h-full gap-3">
@@ -2160,9 +2476,10 @@ const App: React.FC = () => {
             setAuthMode('login');
             setShowWelcome(true);
           }}
+          onSyncStatusClick={handleSyncStatusClick}
         />
 
-        <div className={`mt-[var(--app-header-height)] h-[calc(100dvh-var(--app-header-height))] overflow-y-auto overflow-x-hidden p-5 sm:p-6 md:p-10 xl:p-12 custom-scrollbar ${isOldSchool ? 'old-school-content-scroll' : ''}`}>
+        <div ref={mainScrollRef} className={`mt-[var(--app-header-height)] h-[calc(100dvh-var(--app-header-height))] overflow-y-auto overflow-x-hidden p-5 sm:p-6 md:p-10 xl:p-12 custom-scrollbar ${isOldSchool ? 'old-school-content-scroll' : ''}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={routeKey}
@@ -2305,7 +2622,6 @@ const App: React.FC = () => {
                       type="password"
 	                      placeholder="6-12 character access key"
 	                      value={adminKey}
-	                      onFocus={warmDatabaseOnce}
 	                      onChange={(e) => setAdminKey(e.target.value)}
                       className="w-full border-none bg-transparent p-0 text-purple-200 placeholder:text-slate-500 focus:ring-0"
                     />
@@ -2395,12 +2711,12 @@ const App: React.FC = () => {
                     <label className="block text-[10px] font-black uppercase text-[#94A3B8] tracking-[0.3em] mb-4 text-center">Username</label>
                     <div className="flex items-center gap-3 text-xl font-mono">
                       <span className="text-purple-400/40">@</span>
-	                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onFocus={warmDatabaseOnce} onChange={(e) => setAuthUsername(e.target.value)} className="w-full border-none bg-transparent p-0 text-purple-200 placeholder:text-slate-500 focus:ring-0" />
+	                      <input autoFocus type="text" placeholder="yourname-dsa" value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} className="w-full border-none bg-transparent p-0 text-purple-200 placeholder:text-slate-500 focus:ring-0" />
                     </div>
                   </div>
                   <div className="glass-panel p-6 rounded-[2rem] transition-all focus-within:border-purple-500/70">
                     <label className="block text-[10px] font-black uppercase text-[#94A3B8] tracking-[0.3em] mb-4 text-center">Password</label>
-	                    <input type="password" placeholder="4-10 characters" value={authPassword} onFocus={warmDatabaseOnce} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border-none bg-transparent p-0 text-purple-200 placeholder:text-slate-500 focus:ring-0" />
+	                    <input type="password" placeholder="4-10 characters" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border-none bg-transparent p-0 text-purple-200 placeholder:text-slate-500 focus:ring-0" />
                   </div>
                   {authError && <p className="text-center text-xs font-bold text-purple-400">{authError}</p>}
                   <button type="submit" disabled={isAuthBusy} className="w-full py-5 bg-purple-500/25 hover:bg-purple-500/25 disabled:opacity-60 text-white rounded-[2rem] font-black text-sm tracking-[0.3em] uppercase shadow-2xl shadow-purple-600/20 transition-all active:scale-95">

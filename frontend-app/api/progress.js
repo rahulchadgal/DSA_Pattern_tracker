@@ -1,4 +1,4 @@
-import { query } from '../server/db.js';
+import { query, withDbClient } from '../server/db.js';
 import { allowMethods, parseBody, sendError, sendJson } from '../server/http.js';
 import { requireUser, requireUserHandle } from '../server/auth.js';
 import sanitizeHtml from 'sanitize-html';
@@ -158,82 +158,124 @@ async function getProgress(req, res) {
 
 async function upsertProgress(req, res) {
   const body = parseBody(req);
-  const leetcodeId = typeof body.leetcodeId === 'string' ? body.leetcodeId.trim() : '';
-  const completed = Boolean(body.completed);
-  const hasSolutionText = Object.prototype.hasOwnProperty.call(body, 'solutionText');
-  const solutionRichText =
-    hasSolutionText
-      ? textToSolutionHtml(body.solutionText)
-      : typeof body.solutionRichText === 'string' && body.solutionRichText.trim().length > 0
-      ? sanitizeSolutionHtml(body.solutionRichText)
-      : null;
-  const hasSolutionRichText = hasSolutionText || Object.prototype.hasOwnProperty.call(body, 'solutionRichText');
-  const title = typeof body.title === 'string' ? body.title.trim() : '';
-  const difficulty = typeof body.difficulty === 'string' ? body.difficulty.trim() : '';
-  const link = typeof body.link === 'string' ? body.link.trim() : '';
-  const mainPattern = typeof body.mainPattern === 'string' ? body.mainPattern.trim() : '';
-  const subPattern = typeof body.subPattern === 'string' ? body.subPattern.trim() : '';
-  const metadataJson = body.metadataJson == null ? null : String(body.metadataJson);
+  const isBatch = Array.isArray(body.items);
+  const items = isBatch ? body.items : [body];
 
-  if (!leetcodeId) {
+  if (isBatch && items.length === 0) {
+    return sendJson(res, 200, []);
+  }
+  if (items.length > 100) {
+    return sendError(res, 400, 'Too many progress updates');
+  }
+
+  const payloads = items.map(normalizeProgressPayload);
+  const invalidPayload = payloads.find(payload => !payload.leetcodeId);
+  if (invalidPayload) {
     return sendError(res, 400, 'leetcodeId is required');
   }
 
   try {
     const user = await requireUser(req);
-    let questionResult = await query('SELECT id, leetcode_id FROM question_catalog WHERE leetcode_id = $1', [leetcodeId]);
-    if (!questionResult.rows[0]) {
-      if (!title || !difficulty || !link) {
-        return sendError(res, 404, 'Question not found in catalog');
+    const savedRows = await withDbClient(undefined, async (client) => {
+      await client.query('BEGIN');
+      try {
+        const rows = [];
+        for (const payload of payloads) {
+          rows.push(await saveProgressPayload(client, user.id, payload));
+        }
+        await client.query('COMMIT');
+        return rows;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
       }
-      questionResult = await query(
-        `INSERT INTO question_catalog (
-           leetcode_id, title, difficulty, main_pattern, sub_pattern, link,
-           default_question, custom_imported, imported_by_handle, content_type, metadata_json,
-           created_at, updated_at
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, false, true, 'system-local-progress', 'QUESTION_ONLY', $7, NOW(), NOW())
-         ON CONFLICT (leetcode_id) DO UPDATE SET
-           updated_at = NOW()
-         RETURNING id, leetcode_id`,
-        [
-          leetcodeId,
-          title,
-          difficulty,
-          mainPattern || 'Company',
-          subPattern || '-',
-          link,
-          metadataJson
-        ]
-      );
-    }
-    const questionId = questionResult.rows[0].id;
+    });
 
-    const result = await query(
-      `INSERT INTO progress_records (user_id, question_id, completed, updated_at, completed_at, solution_rich_text)
-       VALUES ($1, $2, $3, NOW(), CASE WHEN $3 THEN NOW() ELSE NULL END, $4)
-       ON CONFLICT (user_id, question_id) DO UPDATE SET
-         completed = EXCLUDED.completed,
-         updated_at = NOW(),
-         completed_at = CASE WHEN EXCLUDED.completed THEN NOW() ELSE NULL END,
-         solution_rich_text = CASE WHEN $5 THEN EXCLUDED.solution_rich_text ELSE progress_records.solution_rich_text END
-       RETURNING
-         (SELECT leetcode_id FROM question_catalog WHERE id = progress_records.question_id) AS "leetcodeId",
-         completed,
-         updated_at AS "updatedAt",
-         completed_at AS "completedAt",
-         solution_rich_text IS NOT NULL AND length(trim(solution_rich_text)) > 0 AS "hasSolutionNote",
-         CASE WHEN $5 THEN solution_rich_text ELSE NULL END AS "solutionRichText",
-         CASE WHEN $5 THEN solution_rich_text ELSE NULL END AS "solutionText"`,
-      [user.id, questionId, completed, solutionRichText, hasSolutionRichText]
-    );
-    if (result.rows[0]?.solutionText) {
-      result.rows[0].solutionText = solutionHtmlToText(result.rows[0].solutionText);
-    }
-
-    return sendJson(res, 200, result.rows[0]);
+    return sendJson(res, 200, isBatch ? savedRows : savedRows[0]);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to save progress';
-    return sendError(res, authStatus(message), message);
+    const status = message === 'Question not found in catalog' ? 404 : authStatus(message);
+    return sendError(res, status, message);
   }
+}
+
+function normalizeProgressPayload(body) {
+  const source = body && typeof body === 'object' ? body : {};
+  const hasSolutionText = Object.prototype.hasOwnProperty.call(source, 'solutionText');
+  const solutionRichText =
+    hasSolutionText
+      ? textToSolutionHtml(source.solutionText)
+      : typeof source.solutionRichText === 'string' && source.solutionRichText.trim().length > 0
+      ? sanitizeSolutionHtml(source.solutionRichText)
+      : null;
+
+  return {
+    leetcodeId: typeof source.leetcodeId === 'string' ? source.leetcodeId.trim() : '',
+    completed: Boolean(source.completed),
+    solutionRichText,
+    hasSolutionRichText: hasSolutionText || Object.prototype.hasOwnProperty.call(source, 'solutionRichText'),
+    title: typeof source.title === 'string' ? source.title.trim() : '',
+    difficulty: typeof source.difficulty === 'string' ? source.difficulty.trim() : '',
+    link: typeof source.link === 'string' ? source.link.trim() : '',
+    mainPattern: typeof source.mainPattern === 'string' ? source.mainPattern.trim() : '',
+    subPattern: typeof source.subPattern === 'string' ? source.subPattern.trim() : '',
+    metadataJson: source.metadataJson == null ? null : String(source.metadataJson)
+  };
+}
+
+async function saveProgressPayload(client, userId, payload) {
+  let questionResult = await client.query(
+    'SELECT id, leetcode_id FROM question_catalog WHERE leetcode_id = $1',
+    [payload.leetcodeId]
+  );
+  if (!questionResult.rows[0]) {
+    if (!payload.title || !payload.difficulty || !payload.link) {
+      throw new Error('Question not found in catalog');
+    }
+    questionResult = await client.query(
+      `INSERT INTO question_catalog (
+         leetcode_id, title, difficulty, main_pattern, sub_pattern, link,
+         default_question, custom_imported, imported_by_handle, content_type, metadata_json,
+         created_at, updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, false, true, 'system-local-progress', 'QUESTION_ONLY', $7, NOW(), NOW())
+       ON CONFLICT (leetcode_id) DO UPDATE SET
+         updated_at = NOW()
+       RETURNING id, leetcode_id`,
+      [
+        payload.leetcodeId,
+        payload.title,
+        payload.difficulty,
+        payload.mainPattern || 'Company',
+        payload.subPattern || '-',
+        payload.link,
+        payload.metadataJson
+      ]
+    );
+  }
+  const questionId = questionResult.rows[0].id;
+
+  const result = await client.query(
+    `INSERT INTO progress_records (user_id, question_id, completed, updated_at, completed_at, solution_rich_text)
+     VALUES ($1, $2, $3, NOW(), CASE WHEN $3 THEN NOW() ELSE NULL END, $4)
+     ON CONFLICT (user_id, question_id) DO UPDATE SET
+       completed = EXCLUDED.completed,
+       updated_at = NOW(),
+       completed_at = CASE WHEN EXCLUDED.completed THEN NOW() ELSE NULL END,
+       solution_rich_text = CASE WHEN $5 THEN EXCLUDED.solution_rich_text ELSE progress_records.solution_rich_text END
+     RETURNING
+       (SELECT leetcode_id FROM question_catalog WHERE id = progress_records.question_id) AS "leetcodeId",
+       completed,
+       updated_at AS "updatedAt",
+       completed_at AS "completedAt",
+       solution_rich_text IS NOT NULL AND length(trim(solution_rich_text)) > 0 AS "hasSolutionNote",
+       CASE WHEN $5 THEN solution_rich_text ELSE NULL END AS "solutionRichText",
+       CASE WHEN $5 THEN solution_rich_text ELSE NULL END AS "solutionText"`,
+    [userId, questionId, payload.completed, payload.solutionRichText, payload.hasSolutionRichText]
+  );
+
+  if (result.rows[0]?.solutionText) {
+    result.rows[0].solutionText = solutionHtmlToText(result.rows[0].solutionText);
+  }
+  return result.rows[0];
 }

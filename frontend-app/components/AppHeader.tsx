@@ -20,6 +20,7 @@ interface AppHeaderProps {
   onGoCompanies: () => void;
   onGoRoulette: () => void;
   onOpenAuth: () => void;
+  onSyncStatusClick: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -36,7 +37,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onGoSyllabus,
   onGoCompanies,
   onGoRoulette,
-  onOpenAuth
+  onOpenAuth,
+  onSyncStatusClick
 }) => {
   const navItems = [
     { label: 'Syllabus', active: isSyllabus, onClick: onGoSyllabus },
@@ -96,9 +98,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
           <button
             type="button"
-            onClick={onOpenAuth}
+            onClick={handle ? onSyncStatusClick : onOpenAuth}
             className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-all md:h-11 md:w-11 ${theme.panelStrong} hover:border-purple-400/50`}
-            title={handle ? `Signed in as @${handle}` : 'Sign in to sync'}
+            title={handle ? `${syncStatusConfig.label} for @${handle}` : 'Sign in to sync'}
             aria-label={handle ? `Signed in as ${handle}` : 'Sign in to sync'}
           >
             <span className={`h-2.5 w-2.5 rounded-full ${syncStatusConfig.color}`} />

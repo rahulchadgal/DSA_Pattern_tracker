@@ -224,6 +224,11 @@ export const backendApi = {
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload)
   }),
+  upsertProgressBatch: (items: ProgressUpsertPayload[]) => apiRequest<ProgressRow[]>('/api/progress', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ items })
+  }),
   getCompanyQuestions: (params?: { company?: string; bucket?: 'all' | '30d' | '3m' | '6m'; search?: string }) =>
     getCompanyQuestionsLocal(params),
   getCompanyQuestionBuckets: (): Promise<CompanyQuestionBucketRows> =>
