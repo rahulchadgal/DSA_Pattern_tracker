@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { X } from 'lucide-react';
-import type { OfficialSolutionEntry } from '../lib/officialSolutions';
+import { formatOfficialHint, type OfficialSolutionEntry } from '../lib/officialSolutions';
 import type { Question } from '../types';
 import type { ThemeMode } from './appTypes';
 import { DifficultyBadge } from './appUi';
@@ -29,6 +29,8 @@ export const OfficialSolutionModal: React.FC<OfficialSolutionModalProps> = ({
   hasMeaningfulHint
 }) => {
   if (!question) return null;
+
+  const formattedHint = solution ? formatOfficialHint(solution.solutionMarkdown) : '';
 
   return (
     <div className="fixed inset-0 z-[106] overflow-y-auto bg-[#081229]/82 p-4 backdrop-blur-2xl md:p-6">
@@ -119,7 +121,7 @@ export const OfficialSolutionModal: React.FC<OfficialSolutionModalProps> = ({
                 <>
                   <h4 className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-yellow-300">Hint / Approach</h4>
                   <pre className="whitespace-pre-wrap rounded-2xl border border-white/[0.12] bg-[#081229]/80 p-4 text-sm leading-7 text-slate-200">
-                    {solution.solutionMarkdown}
+                    {formattedHint}
                   </pre>
                 </>
               )}

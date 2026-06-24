@@ -7,7 +7,7 @@ import type { AdminUserRow, CompanyQuestionRow, ProgressRow, ProgressUpsertPaylo
 import { DSA_DATA } from './constants';
 import { useProfileHandle } from './hooks/useProfileHandle';
 import { useAppRoute } from './hooks/useAppRoute';
-import { getOfficialSolution, OfficialSolutionEntry } from './lib/officialSolutions';
+import { getOfficialSolution, hasMeaningfulOfficialHint, OfficialSolutionEntry } from './lib/officialSolutions';
 import { Pattern, Question, Section } from './types';
 import { AppHeader } from './components/AppHeader';
 import { BackgroundDecorations } from './components/BackgroundDecorations';
@@ -1582,13 +1582,7 @@ const App: React.FC = () => {
   };
 
   const hasMeaningfulHint = (solution: OfficialSolutionEntry) => {
-    const normalized = solution.solutionMarkdown
-      .replace(/^#{1,6}\s*Solution\s*\d*[:\s-]*/gim, '')
-      .replace(/```[\s\S]*?```/g, '')
-      .replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/[#*_`>\-[\]()]/g, '')
-      .trim();
-    return normalized.length > 24;
+    return hasMeaningfulOfficialHint(solution.solutionMarkdown);
   };
 
   const handleSolutionEditorChange = (value: string) => {
