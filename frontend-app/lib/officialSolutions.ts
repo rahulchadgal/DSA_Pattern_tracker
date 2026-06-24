@@ -37,22 +37,29 @@ const simplifyLatex = (value: string): string => value
   .replace(/\\[a-zA-Z]+/g, '')
   .replace(/\{([^{}]*)\}/g, '$1');
 
-const cleanHintLine = (value: string): string => simplifyLatex(value)
+const cleanHintLine = (value: string): string => simplifyLatex(value
   .replace(/`([^`]*)`/g, '$1')
   .replace(/\*\*([^*]*)\*\*/g, '$1')
   .replace(/\*([^*]*)\*/g, '$1')
   .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-  .replace(/^\s{0,3}[-*+]\s+/, '')
+  .replace(/^\s{0,3}[-*+]\s+/, ''))
   .replace(/\s+/g, ' ')
   .trim();
+
+const cleanDisplayMathBlock = (block: string): string => block
+  .split('\n')
+  .filter((line) => !/\\cdots|cdots/.test(line))
+  .map(cleanHintLine)
+  .filter(Boolean)
+  .join('\n');
 
 export const formatOfficialHint = (solutionMarkdown: string): string => {
   const withoutHeavyBlocks = solutionMarkdown
     .replace(/```[\s\S]*?```/g, '')
     .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\$\$[\s\S]*?\$\$/g, '')
-    .replace(/\\\[[\s\S]*?\\\]/g, '')
-    .replace(/\\\([\s\S]*?\\\)/g, '')
+    .replace(/\$\$([\s\S]*?)\$\$/g, (_, block: string) => `\n\n${cleanDisplayMathBlock(block)}\n\n`)
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_, block: string) => `\n\n${cleanDisplayMathBlock(block)}\n\n`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, expression: string) => simplifyLatex(expression))
     .replace(/\$([^$\n]+)\$/g, (_, expression: string) => simplifyLatex(expression))
     .replace(/^#{1,6}\s*Solution\s*\d*[:\s-]*/gim, '')
     .replace(/^#{1,6}\s*/gm, '');
@@ -76,7 +83,7 @@ export const formatOfficialHint = (solutionMarkdown: string): string => {
       return true;
     });
 
-  return paragraphs.slice(0, 3).join('\n\n');
+  return paragraphs.join('\n\n');
 };
 
 export const hasMeaningfulOfficialHint = (solutionMarkdown: string): boolean => (
