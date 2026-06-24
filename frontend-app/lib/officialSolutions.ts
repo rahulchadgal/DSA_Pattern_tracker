@@ -19,75 +19,14 @@ let officialSolutionsPromise: Promise<OfficialSolutionsPayload> | null = null;
 
 const normalizeQuestionId = (id: string | number): string => String(id).trim().replace(/^0+(?=\d)/, '');
 
-const simplifyLatex = (value: string): string => value
-  .replace(/\\(?:textit|textbf|mathrm|mathbf|operatorname)\{([^{}]*)\}/g, '$1')
-  .replace(/\\(?:left|right)/g, '')
-  .replace(/\\lfloor|\\rfloor|\\lceil|\\rceil/g, '')
-  .replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '($1 / $2)')
-  .replace(/\\max/g, 'max')
-  .replace(/\\min/g, 'min')
-  .replace(/\\log/g, 'log')
-  .replace(/\\bmod/g, 'mod')
-  .replace(/\\times|\\cdot/g, '*')
-  .replace(/\\leq?/g, '<=')
-  .replace(/\\geq?/g, '>=')
-  .replace(/\\neq/g, '!=')
-  .replace(/\\infty/g, 'infinity')
-  .replace(/\\Sigma/g, 'Sigma')
-  .replace(/\\[a-zA-Z]+/g, '')
-  .replace(/\{([^{}]*)\}/g, '$1');
-
-const cleanHintLine = (value: string): string => simplifyLatex(value
-  .replace(/`([^`]*)`/g, '$1')
-  .replace(/\*\*([^*]*)\*\*/g, '$1')
-  .replace(/\*([^*]*)\*/g, '$1')
-  .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-  .replace(/^\s{0,3}[-*+]\s+/, ''))
-  .replace(/\s+/g, ' ')
-  .trim();
-
-const cleanDisplayMathBlock = (block: string): string => block
-  .split('\n')
-  .filter((line) => !/\\cdots|cdots/.test(line))
-  .map(cleanHintLine)
-  .filter(Boolean)
-  .join('\n');
-
-export const formatOfficialHint = (solutionMarkdown: string): string => {
-  const withoutHeavyBlocks = solutionMarkdown
+export const hasMeaningfulOfficialHint = (solutionMarkdown: string): boolean => (
+  solutionMarkdown
+    .replace(/^#{1,6}\s*Solution\s*\d*[:\s-]*/gim, '')
     .replace(/```[\s\S]*?```/g, '')
     .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\$\$([\s\S]*?)\$\$/g, (_, block: string) => `\n\n${cleanDisplayMathBlock(block)}\n\n`)
-    .replace(/\\\[([\s\S]*?)\\\]/g, (_, block: string) => `\n\n${cleanDisplayMathBlock(block)}\n\n`)
-    .replace(/\\\(([\s\S]*?)\\\)/g, (_, expression: string) => simplifyLatex(expression))
-    .replace(/\$([^$\n]+)\$/g, (_, expression: string) => simplifyLatex(expression))
-    .replace(/^#{1,6}\s*Solution\s*\d*[:\s-]*/gim, '')
-    .replace(/^#{1,6}\s*/gm, '');
-
-  const paragraphs = withoutHeavyBlocks
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph
-      .split('\n')
-      .map(cleanHintLine)
-      .filter(Boolean)
-      .join(' '))
-    .map((paragraph) => paragraph
-      .replace(/\s+([,.;:])/g, '$1')
-      .replace(/\(\s+/g, '(')
-      .replace(/\s+\)/g, ')')
-      .trim())
-    .filter((paragraph) => {
-      if (paragraph.length < 8) return false;
-      if (/^(time|space) complexity\b/i.test(paragraph)) return false;
-      if (/^complexity\b/i.test(paragraph)) return false;
-      return true;
-    });
-
-  return paragraphs.join('\n\n');
-};
-
-export const hasMeaningfulOfficialHint = (solutionMarkdown: string): boolean => (
-  formatOfficialHint(solutionMarkdown).replace(/[#*_`>\-[\]()]/g, '').trim().length > 24
+    .replace(/[$#*_`>\-[\](){}\\]/g, '')
+    .trim()
+    .length > 24
 );
 
 const loadOfficialSolutionsPayload = async (): Promise<OfficialSolutionsPayload> => {
